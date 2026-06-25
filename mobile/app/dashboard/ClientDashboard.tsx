@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line } from "recharts";
 import Handlebars from "handlebars";
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const ALIASES = {
@@ -43,6 +46,9 @@ export default function ClientDashboard() {
   const [viewingDoc, setViewingDoc] = useState(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [customSender, setCustomSender] = useState("");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  
   const [emailDraft, setEmailDraft] = useState({ to: "", subject: "", message: "", attachmentBase64: "", filename: "" });
   const [chatHistory, setChatHistory] = useState([]);
   const [currentInput, setCurrentInput] = useState("");
@@ -56,6 +62,13 @@ export default function ClientDashboard() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [dynamicData, setDynamicData] = useState({});
   const [statusFilter, setStatusFilter] = useState("");
+
+  const getApiUrl = (endpoint) => {
+    if (Capacitor.isNativePlatform()) {
+      return `https://bloomgard.vercel.app${endpoint}`;
+    }
+    return endpoint;
+  };
 
   useEffect(() => {
     (async () => {
@@ -87,9 +100,12 @@ export default function ClientDashboard() {
         if (profile.tenant_id) {
           setTenantId(profile.tenant_id);
 
-          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled").eq("id", profile.tenant_id).maybeSingle();
-          if (tenantData?.company_name) setCompanyName(tenantData.company_name);
-          if (tenantData?.ai_enabled === false) setAiEnabled(false);
+          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled, custom_email_sender").eq("id", profile.tenant_id).maybeSingle();
+          if (tenantData) {
+            if (tenantData.company_name) setCompanyName(tenantData.company_name);
+            if (tenantData.ai_enabled === false) setAiEnabled(false);
+            if (tenantData.custom_email_sender) setCustomSender(tenantData.custom_email_sender);
+          }
 
           const { data: schema } = await supabase.from("tenant_schemas").select("schema_config").eq("tenant_id", profile.tenant_id).maybeSingle();
           if (schema?.schema_config) {
@@ -116,14 +132,12 @@ export default function ClientDashboard() {
       .then(({ data }) => { if (data) setDynamicInsights(data); });
   }, [tenantId]);
 
-  // Auto-calculation & Default injection engine
   useEffect(() => {
     if (!blueprint.length) return;
     let updated = false;
     const newData = JSON.parse(JSON.stringify(dynamicData));
     blueprint.forEach(section => {
       section.fields.forEach(field => {
-        // Auto-populate logged_in field
         if (field.type === 'logged_in') {
           if (section.allow_multiple && newData[section.title]) {
             newData[section.title].forEach((row, rIdx) => {
@@ -133,7 +147,6 @@ export default function ClientDashboard() {
             if (newData[section.title][field.name] !== user?.email) { newData[section.title][field.name] = user?.email; updated = true; }
           }
         }
-        // Formula Calculations
         if (field.type === 'calculated' && field.options) {
           const processCross = (f) => {
             const ms = f.match(/SUM\[(.*?)\.(.*?)\]/g);
@@ -182,7 +195,6 @@ export default function ClientDashboard() {
   const visibleRecords = isManager ? records : records.filter(r => r.created_by_email === user?.email);
   const docsRecords = visibleRecords.filter(r => r.status === 'Approved' || r.custom_metadata?.has_pdf_generated === true);
 
-  // DYNAMIC STATUS ENGINE: Single Source of Truth
   const extractMasterStatuses = () => {
     let options = new Set();
     blueprint.forEach(section => {
@@ -214,27 +226,21 @@ export default function ClientDashboard() {
   const extractValue = (record, fieldName, sectionTitle) => {
     if (!record || !fieldName) return "";
     const targetKeys = [fieldName, ...(ALIASES[fieldName] || [])].map(normalize);
-    
-    // Helper to check one level of an object
     const check = (obj) => {
       if (!obj || typeof obj !== 'object') return null;
       if (Array.isArray(obj)) { if (!obj.length) return null; obj = obj[0]; }
       for (const [k, v] of Object.entries(obj)) {
-        if (v == null || v === "" || v === 0) continue; // Skip zeros and blanks
+        if (v == null || v === "" || v === 0) continue; 
         if (targetKeys.includes(normalize(k))) return v;
       }
       return null;
     };
-
     let val = null;
-
-    // 1. Look in Metadata FIRST (where "Quote Details" lives)
     if (record.custom_metadata) {
       if (sectionTitle) {
         const sk = Object.keys(record.custom_metadata).find(k => normalize(k).includes(normalize(sectionTitle)) || normalize(sectionTitle).includes(normalize(k)));
         if (sk) val = check(record.custom_metadata[sk]);
       }
-      // If not found yet, scan all modules in metadata
       if (!val) {
         for (const section of Object.values(record.custom_metadata)) {
           val = check(section);
@@ -243,25 +249,19 @@ export default function ClientDashboard() {
       }
       if (!val) val = check(record.custom_metadata); 
     }
-
-    // 2. Look in Root/Clients as fallback
     if (!val) val = check(record);
     if (!val) val = check(record.clients);
-
     return val || "";
   };
 
   const extractArray = (record, sectionTitle) => {
     if (!record || !sectionTitle) return [];
     const t = normalize(sectionTitle);
-    
-    // Explicit array extraction
     if ((t.includes('status') || t.includes('log')) && record.status_logs?.length) {
       return record.status_logs;
     }
     if ((t.includes('product') || t.includes('item')) && record.quotation_items?.length) return record.quotation_items;
     if ((t.includes('attachment') || t.includes('file')) && record.quotation_attachments?.length) return record.quotation_attachments;
-    
     if (record.custom_metadata) { 
       const sk = Object.keys(record.custom_metadata).find(k => normalize(k) === t || normalize(k).includes(t)); 
       if (sk && Array.isArray(record.custom_metadata[sk])) return record.custom_metadata[sk]; 
@@ -292,7 +292,6 @@ export default function ClientDashboard() {
     }
     const creator = editingId ? records.find(r=>r.id===editingId)?.created_by_email : (user?.email || "system@bloomgard.com");
     const clientName = extractValue({custom_metadata:dynamicData},'client_name','Client Information') || "Unknown Client";
-    
     let clientId = null;
     try {
       const cp = { 
@@ -308,7 +307,6 @@ export default function ClientDashboard() {
       if (ec) { clientId = ec.id; await supabase.from('clients').update(cp).eq('id',clientId); }
       else { const { data: nc } = await supabase.from('clients').insert([cp]).select('id').single(); if (nc) clientId = nc.id; }
     } catch(e) {}
-
     let masterStatusValue = allStatuses[0] || "Inquiry";
     blueprint.forEach(sec => {
       sec.fields.forEach(f => {
@@ -319,12 +317,10 @@ export default function ClientDashboard() {
         }
       });
     });
-
     const quoteId = editingId || safeUUID();
     try {
       const { error } = await supabase.from("quotations").upsert([{ id:quoteId, tenant_id:tenantId, client_id:clientId, qn_number:finalQn, date, status: masterStatusValue, custom_metadata:dynamicData, created_by_email:creator }], { onConflict:'id' });
       if (error) throw error;
-
       const items=[], atts=[];
       blueprint.filter(b=>b.allow_multiple).forEach(sec=>{
         const rows=dynamicData[sec.title]||[], lt=sec.title.toLowerCase();
@@ -333,15 +329,12 @@ export default function ClientDashboard() {
           else if (lt.includes('attachment')||lt.includes('file')||lt.includes('document')) atts.push({quotation_id:quoteId,file_name:row.file_name||row.att_name||`File ${i+1}`,file_path:row.file_path||row.att||""});
         });
       });
-
       if (editingId) {
         await supabase.from('quotation_items').delete().eq('quotation_id',editingId);
         await supabase.from('quotation_attachments').delete().eq('quotation_id',editingId);
       }
-      
       if (items.length) await supabase.from('quotation_items').insert(items);
       if (atts.length) await supabase.from('quotation_attachments').insert(atts);
-      
       setEditingId(null); setCurrentView("pipeline"); await fetchRecords(tenantId);
     } catch (err) { alert("Deployment Error: " + err.message); }
   };
@@ -356,20 +349,14 @@ export default function ClientDashboard() {
   const updateStatus = async (id, newStatus) => {
     const targetRec = records.find(r => r.id === id) || selectedRecord;
     const oldStatus = targetRec?.status || "Inquiry";
-    
-    // 1. Update Core Status
     const { error } = await supabase.from("quotations").update({ status: newStatus }).eq("id", id);
     if (error) return alert("Status Error: " + error.message);
-    
-    // 2. Automagically Log the Transition
     const { data: newLog } = await supabase.from("status_logs").insert([{
         quotation_id: id,
         old_status: oldStatus,
         new_status: newStatus,
         comments: `Status updated by ${user?.email}`
     }]).select().single();
-
-    // 3. Keep internal custom_metadata strictly in sync with new status
     let updatedMetadata = { ...(targetRec.custom_metadata || {}) };
     blueprint.forEach(sec => {
       sec.fields.forEach(f => {
@@ -378,8 +365,6 @@ export default function ClientDashboard() {
         }
       });
     });
-    
-    // 4. Force state sync for instantaneous UI update
     setSelectedRecord(p => ({ 
       ...p, 
       status: newStatus, 
@@ -423,8 +408,6 @@ export default function ClientDashboard() {
     if (!msg.trim() || !tenantId) return;
     setCurrentInput("");
     setChatHistory(p=>[...p,{role:'user',content:msg}]); setIsThinking(true);
-    
-    // UPGRADED AI PAYLOAD
     const lightweightData = visibleRecords.map(r => {
       const rawItems = extractArray(r, 'Quotation Items') || extractArray(r, 'Products') || [];
       const cleanProducts = rawItems.map(item => ({
@@ -448,7 +431,7 @@ export default function ClientDashboard() {
     });
 
     try {
-      const res = await fetch('https://bloomgard.vercel.app/api/ask-ai', { 
+      const res = await fetch(getApiUrl('/api/ask-ai'), { 
         method:'POST', 
         headers:{'Content-Type':'application/json'}, 
         body:JSON.stringify({ query: msg, data: lightweightData }) 
@@ -464,16 +447,14 @@ export default function ClientDashboard() {
   const handleGenerateDashInsights = async () => {
     if (!dashCommand.trim() || !tenantId) return; setIsBuildingDash(true);
     const instruction = `CRITICAL: Return ONLY a valid JSON array, no markdown. Format: [{"type":"metric"|"bar_chart"|"pie_chart"|"line_chart"|"list","title":"Title","value":"Summary","data":[{"name":"x","value":1}]}]. Command: ${dashCommand}`;
-    
     const lightweightData = visibleRecords.map(r => ({
       id: r.qn_number || r.qn,
       status: r.status,
       client: extractValue(r, 'client_name', 'Client Information') || "Unknown",
       source: extractValue(r, 'source_ref', 'Client Information') || "Unknown" 
     }));
-
     try {
-      const res = await fetch('https://bloomgard.vercel.app/api/ask-ai', { 
+      const res = await fetch(getApiUrl('/api/ask-ai'), { 
         method:'POST', 
         headers:{'Content-Type':'application/json'}, 
         body:JSON.stringify({ query: instruction, data: lightweightData }) 
@@ -498,81 +479,87 @@ export default function ClientDashboard() {
   };
 
   const removeInsightCard = async (id) => { const {error}=await supabase.from("ai_insights").delete().eq("id",id); if(!error) setDynamicInsights(p=>p.filter(i=>i.id!==id)); };
-
   const formatAIText = (text) => {
     if(!text) return null;
     return <div className="space-y-2">{text.split('\n').map((line,i)=><p key={i} className="last:mb-0">{line.split(/(\*\*.*?\*\*)/g).map((part,j)=>part.startsWith('**')?<strong key={j} className="font-bold text-gray-900">{part.slice(2,-2)}</strong>:<span key={j}>{part}</span>)}</p>)}</div>;
   };
 
-  const injectPDFLibrary = () => new Promise(async (res) => {
-    if (window.html2pdf) return res(true);
-    const tryScript = (src) => new Promise((ok, fail) => {
-      const s = document.createElement('script');
-      s.src = src; s.onload = ok; s.onerror = fail;
-      document.head.appendChild(s);
-    });
-    try { await tryScript('https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'); return res(true); }
-    catch { try { await tryScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'); return res(true); } catch { res(false); } }
-  });
-
-  const isNativeApp = () => {
-    if (typeof window === 'undefined') return false;
-    const o = window.location.origin;
-    return o.includes('localhost') || o.includes('capacitor') || window.location.protocol === 'capacitor:';
-  };
-
-  // --- THE BULLETPROOF PDF ENGINE ---
-  const generateBase64PDF = async (html, name) => {
-    const loaded = await injectPDFLibrary();
-    if (!loaded || !window.html2pdf) throw new Error("PDF library failed to load");
-
-    // We just wrap your clean HTML in a simple white box with a little breathing room.
-    const printReadyHtml = `
-      <div style="background-color: #ffffff; padding: 20px;">
-        ${html}
-      </div>
-    `;
-
-    // ALL hacks removed. We let the engine natively scale it to A4.
-    const opt = {
-      margin:       0.2, // Uniform 0.2-inch margin on all sides
-      filename:     `${(name || 'Document').replace(/[^a-zA-Z0-9\-_]/g, '_')}.pdf`,
-      image:        { type: 'jpeg', quality: 1 },
-      html2canvas:  { scale: 2, useCORS: true }, // No x:0, no y:0, no windowWidth!
-      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
-    };
-
-    return new Promise((resolve, reject) => {
-      window.html2pdf()
-        .set(opt)
-        .from(printReadyHtml)
-        .output('datauristring')
-        .then(resolve)
-        .catch(reject);
-    });
-  };
-
   const downloadDirectPDF = async (html, name) => {
     try {
-      const b64 = await generateBase64PDF(html, name);
-      const base64Data = b64.split(',')[1];
-      const fileName = `${name.replace(/[^a-zA-Z0-9\-_]/g, '_')}.pdf`;
-
-      if (isNativeApp()) {
-        try {
-          const { Filesystem, Directory } = await import('@capacitor/filesystem');
-          const { Share } = await import('@capacitor/share');
-          const result = await Filesystem.writeFile({ path: fileName, data: base64Data, directory: Directory.Cache });
-          await Share.share({ title: name, url: result.uri, dialogTitle: 'Save or Share PDF' });
-        } catch (nativeErr) {
-          console.error('Native share failed:', nativeErr);
-          const a = document.createElement('a'); a.href = b64; a.download = fileName; a.click();
-        }
-      } else {
-        const a = document.createElement('a'); a.href = b64; a.download = fileName; a.click();
+      if (!Capacitor.isNativePlatform()) {
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(`<html><head><style>body { font-family: sans-serif; padding: 20px; font-size: 11px; }</style></head><body>${html}<script>setTimeout(() => window.print(), 1000);</script></body></html>`);
+        doc.close();
+        setTimeout(() => document.body.removeChild(iframe), 60000);
+        return;
       }
+
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      document.head.appendChild(script);
+
+      script.onload = () => {
+        const printHtml = `
+          <style>
+            body, html { margin: 0 !important; padding: 0 !important; background: #ffffff; }
+            .pdf-content { width: 800px; padding: 20px; box-sizing: border-box; text-align: left; }
+          </style>
+          <div class="pdf-content">${html}</div>
+        `;
+
+        const opt = {
+          margin: [0.5, 0, 0.5, 0], 
+          filename: `${name}.pdf`,
+          image: { type: 'jpeg', quality: 1.0 },
+          html2canvas: { 
+            scale: 2, 
+            useCORS: true, 
+            windowWidth: 800, 
+            scrollY: 0,
+            x: 0,
+            y: 0
+          },
+          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+
+        window.html2pdf()
+          .set(opt)
+          .from(printHtml)
+          .outputPdf('datauristring')
+          .then(async (pdfBase64) => {
+            try {
+              const base64Data = pdfBase64.split(',')[1];
+              const cleanName = name.replace(/[^a-zA-Z0-9]/g, '_'); 
+
+              const savedFile = await Filesystem.writeFile({
+                path: `${cleanName}.pdf`,
+                data: base64Data,
+                directory: Directory.Documents,
+              });
+
+              await Share.share({
+                title: `${name}.pdf`,
+                text: 'Here is the quotation document.',
+                url: savedFile.uri,
+                dialogTitle: 'Save or Share PDF',
+              });
+            } catch (fileErr) {
+              alert("Filesystem Error: " + fileErr.message);
+            }
+          })
+          .catch(err => alert("html2pdf processing error: " + err.message));
+      };
     } catch (err) {
-      alert('PDF Error: ' + (err.message || err));
+      alert('PDF Error: ' + err.message);
     }
   };
 
@@ -653,66 +640,103 @@ export default function ClientDashboard() {
   const handleViewDocument = async (r) => { setViewingDoc({html:await getRenderedHTML(r),title:`${r.qn_number} - ${getManifestTitle(r)}`}); };
   
   const handleOpenEmailComposer = async (r) => {
-    const html = await getRenderedHTML(r);
     const name = `${r.qn_number} - ${getManifestTitle(r)}`;
-    let b64 = '';
-
-    try {
-      b64 = await generateBase64PDF(html, name);
-    } catch(e) { 
-      console.error('Email PDF gen failed:', e); 
-    }
-
+    
     setEmailDraft({
       to: "",
-      subject: `Document Manifest: ${name}`,
+      subject: `Document: ${name}`,
       message: `Hello,\n\nPlease find the attached official document.\n\nBest regards,\n${user?.email}`,
-      attachmentBase64: b64,
+      attachmentBase64: "", // Clear this since we removed the heavy PDF generator logic
       filename: `${name}.pdf`
     });
     setShowEmailModal(true);
   };
 
-    const sendDraftedEmail = async () => {
+  const sendDraftedEmail = async () => {
     setIsSending(true);
     try { 
-      const res = await fetch('https://bloomgard.vercel.app/api/send-quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...emailDraft,  
-          agentEmail: user?.email,               
-          companyName: companyName               
-        })
-      }); 
-      
-      const r = await res.json(); 
-      if (r.success) {
-        setShowEmailModal(false); 
+      const url = getApiUrl('/api/send-quote');
+      const payload = { 
+        to: emailDraft.to,
+        subject: emailDraft.subject,
+        message: emailDraft.message,
+        attachments: emailDraft.attachments || [], 
+        agentEmail: user?.email,               
+        companyName: companyName || "",
+        customSender: customSender || ""
+      };
+
+      if (Capacitor.isNativePlatform()) {
+        const res = await CapacitorHttp.post({
+          url: url,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json' 
+          },
+          data: payload
+        }); 
+        
+        if (res.status === 200 && res.data?.success) {
+          setShowEmailModal(false);
+          alert("Email sent successfully!");
+        } else {
+          throw new Error(res.data?.error || `API Error: ${res.status}`); 
+        }
       } else {
-        throw new Error(r.error); 
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payload)
+        }); 
+        
+        const responseText = await res.text();
+        let r;
+        try { 
+          r = JSON.parse(responseText); 
+        } catch (parseError) { 
+          throw new Error(`Parse Error: ${responseText.slice(0, 40)}...`); 
+        }
+        
+        if (r.success) {
+          setShowEmailModal(false);
+          alert("Email sent successfully!");
+        } else {
+          throw new Error(r.error || "Server failed to send."); 
+        }
       }
-    }
-    catch(e) { 
-      alert("Email Failed: " + e.message); 
-    } 
-    finally { 
+    } catch(e) { 
+      alert("Delivery Failed: " + e.message); 
+    } finally { 
       setIsSending(false); 
     }
   };
   
-    const loadRecordForEditing = (rec) => {
+  const loadRecordForEditing = (rec) => {
     setEditingId(rec.id); 
     setQn(rec.qn_number); 
     setDate(rec.date || new Date().toISOString().split('T')[0]); 
     let d = { ...(rec.custom_metadata || {}) };
+    
     blueprint.forEach(sec => { 
       if (sec.allow_multiple) {
-        d[sec.title] = extractArray(rec, sec.title);
+        d[sec.title] = extractArray(rec, sec.title).map(item => {
+           let meta = item.custom_metadata;
+           if (typeof meta === 'string') {
+               try { meta = JSON.parse(meta); } catch(e) { meta = {}; }
+           }
+           const rowState = { ...(meta || {}), ...item };
+           sec.fields.forEach(f => {
+               const val = extractValue({ ...item, custom_metadata: meta }, f.name, sec.title);
+               if (val !== "" && val != null) { rowState[f.name] = val; }
+           });
+           return rowState;
+        });
       } else { 
         if (!d[sec.title]) d[sec.title] = {}; 
         sec.fields.forEach(f => {
-          d[sec.title][f.name] = extractValue(rec, f.name, sec.title) || "";
+          const val = extractValue(rec, f.name, sec.title);
+          if (val !== "" && val != null) { d[sec.title][f.name] = val; } 
+          else if (d[sec.title][f.name] == null) { d[sec.title][f.name] = ""; }
         }); 
       } 
     });
@@ -746,7 +770,7 @@ export default function ClientDashboard() {
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          {[['dashboard','📊 Intelligence'],['pipeline','🚀 Quotes'],['docs','📄 Docs']].map(([v,label])=>(
+          {[['dashboard','📊 Intelligence'],['pipeline','🚀 Quotes'],['docs','📄 Docs'],['settings','⚙️ Settings']].map(([v,label])=>(
             <div key={v} onClick={()=>{setCurrentView(v);setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView===v?'bg-gray-900 text-white shadow-md':'text-gray-500 hover:bg-gray-50'}`}>{label}</div>
           ))}
           <div className="pt-4 pb-2"><div className="border-t border-gray-100"></div></div>
@@ -776,6 +800,55 @@ export default function ClientDashboard() {
           </div>
         )}
 
+        {currentView === "settings" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto space-y-8">
+            <header className="mb-8">
+              <h2 className="text-3xl font-bold text-gray-900">Workspace Settings</h2>
+            </header>
+
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
+              <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <span className="text-2xl">✉️</span>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Email Configuration</h3>
+                  
+                </div>
+              </div>
+              
+              <div className="space-y-4 max-w-md">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Custom Sender Email</label>
+                  <input 
+                    type="email" 
+                    value={customSender} 
+                    onChange={e => setCustomSender(e.target.value)} 
+                    placeholder="quotes@yourdomain.com"
+                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                    This email must belong to the domain you verified in GoDaddy/Resend.
+                  </p>
+                </div>
+
+                <button 
+                  onClick={async () => {
+                    if (!tenantId) return;
+                    setIsSavingSettings(true);
+                    const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender }).eq('id', tenantId);
+                    setIsSavingSettings(false);
+                    if (error) alert("Failed to save: " + error.message);
+                    else alert("Email settings updated successfully!");
+                  }}
+                  disabled={isSavingSettings}
+                  className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform disabled:bg-gray-400"
+                >
+                  {isSavingSettings ? "Saving..." : "Save Configuration"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {currentView === "dashboard" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-12">
             <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-gray-200 pb-8">
@@ -800,7 +873,7 @@ export default function ClientDashboard() {
                     let cd=[]; try{ let r=insight.data; if(typeof r==='string') r=JSON.parse(r); if(Array.isArray(r)) cd=r; else if(typeof r==='object'&&r) cd=Object.entries(r).map(([k,v])=>({name:k,value:v})); }catch(e){} cd=cd.map(d=>({name:String(d.name||d.key||'Unknown'),value:Number(d.value||d.count||0)}));
                     return (
                       <div key={insight.id||idx} className={`relative bg-white border border-gray-200 p-6 rounded-2xl shadow-sm group hover:shadow-md transition-all ${insight.type?.includes('chart')?'lg:col-span-2':''}`}>
-                        <button onClick={()=>removeInsightCard(insight.id)} className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white font-bold text-xs z-10 active:scale-95 transition-transform">✕</button>
+                        <button onClick={()=>removeInsightCard(insight.id)} className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-white font-bold text-xs z-10 active:scale-95 transition-transform">✕</button>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 pr-6">{insight.title}</p>
                         {insight.type==='metric'&&<p className="text-5xl font-bold tracking-tighter text-gray-900">{insight.value}</p>}
                         {insight.type?.includes('chart')&&cd.length>0&&<div className="h-64 w-full pt-4"><ResponsiveContainer width="100%" height="100%">{insight.type==='pie_chart'?<PieChart><Pie data={cd} nameKey="name" dataKey="value" innerRadius={60} outerRadius={85} paddingAngle={4} stroke="none">{cd.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}</Pie><Tooltip/></PieChart>:insight.type==='line_chart'?<LineChart data={cd} margin={{top:0,right:0,left:-20,bottom:0}}><XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false}/><YAxis fontSize={11} tickLine={false} axisLine={false}/><Tooltip/><Line type="monotone" dataKey="value" stroke="#4F46E5" strokeWidth={3}/></LineChart>:<BarChart data={cd} margin={{top:0,right:0,left:-20,bottom:0}}><XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false}/><YAxis fontSize={11} tickLine={false} axisLine={false}/><Tooltip cursor={{fill:'#F3F4F6'}}/><Bar dataKey="value" fill="#111827" radius={[6,6,0,0]} barSize={40}/></BarChart>}</ResponsiveContainer></div>}
@@ -1012,7 +1085,7 @@ export default function ClientDashboard() {
               <h2 className="text-3xl font-bold text-gray-900">{editingId ? "Revise Entry" : "Create Entry"}</h2>
               <div className="flex items-center gap-3">
                 <button onClick={()=>{setEditingId(null);setCurrentView('pipeline');setSelectedRecord(null);}} className="px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-900 active:scale-95 transition-transform">Discard</button>
-                <button onClick={handleSave} className="bg-gray-900 text-white px-6 py-2.5 rounded-xl font-semibold text-xs shadow-sm hover:bg-gray-800 active:scale-95 transition-transform">Deploy Record</button>
+                <button onClick={handleSave} className="bg-white text-white px-6 py-2.5 rounded-xl font-semibold text-xs shadow-sm hover:bg-gray-800 active:scale-95 transition-transform" style={{ backgroundColor: '#111827' }}>Save</button>
               </div>
             </div>
             
@@ -1267,7 +1340,7 @@ export default function ClientDashboard() {
               <div className="mt-12 pt-8 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4 pb-8">
                 <button onClick={() => handleViewDocument(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Preview PDF</button>
                 <button onClick={() => handleGeneratePDF(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Download PDF</button>
-                <button onClick={() => handleOpenEmailComposer(selectedRecord)} className="bg-gray-900 text-white py-3.5 rounded-xl font-semibold text-xs shadow-md hover:bg-gray-800 active:scale-95 transition-transform">Deploy to Email</button>
+                <button onClick={() => handleOpenEmailComposer(selectedRecord)} className="bg-gray-900 text-white py-3.5 rounded-xl font-semibold text-xs shadow-md hover:bg-gray-800 active:scale-95 transition-transform">Mail</button>
               </div>
             </div>
           </div>
@@ -1310,20 +1383,80 @@ export default function ClientDashboard() {
                 <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Subject</label><input value={emailDraft.subject} onChange={e=>setEmailDraft({...emailDraft,subject:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400"/></div>
                 <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Message</label><textarea rows={5} value={emailDraft.message} onChange={e=>setEmailDraft({...emailDraft,message:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm outline-none focus:border-gray-400 resize-none"/></div>
                 
-                {emailDraft.attachmentBase64 ? (
-                  <div className="flex items-center justify-between bg-gray-50 border border-gray-200 p-3.5 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-sm shadow-sm border border-gray-100">📎</div>
-                      <div className="overflow-hidden">
-                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Attached File</p>
-                        <p className="text-xs font-semibold text-gray-800 truncate">{emailDraft.filename}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => setEmailDraft({...emailDraft, attachmentBase64: "", filename: ""})} className="text-xs font-bold text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg active:scale-95 transition-transform">Remove</button>
+                <div className="space-y-1.5 pt-2">
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Attachments</label>
+                  
+                  <div 
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => { 
+                      e.preventDefault(); e.stopPropagation();
+                      const files = Array.from(e.dataTransfer.files);
+                      files.forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setEmailDraft(prev => ({ 
+                            ...prev, 
+                            attachments: [...(prev.attachments||[]), { filename: file.name, base64: ev.target.result }] 
+                          }));
+                        };
+                        reader.readAsDataURL(file);
+                      });
+                    }}
+                    className="w-full border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
+                    onClick={() => document.getElementById('email-file-upload').click()}
+                  >
+                    <div className="text-2xl mb-2 opacity-80">📁</div>
+                    <p className="text-xs font-bold text-gray-700">Click or drag files here</p>
+                    <p className="text-[10px] text-gray-400 mt-1 font-medium tracking-wide">Attach PDFs, Images, or Documents</p>
+                    <input 
+                      id="email-file-upload" 
+                      type="file" 
+                      multiple 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files);
+                        files.forEach(file => {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setEmailDraft(prev => ({ 
+                              ...prev, 
+                              attachments: [...(prev.attachments||[]), { filename: file.name, base64: ev.target.result }] 
+                            }));
+                          };
+                          reader.readAsDataURL(file);
+                        });
+                        e.target.value = ''; 
+                      }} 
+                    />
                   </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-xl border border-gray-100 border-dashed text-center">No document attached.</p>
-                )}
+
+                  {emailDraft.attachments && emailDraft.attachments.length > 0 && (
+                    <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {emailDraft.attachments.map((att, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 p-2.5 rounded-xl shadow-sm">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-7 h-7 bg-white rounded flex items-center justify-center text-xs shadow-sm border border-gray-100 shrink-0">📎</div>
+                            <p className="text-[11px] font-semibold text-gray-800 truncate">{att.filename}</p>
+                          </div>
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setEmailDraft(p => ({ 
+                                ...p, 
+                                attachments: p.attachments.filter((_, i) => i !== idx) 
+                              })); 
+                            }} 
+                            className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2.5 py-1.5 rounded-lg active:scale-95 transition-transform shrink-0 border border-red-100"
+                          >
+                            ✕ Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 items-center">
                 <button onClick={() => setShowEmailModal(false)} className="text-[11px] font-semibold text-gray-500 hover:text-gray-800 px-3 py-2 active:scale-95 transition-transform">Cancel</button>
@@ -1336,5 +1469,3 @@ export default function ClientDashboard() {
     </div>
   );
 }
-
-
