@@ -1,11 +1,10 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // If Vercel is building this, be a live server (undefined).
-  // If your computer is building the APK, be static ('export').
+  // Ensure backend plugins like Puppeteer work properly on Vercel
   serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
   
-  output: process.env.VERCEL ? undefined : 'export', 
+  // Notice: The "output" line has been completely removed so it defaults to a server
   
   images: { 
     unoptimized: true,
