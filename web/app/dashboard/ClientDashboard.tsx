@@ -4,9 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line } from "recharts";
 import Handlebars from "handlebars";
-import { Capacitor, CapacitorHttp } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 
 // BULLETPROOF FORMATTER: Forcibly converts any long decimals to 2 decimal places.
 const formatValue = (val, isMoney = false) => {
@@ -81,22 +78,8 @@ export default function ClientDashboard() {
   const [dynamicData, setDynamicData] = useState({});
   const [statusFilter, setStatusFilter] = useState("");
 
-  const getApiUrl = (endpoint) => {
-    if (Capacitor.isNativePlatform()) {
-      return `https://bloomgard.vercel.app${endpoint}`;
-    }
-    return endpoint;
-  };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { StatusBar, Style } = await import('@capacitor/status-bar');
-        await StatusBar.setOverlaysWebView({ overlay: false }); 
-        await StatusBar.setStyle({ style: Style.Light });
-      } catch (e) {}
-    })();
-  }, []);
+  // Web environment API URL
+  const getApiUrl = (endpoint) => endpoint;
 
   useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -524,23 +507,6 @@ export default function ClientDashboard() {
 
   const downloadDirectPDF = async (html, name) => {
     try {
-      if (!Capacitor.isNativePlatform()) {
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        document.body.appendChild(iframe);
-        const doc = iframe.contentWindow.document;
-        doc.open();
-        doc.write(`<html><head><style>body { font-family: sans-serif; padding: 20px; font-size: 11px; }</style></head><body>${html}<script>setTimeout(() => window.print(), 1000);</script></body></html>`);
-        doc.close();
-        setTimeout(() => document.body.removeChild(iframe), 60000);
-        return;
-      }
-
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
       document.head.appendChild(script);
@@ -548,54 +514,29 @@ export default function ClientDashboard() {
       script.onload = () => {
         const printHtml = `
           <style>
-            body { margin: 0; padding: 0; background: #ffffff; }
-            .pdf-wrapper { display: flex; justify-content: center; width: 100%; }
-            .pdf-content { width: 800px; padding: 20px; box-sizing: border-box; }
+            body, html { margin: 0 !important; padding: 0 !important; background: #ffffff; }
+            .pdf-content { width: 800px; padding: 20px; box-sizing: border-box; text-align: left; }
           </style>
-          <div class="pdf-wrapper">
-            <div class="pdf-content">${html}</div>
-          </div>
+          <div class="pdf-content">${html}</div>
         `;
 
         const opt = {
-          margin: 0.5,
+          margin: [0.5, 0, 0.5, 0], 
           filename: `${name}.pdf`,
           image: { type: 'jpeg', quality: 1.0 },
           html2canvas: { 
             scale: 2, 
             useCORS: true, 
             windowWidth: 800, 
-            scrollY: 0
+            scrollY: 0,
+            x: 0,
+            y: 0
           },
           jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
 
-        window.html2pdf()
-          .set(opt)
-          .from(printHtml)
-          .outputPdf('datauristring')
-          .then(async (pdfBase64) => {
-            try {
-              const base64Data = pdfBase64.split(',')[1];
-              const cleanName = name.replace(/[^a-zA-Z0-9]/g, '_'); 
-
-              const savedFile = await Filesystem.writeFile({
-                path: `${cleanName}.pdf`,
-                data: base64Data,
-                directory: Directory.Documents,
-              });
-
-              await Share.share({
-                title: `${name}.pdf`,
-                text: 'Here is the quotation document.',
-                url: savedFile.uri,
-                dialogTitle: 'Save or Share PDF',
-              });
-            } catch (fileErr) {
-              alert("Filesystem Error: " + fileErr.message);
-            }
-          })
-          .catch(err => alert("html2pdf processing error: " + err.message));
+        // For the web version, we simply instruct html2pdf to save directly to the browser downloads
+        window.html2pdf().set(opt).from(printHtml).save();
       };
     } catch (err) {
       alert('PDF Error: ' + err.message);
@@ -706,44 +647,28 @@ export default function ClientDashboard() {
         customSender: customSender || ""
       };
 
-      if (Capacitor.isNativePlatform()) {
-        const res = await CapacitorHttp.post({
-          url: url,
-          headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json' 
-          },
-          data: payload
-        }); 
+      // Native Web Fetch instead of Capacitor HTTP
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+      }); 
         
-        if (res.status === 200 && res.data?.success) {
-          setShowEmailModal(false);
-          alert("Email sent successfully!");
-        } else {
-          throw new Error(res.data?.error || `API Error: ${res.status}`); 
-        }
-      } else {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(payload)
-        }); 
-        
-        const responseText = await res.text();
-        let r;
-        try { 
-          r = JSON.parse(responseText); 
-        } catch (parseError) { 
-          throw new Error(`Parse Error: ${responseText.slice(0, 40)}...`); 
-        }
-        
-        if (r.success) {
-          setShowEmailModal(false);
-          alert("Email sent successfully!");
-        } else {
-          throw new Error(r.error || "Server failed to send."); 
-        }
+      const responseText = await res.text();
+      let r;
+      try { 
+        r = JSON.parse(responseText); 
+      } catch (parseError) { 
+        throw new Error(`Parse Error: ${responseText.slice(0, 40)}...`); 
       }
+        
+      if (r.success) {
+        setShowEmailModal(false);
+        alert("Email sent successfully!");
+      } else {
+        throw new Error(r.error || "Server failed to send."); 
+      }
+      
     } catch(e) { 
       alert("Delivery Failed: " + e.message); 
     } finally { 
