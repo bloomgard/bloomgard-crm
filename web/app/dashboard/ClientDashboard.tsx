@@ -78,6 +78,9 @@ export default function ClientDashboard() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [dynamicData, setDynamicData] = useState({});
   const [statusFilter, setStatusFilter] = useState("");
+  const [editedSnippets, setEditedSnippets] = useState({});
+  const [userPreferences, setUserPreferences] = useState({ theme: 'light', wallpaper: 'legacy' });
+  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
 
   const getApiUrl = (endpoint) => endpoint;
 
@@ -97,6 +100,17 @@ export default function ClientDashboard() {
         const fullUser = { ...profile, email: session.user.email };
         setUser(fullUser);
         setAuthState('authed');
+        
+        let prefs = { theme: 'light', wallpaper: 'legacy' };
+        if (profile.custom_metadata?.preferences) {
+           prefs = profile.custom_metadata.preferences;
+        } else {
+           const localPrefs = localStorage.getItem('userPrefs_' + profile.id);
+           if (localPrefs) {
+             try { prefs = JSON.parse(localPrefs); } catch(e) {}
+           }
+        }
+        setUserPreferences(prefs);
 
         if (profile.tenant_id) {
           setTenantId(profile.tenant_id);
@@ -422,6 +436,9 @@ export default function ClientDashboard() {
 
   const handleTriggerAgent = async (quote) => {
     setDispatchingId(quote.id);
+    const defaultSnippet = `Hi ${extractValue(quote, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote (${quote.qn_number || quote.qn}). Let me know if you have any questions or need further clarification.`;
+    const finalMessage = editedSnippets[quote.id] !== undefined ? editedSnippets[quote.id] : defaultSnippet;
+
     try {
       const res = await fetch(getApiUrl('/api/trigger-agent'), {
         method: 'POST',
@@ -429,7 +446,8 @@ export default function ClientDashboard() {
         body: JSON.stringify({
           quoteId: quote.id,
           tenantId: tenantId,
-          agentEmail: user?.email
+          agentEmail: user?.email,
+          customMessage: finalMessage
         })
       });
       
@@ -873,14 +891,17 @@ export default function ClientDashboard() {
     </div>
   );
 
+  const isGlass = userPreferences.wallpaper !== 'legacy';
+
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans">
+    <div className={`flex min-h-screen font-sans transition-colors duration-500 ${userPreferences.theme === 'dark' ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode' : ''} bg-gray-50 dark:bg-[#030712]`}>
       {!isMobileMenuOpen && !selectedRecord && !viewingDoc && !showEmailModal && (
         <button onClick={()=>setIsMobileMenuOpen(true)} className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-md active:scale-95 transition-transform">☰</button>
       )}
-      {isMobileMenuOpen && <div onClick={()=>setIsMobileMenuOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm"></div>}
+      {isMobileMenuOpen && <div onClick={()=>setIsMobileMenuOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity"></div>}
 
-      <aside className={`fixed inset-y-0 left-0 z-[100] w-64 bg-white flex flex-col shadow-2xl md:shadow-none border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen?'translate-x-0':'-translate-x-full'} md:translate-x-0`}>
+      <aside className={`fixed inset-y-0 left-0 z-[100] w-64 flex flex-col shadow-2xl md:shadow-none border-r transform transition-all duration-300 ease-in-out ${isMobileMenuOpen?'translate-x-0':'-translate-x-full'} md:translate-x-0 
+        ${isGlass ? 'bg-white/60 dark:bg-black/40 backdrop-blur-2xl border-white/20 dark:border-white/10' : 'bg-white dark:bg-[#030712] border-gray-200 dark:border-gray-800'}`}>
         <div className="p-8 pb-4">
           <h1 className="text-4xl font-bold tracking-tighter text-gray-900">Bloomgard.</h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
@@ -902,9 +923,9 @@ export default function ClientDashboard() {
             </div>
           ))}
           <div className="pt-4 pb-2"><div className="border-t border-gray-100"></div></div>
-          <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-600 hover:bg-indigo-50'}`}>🤖 Bloomgard AI</div>
+          <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
         </nav>
-        <div className="p-6 border-t border-gray-100 space-y-4 bg-gray-50/50">
+        <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/30 dark:bg-black/30 border-white/10' : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800'}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center text-gray-700 text-xs font-bold uppercase border border-gray-300">{user?.email?.charAt(0)||'O'}</div>
             <div className="overflow-hidden">
@@ -916,7 +937,16 @@ export default function ClientDashboard() {
         </div>
       </aside>
 
-      <main className="flex-1 w-full px-3 py-4 pt-24 md:ml-64 md:px-8 md:pt-8 lg:px-12 min-h-screen bg-gray-50" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 6rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}>
+      <main className="flex-1 w-full px-3 py-4 pt-24 md:ml-64 md:px-8 md:pt-8 lg:px-12 min-h-screen relative z-10 transition-all duration-500" 
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 6rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+      >
+        {isGlass && (
+          <>
+            <div className="fixed inset-0 z-[-2] bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url('/wallpapers/${userPreferences.wallpaper}.jpg')` }}></div>
+            {userPreferences.theme === 'dark' && <div className="fixed inset-0 z-[-1] bg-black/60 transition-opacity duration-700"></div>}
+            {userPreferences.theme === 'light' && <div className="fixed inset-0 z-[-1] bg-white/20 transition-opacity duration-700"></div>}
+          </>
+        )}
 
         {!tenantId && (
           <div className="max-w-6xl mx-auto bg-amber-50 border-l-4 border-amber-500 p-4 md:p-6 rounded-xl mb-8 flex items-start gap-4">
@@ -957,18 +987,25 @@ export default function ClientDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {pendingAlerts.map(r => (
+                    {pendingAlerts.map(r => {
+                      const defaultSnippet = `Hi ${extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote (${r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.`;
+                      const currentVal = editedSnippets[r.id] !== undefined ? editedSnippets[r.id] : defaultSnippet;
+                      
+                      return (
                       <div key={r.id} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm hover:shadow-md hover:bg-white/80 transition-all gap-4">
                         <div className="flex-1 w-full md:w-auto">
                           <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
                           <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-3">Due: {r.follow_up_due_date || r.custom_metadata?.follow_up_due_date ? new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString() : 'Overdue (> 3 days)'}</p>
-                          <div className="bg-white p-3 rounded-lg border border-indigo-100/50 shadow-sm relative">
-                            <p className="text-xs text-gray-600 italic">
-                              <span className="font-semibold text-indigo-400 mr-1">"</span>
-                              Hi {extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote ({r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.
-                              <span className="font-semibold text-indigo-400 ml-1">"</span>
+                          <div className="bg-white p-3 rounded-lg border border-indigo-100/50 shadow-sm relative group focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+                            <textarea
+                              value={currentVal}
+                              onChange={(e) => setEditedSnippets({...editedSnippets, [r.id]: e.target.value})}
+                              className="w-full text-xs text-gray-600 italic bg-transparent outline-none resize-none min-h-[48px]"
+                            />
+                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2 flex justify-between items-center">
+                              <span>Suggested Email Snippet • Waiting for Approval</span>
+                              <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">✎ Edit</span>
                             </p>
-                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2">Suggested Email Snippet • Waiting for Approval</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-4 w-full md:w-auto">
@@ -989,7 +1026,7 @@ export default function ClientDashboard() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
               </div>
@@ -1004,6 +1041,54 @@ export default function ClientDashboard() {
             </header>
 
             <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
+              
+              <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <span className="text-2xl">✨</span>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">UI & Personalization</h3>
+                </div>
+              </div>
+
+              <div className="space-y-6 max-w-2xl mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Theme Mode</label>
+                    <div className="flex bg-gray-100/50 p-1 rounded-xl w-full border border-gray-200/50">
+                      <button onClick={() => setUserPreferences({...userPreferences, theme: 'light'})} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'light' ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-700'}`}>Light Mode</button>
+                      <button onClick={() => setUserPreferences({...userPreferences, theme: 'dark'})} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'dark' ? 'bg-gray-900 shadow-sm text-white' : 'text-gray-500 hover:text-gray-700'}`}>Dark Mode</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Workspace Wallpaper</label>
+                    <select 
+                      value={userPreferences.wallpaper} 
+                      onChange={e => setUserPreferences({...userPreferences, wallpaper: e.target.value})} 
+                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors cursor-pointer"
+                    >
+                      <option value="legacy">Legacy UI (Solid Background)</option>
+                      <option value="wp1">Glassmorphism - Wallpaper 1</option>
+                      <option value="wp2">Glassmorphism - Wallpaper 2</option>
+                      <option value="wp3">Glassmorphism - Wallpaper 3</option>
+                    </select>
+                  </div>
+                </div>
+                <button 
+                  onClick={async () => {
+                    setIsSavingPrefs(true);
+                    localStorage.setItem('userPrefs_' + user?.id, JSON.stringify(userPreferences));
+                    if (user?.id) {
+                       await supabase.from('profiles').update({ custom_metadata: { ...user.custom_metadata, preferences: userPreferences } }).eq('id', user.id);
+                    }
+                    setIsSavingPrefs(false);
+                    alert("Personalization settings saved successfully!");
+                  }}
+                  disabled={isSavingPrefs}
+                  className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-indigo-400"
+                >
+                  {isSavingPrefs ? "Saving..." : "Save UI Preferences"}
+                </button>
+              </div>
+
               <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
                 <span className="text-2xl">✉️</span>
                 <div>

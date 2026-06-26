@@ -20,3 +20,46 @@ input:-webkit-autofill:active {
   -webkit-text-fill-color: black !important;
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* Global Dark Mode Overrides (Saves doing 1000+ inline class changes) */
+.dark body {
+    background-color: #030712 !important;
+    color: #e5e7eb !important;
+}
+.dark .text-gray-900, .dark .text-gray-800, .dark .text-gray-700 {
+    color: #f9fafb !important;
+}
+.dark .text-gray-600, .dark .text-gray-500 {
+    color: #d1d5db !important;
+}
+.dark .border-gray-200, .dark .border-gray-100, .dark .border-indigo-100\/50, .dark .border-white\/50 {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.dark .bg-gray-50, .dark .bg-white {
+    background-color: #111827 !important;
+}
+.dark .bg-gray-100 {
+    background-color: #1f2937 !important;
+}
+.dark input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0px 1000px #1f2937 inset !important;
+  -webkit-text-fill-color: white !important;
+}
+
+/* Glassmorphism Overrides */
+.glass-mode .bg-white, .glass-mode .bg-gray-50, .glass-mode .bg-white\/60, .glass-mode .bg-[#F8F9FA] {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+.glass-mode.dark .bg-white, .glass-mode.dark .bg-gray-50, .glass-mode.dark .bg-white\/60, .glass-mode.dark .bg-[#F8F9FA] {
+    background-color: rgba(0, 0, 0, 0.35) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #f3f4f6 !important;
+}
+.glass-mode input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.1) inset !important;
+}

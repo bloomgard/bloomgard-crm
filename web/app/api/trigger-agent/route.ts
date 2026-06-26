@@ -12,7 +12,7 @@ const AI_MODEL = 'openai/gpt-3.5-turbo';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { quoteId, tenantId, agentEmail } = body;
+    const { quoteId, tenantId, agentEmail, customMessage } = body;
 
     if (!quoteId || !tenantId) {
       return NextResponse.json({ success: false, error: 'Missing quoteId or tenantId' }, { status: 400 });
@@ -67,10 +67,13 @@ export async function POST(request: Request) {
     Quote Number: ${quote.qn_number}
     Items Quoted: ${itemsSummary}
     
+    ${customMessage ? `BASE MESSAGE (From User):
+    "${customMessage}"` : ''}
+    
     RULES:
+    ${customMessage ? '- Use the BASE MESSAGE provided above as the exact core of your email.' : '- Write a polite, professional, and concise follow-up email.'}
+    - Refine the text according to the Personality & Style settings.
     - Keep it under 3 paragraphs.
-    - Mention the specific quote number and summarize the items briefly to jog their memory.
-    - Be helpful, not pushy. Ask if they have any questions or need revisions.
     - Output ONLY the email body. Do not include subject lines or conversational filler.`;
 
     const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
