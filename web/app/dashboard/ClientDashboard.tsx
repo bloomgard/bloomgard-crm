@@ -901,8 +901,9 @@ export default function ClientDashboard() {
       )}
       {isMobileMenuOpen && <div onClick={()=>setIsMobileMenuOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity"></div>}
 
-      <aside className={`fixed inset-y-0 left-0 z-[100] w-64 flex flex-col shadow-2xl md:shadow-none border-r transform transition-all duration-300 ease-in-out ${isMobileMenuOpen?'translate-x-0':'-translate-x-full'} md:translate-x-0 
-        ${isGlass ? 'bg-white/60 dark:bg-black/40 backdrop-blur-2xl border-white/20 dark:border-white/10' : 'bg-white dark:bg-[#030712] border-gray-200 dark:border-gray-800'}`}>
+      <aside className={`fixed z-[100] w-64 flex flex-col shadow-2xl md:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-in-out 
+        ${isMobileMenuOpen ? 'inset-y-0 left-0 translate-x-0 rounded-none border-r' : 'top-4 bottom-4 left-4 -translate-x-[120%] md:translate-x-0 rounded-3xl'} 
+        ${isGlass ? 'bg-white/40 dark:bg-black/40 backdrop-blur-3xl border border-white/40 dark:border-white/10' : (isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200')}`}>
         <div className="p-8 pb-4">
           <h1 className="text-4xl font-bold tracking-tighter text-gray-900">Bloomgard.</h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
@@ -938,7 +939,7 @@ export default function ClientDashboard() {
         </div>
       </aside>
 
-      <main className="flex-1 w-full px-3 py-4 pt-24 md:ml-64 md:px-8 md:pt-8 lg:px-12 min-h-screen relative z-10 transition-all duration-500" 
+      <main className={`flex-1 w-full px-3 py-4 pt-24 md:ml-[17.5rem] md:px-8 md:pt-8 lg:px-12 min-h-screen relative z-10 transition-all duration-500 ${isGlass ? '!bg-transparent' : ''}`} 
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 6rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
       >
         {isGlass && (

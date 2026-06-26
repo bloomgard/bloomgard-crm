@@ -63,8 +63,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+    <div className="min-h-screen flex items-center justify-center p-4 glass-mode relative z-10 transition-all duration-500">
+      <div className="fixed inset-0 z-[-1] bg-cover bg-center" style={{ backgroundImage: "url('/wallpapers/login_bg.png')" }}></div>
+      
+      <div className="w-full max-w-md bg-white rounded-[2rem] p-10 border border-white/40 relative overflow-hidden">
         
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold tracking-tighter text-gray-900 mb-2">Bloomgard.</h1>
@@ -87,7 +89,7 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-black focus:ring-0 outline-none transition-colors"
+              className="w-full bg-white/40 backdrop-blur-sm border border-white/40 rounded-xl px-4 py-3 text-sm focus:bg-white/70 focus:border-gray-300 focus:ring-0 outline-none transition-all placeholder-gray-500"
               placeholder="name@company.com"
             />
           </div>
@@ -100,7 +102,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-black focus:ring-0 outline-none transition-colors pr-16"
+                className="w-full bg-white/40 backdrop-blur-sm border border-white/40 rounded-xl px-4 py-3 text-sm focus:bg-white/70 focus:border-gray-300 focus:ring-0 outline-none transition-all pr-16 placeholder-gray-500"
                 placeholder="••••••••"
               />
               <button
@@ -120,7 +122,7 @@ export default function Login() {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full bg-black text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400 active:scale-95"
+            className="w-full bg-gray-900 text-white font-bold py-3.5 px-4 rounded-xl hover:bg-black transition-all hover:shadow-lg disabled:bg-gray-400 active:scale-95 mt-4"
           >
             {isSignUp ? "Create Workspace" : "Sign In"}
           </button>
