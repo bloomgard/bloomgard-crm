@@ -470,6 +470,20 @@ export default function ClientDashboard() {
       
       const { error } = await supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig }).eq('tenant_id', tenantId);
       if (error) throw error;
+
+      if (agentData.assigned_quote_ids) {
+        for (const quoteId of agentData.assigned_quote_ids) {
+          const q = records.find(r => r.id === quoteId);
+          if (q) {
+            let meta = q.custom_metadata;
+            if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) { meta = {}; } }
+            if (!meta) meta = {};
+            meta.agent_id = agentData.id;
+            await supabase.from('quotations').update({ custom_metadata: meta }).eq('id', quoteId);
+          }
+        }
+        await fetchRecords(tenantId);
+      }
       
       setAgents(updatedAgents);
       setEditingAgent(null);
@@ -1065,6 +1079,16 @@ export default function ClientDashboard() {
                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Core Instructions (Product, Policy, Tone)</label>
                     <textarea value={editingAgent.instructions} onChange={e=>setEditingAgent({...editingAgent, instructions: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-indigo-400 h-32 resize-none" placeholder="Enter specific instructions regarding products, company policies, and negotiation tactics..."></textarea>
                   </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Assign Quotes to Agent</label>
+                    <select multiple value={editingAgent.assigned_quote_ids || []} onChange={e=> {
+                      const options = Array.from(e.target.selectedOptions, option => option.value);
+                      setEditingAgent({...editingAgent, assigned_quote_ids: options});
+                    }} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400 h-32">
+                      {records.filter(r => r.status === 'Inquiry').map(r => <option key={r.id} value={r.id}>{r.qn_number} ({r.clients?.company_name || r.custom_metadata?.client_name || 'Client'})</option>)}
+                    </select>
+                    <p className="text-[10px] text-gray-400 mt-1 ml-1">Hold Cmd/Ctrl to select multiple quotes.</p>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-4 mt-8">
                   <button onClick={() => setEditingAgent(null)} className="px-6 py-2.5 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100 transition-colors">Cancel</button>
@@ -1100,7 +1124,14 @@ export default function ClientDashboard() {
                         <p className="text-xs text-gray-600 mb-4 line-clamp-2">{a.task}</p>
                       </div>
                       <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
-                        <button onClick={() => setEditingAgent(a)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
+                        <button onClick={() => {
+                          const assigned = records.filter(r => {
+                            let m = r.custom_metadata;
+                            if(typeof m==='string') { try { m = JSON.parse(m); } catch(e){ m={}; } }
+                            return m?.agent_id === a.id;
+                          }).map(r => r.id);
+                          setEditingAgent({...a, assigned_quote_ids: assigned});
+                        }} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
                         <button onClick={() => handleDeleteAgent(a.id)} className="text-xs font-semibold text-red-500 hover:text-red-700 ml-4">Delete</button>
                       </div>
                     </div>
