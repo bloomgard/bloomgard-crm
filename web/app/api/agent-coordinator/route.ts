@@ -84,7 +84,9 @@ export async function POST(request: Request) {
 
       const itemsSummary = quote.quotation_items?.map((item: any) => `${item.quantity}x ${item.item_name}`).join(', ') || 'the requested items';
       
-      const systemPrompt = `You are an automated agent acting on behalf of a company.
+      const mode = agent.mode || 'email';
+
+      const promptContext = `
       Your Identity: 
       - Name: ${agent.name}
       - Email: ${agent.email}
@@ -99,45 +101,92 @@ export async function POST(request: Request) {
       Client Name: ${clientName}
       Quote Number: ${quote.qn_number}
       Items Quoted: ${itemsSummary}
-      
-      RULES:
-      - Write a highly personalized, professional email to the client to achieve your Task.
-      - Follow the core instructions and tone strictly.
-      - Output ONLY the email body. Do not include subject lines or conversational filler.`;
+      `;
 
       try {
-        const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${AI_API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://bloomgard.vercel.app", 
-          },
-          body: JSON.stringify({
-            model: AI_MODEL,
-            messages: [{ role: "system", content: systemPrompt }]
-          })
-        });
+        if (mode === 'call') {
+          const clientPhone = quote.clients?.phone_number || quote.custom_metadata?.phone_number;
+          if (!clientPhone) {
+            console.warn(`No phone number for quote ${quote.qn_number}, skipping voice call.`);
+            continue;
+          }
 
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          const emailBody = aiData.choices[0].message.content.trim();
+          const callTaskPrompt = `You are an automated voice agent acting on behalf of a company. 
+          ${promptContext}
+          RULES:
+          - Speak naturally and professionally to the client on the phone.
+          - Strictly follow your core instructions and tone.
+          - Achieve the assigned task over this phone call.`;
 
-          const mailOptions = {
-            from: `${agent.name} <onboarding@resend.dev>`, 
-            to: clientEmail,
-            subject: `Regarding Quote ${quote.qn_number}`,
-            text: emailBody
-          };
+          const blandApiKey = process.env.BLAND_API_KEY;
+          if (!blandApiKey) throw new Error("BLAND_API_KEY is not set in environment variables.");
 
-          await transporter.sendMail(mailOptions);
-          
-          await supabase.from('quotations').update({ follow_up_status: 'Agent Dispatched', last_contact_date: new Date().toISOString() }).eq('id', quote.id);
-          await supabase.from('status_logs').insert([{ quotation_id: quote.id, old_status: quote.status, new_status: quote.status, comments: `Autonomous Agent [${agent.name}] dispatched email based on Importance Level ${agent.importance}.` }]);
+          const callRes = await fetch('https://api.bland.ai/v1/calls', {
+            method: 'POST',
+            headers: {
+              'authorization': blandApiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              phone_number: clientPhone,
+              task: callTaskPrompt,
+              reduce_latency: true,
+              voice_id: 0
+            })
+          });
+
+          if (!callRes.ok) {
+            const errData = await callRes.text();
+            throw new Error(`Bland AI Error: ${errData}`);
+          }
+
+          await supabase.from('quotations').update({ follow_up_status: 'Voice Call Dispatched', last_contact_date: new Date().toISOString() }).eq('id', quote.id);
+          await supabase.from('status_logs').insert([{ quotation_id: quote.id, old_status: quote.status, new_status: quote.status, comments: `Autonomous Agent [${agent.name}] dispatched VOICE CALL based on Importance Level ${agent.importance}.` }]);
           
           processedCount++;
+
+        } else {
+          // Email Mode
+          const systemPrompt = `You are an automated agent acting on behalf of a company.
+          ${promptContext}
+          RULES:
+          - Write a highly personalized, professional email to the client to achieve your Task.
+          - Follow the core instructions and tone strictly.
+          - Output ONLY the email body. Do not include subject lines or conversational filler.`;
+
+          const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${AI_API_KEY}`,
+              "Content-Type": "application/json",
+              "HTTP-Referer": "https://bloomgard.vercel.app", 
+            },
+            body: JSON.stringify({
+              model: AI_MODEL,
+              messages: [{ role: "system", content: systemPrompt }]
+            })
+          });
+
+          if (aiResponse.ok) {
+            const aiData = await aiResponse.json();
+            const emailBody = aiData.choices[0].message.content.trim();
+
+            const mailOptions = {
+              from: `${agent.name} <onboarding@resend.dev>`, 
+              to: clientEmail,
+              subject: `Regarding Quote ${quote.qn_number}`,
+              text: emailBody
+            };
+
+            await transporter.sendMail(mailOptions);
+            
+            await supabase.from('quotations').update({ follow_up_status: 'Email Dispatched', last_contact_date: new Date().toISOString() }).eq('id', quote.id);
+            await supabase.from('status_logs').insert([{ quotation_id: quote.id, old_status: quote.status, new_status: quote.status, comments: `Autonomous Agent [${agent.name}] dispatched EMAIL based on Importance Level ${agent.importance}.` }]);
+            
+            processedCount++;
+          }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Error processing task for quote ${quote.qn_number}:`, err);
       }
     }
