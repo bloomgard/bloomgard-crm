@@ -48,6 +48,10 @@ export default function ClientDashboard() {
   const [companyName, setCompanyName] = useState("");
   const [aiEnabled, setAiEnabled] = useState(true);
   const [blueprint, setBlueprint] = useState([]);
+  const [agents, setAgents] = useState([]);
+  const [editingAgent, setEditingAgent] = useState(null);
+  const [isSavingAgent, setIsSavingAgent] = useState(false);
+  const [isRunningCoordinator, setIsRunningCoordinator] = useState(false);
   const [records, setRecords] = useState([]);
   const [currentView, setCurrentView] = useState("alerts"); // Default to Alerts for testing
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -105,9 +109,12 @@ export default function ClientDashboard() {
 
           const { data: schema } = await supabase.from("tenant_schemas").select("schema_config").eq("tenant_id", profile.tenant_id).maybeSingle();
           if (schema?.schema_config) {
-            setBlueprint(schema.schema_config);
+            const agentConfig = schema.schema_config.find(s => s.is_agent_config);
+            if (agentConfig) setAgents(agentConfig.agents || []);
+            const actualBlueprint = schema.schema_config.filter(s => !s.is_agent_config);
+            setBlueprint(actualBlueprint);
             const init = {};
-            schema.schema_config.forEach(s => { init[s.title] = s.allow_multiple ? [{}] : {}; });
+            actualBlueprint.forEach(s => { init[s.title] = s.allow_multiple ? [{}] : {}; });
             setDynamicData(init);
           }
           await fetchRecords(profile.tenant_id);
@@ -426,6 +433,62 @@ export default function ClientDashboard() {
     } finally {
       setDispatchingId(null);
     }
+  };
+
+  const handleRunCoordinator = async () => {
+    if (!tenantId) return;
+    setIsRunningCoordinator(true);
+    try {
+      const res = await fetch(getApiUrl('/api/agent-coordinator'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Coordinator failed.");
+      alert(data.message);
+      await fetchRecords(tenantId);
+    } catch (e) {
+      alert("Error: " + e.message);
+    } finally {
+      setIsRunningCoordinator(false);
+    }
+  };
+
+  const handleSaveAgent = async (agentData) => {
+    if (!tenantId) return alert("No workspace connected.");
+    setIsSavingAgent(true);
+    try {
+      const isNew = !agentData.id;
+      if (isNew) agentData.id = safeUUID();
+      const updatedAgents = isNew ? [...agents, agentData] : agents.map(a => a.id === agentData.id ? agentData : a);
+      
+      const newSchemaConfig = [
+        ...blueprint,
+        { is_agent_config: true, agents: updatedAgents, title: "system_agents" }
+      ];
+      
+      const { error } = await supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig }).eq('tenant_id', tenantId);
+      if (error) throw error;
+      
+      setAgents(updatedAgents);
+      setEditingAgent(null);
+    } catch (e) {
+      alert("Error saving agent: " + e.message);
+    } finally {
+      setIsSavingAgent(false);
+    }
+  };
+
+  const handleDeleteAgent = async (id) => {
+    if (!confirm("Delete this agent?")) return;
+    const updatedAgents = agents.filter(a => a.id !== id);
+    const newSchemaConfig = [
+      ...blueprint,
+      { is_agent_config: true, agents: updatedAgents, title: "system_agents" }
+    ];
+    await supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig }).eq('tenant_id', tenantId);
+    setAgents(updatedAgents);
   };
 
   const handleDelete = async (id) => {
@@ -797,6 +860,7 @@ export default function ClientDashboard() {
           {[
             ['dashboard','📊 Intelligence'],
             ['alerts','⚡ Action Needed'],
+            ['agents','🤖 Agent Fleet'],
             ['pipeline','🚀 Quotes'],
             ['docs','📄 Docs'],
             ['settings','⚙️ Settings']
@@ -942,6 +1006,96 @@ export default function ClientDashboard() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {currentView === "agents" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-8">
+            <header className="mb-8 flex justify-between items-end border-b border-gray-200 pb-8">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">🤖 Agent Fleet</h2>
+                <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">Manage Autonomous Follow-up Agents</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={handleRunCoordinator} disabled={isRunningCoordinator || agents.length === 0} className="bg-white text-gray-900 border border-gray-200 px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-transform disabled:opacity-50">
+                  {isRunningCoordinator ? "Syncing..." : "▶ Run Daily Sync"}
+                </button>
+                <button onClick={() => setEditingAgent({ name: '', email: '', phone: '', importance: 5, task: '', instructions: '' })} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform">
+                  + Create Agent
+                </button>
+              </div>
+            </header>
+
+            {editingAgent ? (
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm max-w-2xl mx-auto">
+                <h3 className="text-lg font-bold text-gray-900 mb-6">{editingAgent.id ? "Edit Agent Profile" : "New Agent Profile"}</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Agent Name</label>
+                      <input type="text" value={editingAgent.name} onChange={e=>setEditingAgent({...editingAgent, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="e.g. Sarah from Sales" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Agent Email</label>
+                      <input type="email" value={editingAgent.email} onChange={e=>setEditingAgent({...editingAgent, email: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="sales@company.com" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Agent Phone</label>
+                      <input type="text" value={editingAgent.phone} onChange={e=>setEditingAgent({...editingAgent, phone: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="+1 234 567 890" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Importance Level (1-10)</label>
+                      <input type="number" min="1" max="10" value={editingAgent.importance} onChange={e=>setEditingAgent({...editingAgent, importance: parseInt(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Specific Task</label>
+                    <input type="text" value={editingAgent.task} onChange={e=>setEditingAgent({...editingAgent, task: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="e.g. Negotiate a 10% discount to close the deal" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Core Instructions (Product, Policy, Tone)</label>
+                    <textarea value={editingAgent.instructions} onChange={e=>setEditingAgent({...editingAgent, instructions: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-indigo-400 h-32 resize-none" placeholder="Enter specific instructions regarding products, company policies, and negotiation tactics..."></textarea>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-4 mt-8">
+                  <button onClick={() => setEditingAgent(null)} className="px-6 py-2.5 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100 transition-colors">Cancel</button>
+                  <button onClick={() => handleSaveAgent(editingAgent)} disabled={isSavingAgent} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:opacity-50">
+                    {isSavingAgent ? "Saving..." : "Save Agent"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {agents.length === 0 ? (
+                  <div className="col-span-full text-center py-16 border-2 border-dashed border-gray-200 rounded-3xl">
+                    <span className="text-4xl mb-4 block opacity-50">🤖</span>
+                    <p className="text-gray-500 font-medium text-sm">No Agents Created Yet</p>
+                    <p className="text-gray-400 text-xs mt-1">Create an agent to automate your follow-ups and negotiations.</p>
+                  </div>
+                ) : (
+                  agents.map(a => (
+                    <div key={a.id} className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="font-bold text-gray-900">{a.name}</h3>
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest">{a.email}</p>
+                          </div>
+                          <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-full">Rank {a.importance}</span>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-4 line-clamp-2">{a.task}</p>
+                      </div>
+                      <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+                        <button onClick={() => setEditingAgent(a)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
+                        <button onClick={() => handleDeleteAgent(a.id)} className="text-xs font-semibold text-red-500 hover:text-red-700 ml-4">Delete</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1185,9 +1339,16 @@ export default function ClientDashboard() {
               </div>
             </div>
             
-            <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 mb-8 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 mb-8 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Ref ID</label><input readOnly className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-400 outline-none cursor-not-allowed italic" value={qn || "Auto-generated on save"}/></div>
               <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Date</label><input type="date" className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400" value={date} onChange={e=>setDate(e.target.value)}/></div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Assign Agent</label>
+                <select className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400" value={dynamicData.agent_id || ""} onChange={e => setDynamicData({ ...dynamicData, agent_id: e.target.value })}>
+                  <option value="">None (Manual Follow-up)</option>
+                  {agents.map(a => <option key={a.id} value={a.id}>{a.name} - Rank {a.importance}</option>)}
+                </select>
+              </div>
             </div>
             
             <div className="space-y-8 pb-20">
