@@ -1080,14 +1080,33 @@ export default function ClientDashboard() {
                     <textarea value={editingAgent.instructions} onChange={e=>setEditingAgent({...editingAgent, instructions: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-indigo-400 h-32 resize-none" placeholder="Enter specific instructions regarding products, company policies, and negotiation tactics..."></textarea>
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Assign Quotes to Agent</label>
-                    <select multiple value={editingAgent.assigned_quote_ids || []} onChange={e=> {
-                      const options = Array.from(e.target.selectedOptions, option => option.value);
-                      setEditingAgent({...editingAgent, assigned_quote_ids: options});
-                    }} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400 h-32">
-                      {records.filter(r => r.status === 'Inquiry').map(r => <option key={r.id} value={r.id}>{r.qn_number} ({r.clients?.company_name || r.custom_metadata?.client_name || 'Client'})</option>)}
-                    </select>
-                    <p className="text-[10px] text-gray-400 mt-1 ml-1">Hold Cmd/Ctrl to select multiple quotes.</p>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 mb-2 block">Assign Quotes to Agent</label>
+                    <div className="w-full bg-gray-50 border border-gray-200 rounded-xl max-h-48 overflow-y-auto p-2 space-y-1">
+                      {records.filter(r => r.status === 'Inquiry').map(r => (
+                        <label key={r.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
+                          <input 
+                            type="checkbox" 
+                            checked={(editingAgent.assigned_quote_ids || []).includes(r.id)}
+                            onChange={(e) => {
+                              const currentIds = editingAgent.assigned_quote_ids || [];
+                              if (e.target.checked) {
+                                setEditingAgent({...editingAgent, assigned_quote_ids: [...currentIds, r.id]});
+                              } else {
+                                setEditingAgent({...editingAgent, assigned_quote_ids: currentIds.filter(id => id !== r.id)});
+                              }
+                            }}
+                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-gray-900">{r.qn_number}</span>
+                            <span className="text-xs text-gray-500">{r.clients?.company_name || r.custom_metadata?.client_name || 'Client'}</span>
+                          </div>
+                        </label>
+                      ))}
+                      {records.filter(r => r.status === 'Inquiry').length === 0 && (
+                        <div className="p-4 text-center text-xs text-gray-500">No active inquiry quotes available to assign.</div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex justify-end gap-4 mt-8">
