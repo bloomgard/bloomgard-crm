@@ -354,6 +354,10 @@ export default function ClientDashboard() {
     } catch(e) {}
     
     let masterStatusValue = allStatuses[0] || "Inquiry";
+    if (editingId) {
+       const existingQuote = records.find(r => r.id === editingId);
+       if (existingQuote && existingQuote.status) masterStatusValue = existingQuote.status;
+    }
     blueprint.forEach(sec => {
       sec.fields.forEach(f => {
         if (f.type === 'master_status') {
@@ -1044,14 +1048,7 @@ export default function ClientDashboard() {
               <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm max-w-2xl mx-auto">
                 <h3 className="text-lg font-bold text-gray-900 mb-6">{editingAgent.id ? "Edit Agent Profile" : "New Agent Profile"}</h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Mode</label>
-                      <select value={editingAgent.mode || 'email'} onChange={e=>setEditingAgent({...editingAgent, mode: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400">
-                        <option value="email">Email</option>
-                        <option value="call">Phone Call</option>
-                      </select>
-                    </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Agent Name</label>
                       <input type="text" value={editingAgent.name} onChange={e=>setEditingAgent({...editingAgent, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="e.g. Sarah from Sales" />
@@ -1074,6 +1071,11 @@ export default function ClientDashboard() {
                   <div>
                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Specific Task</label>
                     <input type="text" value={editingAgent.task} onChange={e=>setEditingAgent({...editingAgent, task: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="e.g. Negotiate a 10% discount to close the deal" />
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button type="button" onClick={() => setEditingAgent({...editingAgent, task: 'Follow up on the quote and ask if they have any questions'})} className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold hover:bg-indigo-100 transition-colors">Follow Up</button>
+                      <button type="button" onClick={() => setEditingAgent({...editingAgent, task: 'Negotiate a deal within a 10% discount margin'})} className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold hover:bg-indigo-100 transition-colors">Negotiate Deal</button>
+                      <button type="button" onClick={() => setEditingAgent({...editingAgent, task: 'Act as a chatbot and answer their questions about the product'})} className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold hover:bg-indigo-100 transition-colors">Answer Questions</button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Core Instructions (Product, Policy, Tone)</label>
@@ -1133,12 +1135,7 @@ export default function ClientDashboard() {
                             <h3 className="font-bold text-gray-900">{a.name}</h3>
                             <p className="text-[10px] text-gray-500 uppercase tracking-widest">{a.email}</p>
                           </div>
-                          <div className="flex flex-col gap-1 items-end">
-                            <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-full">Rank {a.importance}</span>
-                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${a.mode === 'call' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                              {a.mode === 'call' ? '📞 Voice Call' : '✉️ Email'}
-                            </span>
-                          </div>
+                          <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-full">Rank {a.importance}</span>
                         </div>
                         <p className="text-xs text-gray-600 mb-4 line-clamp-2">{a.task}</p>
                       </div>
