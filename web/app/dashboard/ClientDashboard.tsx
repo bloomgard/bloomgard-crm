@@ -548,23 +548,24 @@ export default function ClientDashboard() {
       script.onload = () => {
         const printHtml = `
           <style>
-            body, html { margin: 0 !important; padding: 0 !important; background: #ffffff; }
-            .pdf-content { width: 800px; padding: 20px; box-sizing: border-box; text-align: left; }
+            body { margin: 0; padding: 0; background: #ffffff; }
+            .pdf-wrapper { display: flex; justify-content: center; width: 100%; }
+            .pdf-content { width: 800px; padding: 20px; box-sizing: border-box; }
           </style>
-          <div class="pdf-content">${html}</div>
+          <div class="pdf-wrapper">
+            <div class="pdf-content">${html}</div>
+          </div>
         `;
 
         const opt = {
-          margin: [0.5, 0, 0.5, 0], 
+          margin: 0.5,
           filename: `${name}.pdf`,
           image: { type: 'jpeg', quality: 1.0 },
           html2canvas: { 
             scale: 2, 
             useCORS: true, 
             windowWidth: 800, 
-            scrollY: 0,
-            x: 0,
-            y: 0
+            scrollY: 0
           },
           jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
@@ -700,7 +701,7 @@ export default function ClientDashboard() {
         subject: emailDraft.subject,
         message: emailDraft.message,
         attachments: emailDraft.attachments || [], 
-        agentEmail: user?.email,               
+        agentEmail: user?.email,              
         companyName: companyName || "",
         customSender: customSender || ""
       };
