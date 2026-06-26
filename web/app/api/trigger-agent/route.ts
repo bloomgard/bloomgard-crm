@@ -38,8 +38,29 @@ export async function POST(request: Request) {
 
     const itemsSummary = quote.quotation_items?.map((item: any) => `${item.quantity}x ${item.item_name}`).join(', ') || 'the requested items';
     
+    const { data: schema } = await supabase
+      .from('tenant_schemas')
+      .select('schema_config')
+      .eq('tenant_id', tenantId)
+      .single();
+    
+    let tone = 'Professional', englishLevel = 'Native', desperation = 'Low';
+    if (schema?.schema_config) {
+      const aiSettingsConfig = schema.schema_config.find((s: any) => s.is_ai_settings);
+      if (aiSettingsConfig) {
+        tone = aiSettingsConfig.tone || tone;
+        englishLevel = aiSettingsConfig.englishLevel || englishLevel;
+        desperation = aiSettingsConfig.desperation || desperation;
+      }
+    }
+
     const systemPrompt = `You are an automated sales assistant named Bloomgard AI, working on behalf of ${agentEmail}. 
-    Your task is to write a polite, professional, and concise follow-up email to a client who hasn't responded to a quote.
+    Your task is to write a follow-up email to a client who hasn't responded to a quote.
+    
+    Personality & Style:
+    - Tone: ${tone}
+    - English Level: ${englishLevel}
+    - Desperation Level: ${desperation}
     
     CONTEXT:
     Client Name: ${clientName}

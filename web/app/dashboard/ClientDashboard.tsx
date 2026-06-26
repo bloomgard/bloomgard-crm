@@ -61,6 +61,7 @@ export default function ClientDashboard() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [customSender, setCustomSender] = useState("");
+  const [aiSettings, setAiSettings] = useState({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low' });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
   
@@ -111,7 +112,9 @@ export default function ClientDashboard() {
           if (schema?.schema_config) {
             const agentConfig = schema.schema_config.find(s => s.is_agent_config);
             if (agentConfig) setAgents(agentConfig.agents || []);
-            const actualBlueprint = schema.schema_config.filter(s => !s.is_agent_config);
+            const aiSettingsConfig = schema.schema_config.find(s => s.is_ai_settings);
+            if (aiSettingsConfig) setAiSettings({ tone: aiSettingsConfig.tone || 'Professional', englishLevel: aiSettingsConfig.englishLevel || 'Native', desperation: aiSettingsConfig.desperation || 'Low' });
+            const actualBlueprint = schema.schema_config.filter(s => !s.is_agent_config && !s.is_ai_settings);
             setBlueprint(actualBlueprint);
             const init = {};
             actualBlueprint.forEach(s => { init[s.title] = s.allow_multiple ? [{}] : {}; });
@@ -214,12 +217,17 @@ export default function ClientDashboard() {
 
   // DERIVED STATE: AI Alerts Triage
   const pendingAlerts = visibleRecords.filter(r => {
-    // Only flag quotes that are in Inquiry status and haven't been dispatched yet
-    if (r.status !== 'Inquiry') return false; 
-    if (r.follow_up_status === 'Agent Dispatched') return false;
+    // Flag quotes that haven't been dispatched yet
+    if (r.follow_up_status === 'Agent Dispatched' || r.custom_metadata?.follow_up_status === 'Agent Dispatched') return false;
+    // Don't flag quotes that are already Approved or Lost
+    if (r.status === 'Approved' || r.status === 'Lost') return false;
 
     const dueDate = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
-    if (!dueDate) return false;
+    if (!dueDate) {
+      const createdDate = new Date(r.created_at || r.date || Date.now());
+      const daysOld = (new Date() - createdDate) / (1000 * 60 * 60 * 24);
+      return daysOld >= 3;
+    }
 
     // Check if the due date is today or in the past
     return new Date(dueDate) <= new Date();
@@ -463,13 +471,15 @@ export default function ClientDashboard() {
     if (!tenantId) return alert("No workspace connected.");
     setIsSavingAgent(true);
     try {
+      agentData.email = customSender || "";
       const isNew = !agentData.id;
       if (isNew) agentData.id = safeUUID();
       const updatedAgents = isNew ? [...agents, agentData] : agents.map(a => a.id === agentData.id ? agentData : a);
       
       const newSchemaConfig = [
         ...blueprint,
-        { is_agent_config: true, agents: updatedAgents, title: "system_agents" }
+        { is_agent_config: true, agents: updatedAgents, title: "system_agents" },
+        { ...aiSettings, is_ai_settings: true, title: "ai_settings" }
       ];
       
       const { error } = await supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig }).eq('tenant_id', tenantId);
@@ -503,7 +513,8 @@ export default function ClientDashboard() {
     const updatedAgents = agents.filter(a => a.id !== id);
     const newSchemaConfig = [
       ...blueprint,
-      { is_agent_config: true, agents: updatedAgents, title: "system_agents" }
+      { is_agent_config: true, agents: updatedAgents, title: "system_agents" },
+      { ...aiSettings, is_ai_settings: true, title: "ai_settings" }
     ];
     await supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig }).eq('tenant_id', tenantId);
     setAgents(updatedAgents);
@@ -948,9 +959,17 @@ export default function ClientDashboard() {
                   <div className="space-y-4">
                     {pendingAlerts.map(r => (
                       <div key={r.id} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm hover:shadow-md hover:bg-white/80 transition-all gap-4">
-                        <div>
+                        <div className="flex-1 w-full md:w-auto">
                           <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
-                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider">Due: {new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString()}</p>
+                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-3">Due: {r.follow_up_due_date || r.custom_metadata?.follow_up_due_date ? new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString() : 'Overdue (> 3 days)'}</p>
+                          <div className="bg-white p-3 rounded-lg border border-indigo-100/50 shadow-sm relative">
+                            <p className="text-xs text-gray-600 italic">
+                              <span className="font-semibold text-indigo-400 mr-1">"</span>
+                              Hi {extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote ({r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.
+                              <span className="font-semibold text-indigo-400 ml-1">"</span>
+                            </p>
+                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2">Suggested Email Snippet • Waiting for Approval</p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-4 w-full md:w-auto">
                           <div className="hidden md:block text-right pr-4 border-r border-indigo-100/50">
@@ -1012,16 +1031,62 @@ export default function ClientDashboard() {
                   onClick={async () => {
                     if (!tenantId) return;
                     setIsSavingSettings(true);
-                    const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender }).eq('id', tenantId);
+                    
+                    const newSchemaConfig = [
+                      ...blueprint,
+                      { is_agent_config: true, agents, title: "system_agents" },
+                      { ...aiSettings, is_ai_settings: true, title: "ai_settings" }
+                    ];
+
+                    const [res1, res2] = await Promise.all([
+                      supabase.from('tenants').update({ custom_email_sender: customSender }).eq('id', tenantId),
+                      supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig }).eq('tenant_id', tenantId)
+                    ]);
+                    
                     setIsSavingSettings(false);
-                    if (error) alert("Failed to save: " + error.message);
-                    else alert("Email settings updated successfully!");
+                    if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
+                    else alert("Settings updated successfully!");
                   }}
                   disabled={isSavingSettings}
                   className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform disabled:bg-gray-400"
                 >
                   {isSavingSettings ? "Saving..." : "Save Configuration"}
                 </button>
+              </div>
+
+              <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                <span className="text-2xl">🤖</span>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">AI Personality Settings</h3>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mb-4">
+                <div>
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Tone</label>
+                  <select value={aiSettings.tone} onChange={e=>setAiSettings({...aiSettings, tone: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                    <option>Professional</option>
+                    <option>Casual</option>
+                    <option>Friendly</option>
+                    <option>Aggressive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">English Level</label>
+                  <select value={aiSettings.englishLevel} onChange={e=>setAiSettings({...aiSettings, englishLevel: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                    <option>Native</option>
+                    <option>Simple / Basic</option>
+                    <option>Corporate Jargon</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Desperation Level</label>
+                  <select value={aiSettings.desperation} onChange={e=>setAiSettings({...aiSettings, desperation: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                    <option>Low (Confident)</option>
+                    <option>Medium (Eager)</option>
+                    <option>High (Need the deal)</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -1038,7 +1103,7 @@ export default function ClientDashboard() {
                 <button onClick={handleRunCoordinator} disabled={isRunningCoordinator || agents.length === 0} className="bg-white text-gray-900 border border-gray-200 px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-transform disabled:opacity-50">
                   {isRunningCoordinator ? "Syncing..." : "▶ Run Daily Sync"}
                 </button>
-                <button onClick={() => setEditingAgent({ name: '', email: '', phone: '', importance: 5, task: '', instructions: '' })} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform">
+                <button onClick={() => setEditingAgent({ name: '', email: customSender || '', phone: '', importance: 5, task: '', instructions: '' })} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform">
                   + Create Agent
                 </button>
               </div>
@@ -1055,7 +1120,10 @@ export default function ClientDashboard() {
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Agent Email</label>
-                      <input type="email" value={editingAgent.email} onChange={e=>setEditingAgent({...editingAgent, email: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="sales@company.com" />
+                      <div className="w-full bg-gray-100/80 border border-gray-200 px-4 py-2.5 rounded-xl text-sm text-gray-500 flex items-center justify-between cursor-not-allowed">
+                        <span className="truncate">{customSender || "Configure in Workspace Settings"}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-400 bg-indigo-50 px-2 py-0.5 rounded shadow-sm">Global</span>
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -1084,7 +1152,7 @@ export default function ClientDashboard() {
                   <div>
                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 mb-2 block">Assign Quotes to Agent</label>
                     <div className="w-full bg-gray-50 border border-gray-200 rounded-xl max-h-48 overflow-y-auto p-2 space-y-1">
-                      {records.filter(r => r.status === 'Inquiry').map(r => (
+                      {records.map(r => (
                         <label key={r.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
                           <input 
                             type="checkbox" 
@@ -1105,8 +1173,8 @@ export default function ClientDashboard() {
                           </div>
                         </label>
                       ))}
-                      {records.filter(r => r.status === 'Inquiry').length === 0 && (
-                        <div className="p-4 text-center text-xs text-gray-500">No active inquiry quotes available to assign.</div>
+                      {records.length === 0 && (
+                        <div className="p-4 text-center text-xs text-gray-500">No quotes available to assign.</div>
                       )}
                     </div>
                   </div>

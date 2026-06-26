@@ -30,6 +30,11 @@ export async function POST(request: Request) {
     const agentConfig = schema.schema_config.find((s: any) => s.is_agent_config);
     const customAgents = agentConfig ? agentConfig.agents : [];
 
+    const aiSettingsConfig = schema.schema_config.find((s: any) => s.is_ai_settings);
+    const tone = aiSettingsConfig?.tone || 'Professional';
+    const englishLevel = aiSettingsConfig?.englishLevel || 'Native';
+    const desperation = aiSettingsConfig?.desperation || 'Low';
+
     if (!customAgents || customAgents.length === 0) {
        return NextResponse.json({ success: true, message: 'No autonomous agents configured.' });
     }
@@ -93,6 +98,11 @@ export async function POST(request: Request) {
       - Phone: ${agent.phone}
       
       Your Primary Task: ${agent.task}
+      
+      Personality & Style:
+      - Tone: ${tone}
+      - English Level: ${englishLevel}
+      - Desperation Level: ${desperation}
       
       Core Instructions & Policy: 
       ${agent.instructions}
