@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 "use client";
 import { useState, useEffect, useRef } from "react";
@@ -5,19 +6,13 @@ import { supabase } from "@/utils/supabaseClient";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line } from "recharts";
 import Handlebars from "handlebars";
 
-// BULLETPROOF FORMATTER: Forcibly converts any long decimals to 2 decimal places.
+// BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
   if (val == null || val === "") return val;
-  
-  if (isMoney && !isNaN(parseFloat(val))) {
-    return parseFloat(val).toFixed(2);
-  }
-
+  if (isMoney && !isNaN(parseFloat(val))) return parseFloat(val).toFixed(2);
   let strVal = String(val);
   if (/\.\d{3,}/.test(strVal)) {
-    if (!isNaN(parseFloat(strVal))) {
-      return parseFloat(strVal).toFixed(2);
-    }
+    if (!isNaN(parseFloat(strVal))) return parseFloat(strVal).toFixed(2);
     return strVal.replace(/(\d+\.\d{2})\d{3,}/g, '$1');
   }
   return val;
@@ -54,7 +49,7 @@ export default function ClientDashboard() {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [blueprint, setBlueprint] = useState([]);
   const [records, setRecords] = useState([]);
-  const [currentView, setCurrentView] = useState("dashboard");
+  const [currentView, setCurrentView] = useState("alerts"); // Default to Alerts for testing
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -63,6 +58,7 @@ export default function ClientDashboard() {
   const [isSending, setIsSending] = useState(false);
   const [customSender, setCustomSender] = useState("");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
   
   const [emailDraft, setEmailDraft] = useState({ to: "", subject: "", message: "", attachmentBase64: "", filename: "" });
   const [chatHistory, setChatHistory] = useState([]);
@@ -78,7 +74,6 @@ export default function ClientDashboard() {
   const [dynamicData, setDynamicData] = useState({});
   const [statusFilter, setStatusFilter] = useState("");
 
-  // Web environment API URL
   const getApiUrl = (endpoint) => endpoint;
 
   useEffect(() => {
@@ -210,6 +205,19 @@ export default function ClientDashboard() {
   const visibleRecords = isManager ? records : records.filter(r => r.created_by_email === user?.email);
   const docsRecords = visibleRecords.filter(r => r.status === 'Approved' || r.custom_metadata?.has_pdf_generated === true);
 
+  // DERIVED STATE: AI Alerts Triage
+  const pendingAlerts = visibleRecords.filter(r => {
+    // Only flag quotes that are in Inquiry status and haven't been dispatched yet
+    if (r.status !== 'Inquiry') return false; 
+    if (r.follow_up_status === 'Agent Dispatched') return false;
+
+    const dueDate = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
+    if (!dueDate) return false;
+
+    // Check if the due date is today or in the past
+    return new Date(dueDate) <= new Date();
+  });
+
   const extractMasterStatuses = () => {
     let options = new Set();
     blueprint.forEach(section => {
@@ -311,6 +319,15 @@ export default function ClientDashboard() {
       const cur = records.find(r => r.id === editingId);
       if (cur && cur.qn_number === generatedQn) { const m = generatedQn.match(/-Rev-(\d+)$/i); finalQn = m ? generatedQn.replace(/-Rev-\d+$/i, `-Rev-${parseInt(m[1])+1}`) : `${generatedQn}-Rev-1`; }
     }
+
+    // Auto-calculate a follow up date 3 days from now if this is a brand new quote
+    let computedFollowUpDate = null;
+    if (!editingId) {
+      const d = new Date();
+      d.setDate(d.getDate() + 3);
+      computedFollowUpDate = d.toISOString().split('T')[0];
+    }
+
     const creator = editingId ? records.find(r=>r.id===editingId)?.created_by_email : (user?.email || "system@bloomgard.com");
     const clientName = extractValue({custom_metadata:dynamicData},'client_name','Client Information') || "Unknown Client";
     let clientId = null;
@@ -328,6 +345,7 @@ export default function ClientDashboard() {
       if (ec) { clientId = ec.id; await supabase.from('clients').update(cp).eq('id',clientId); }
       else { const { data: nc } = await supabase.from('clients').insert([cp]).select('id').single(); if (nc) clientId = nc.id; }
     } catch(e) {}
+    
     let masterStatusValue = allStatuses[0] || "Inquiry";
     blueprint.forEach(sec => {
       sec.fields.forEach(f => {
@@ -338,10 +356,30 @@ export default function ClientDashboard() {
         }
       });
     });
+
     const quoteId = editingId || safeUUID();
+    
+    // Construct upsert payload
+    const upsertPayload = { 
+      id:quoteId, 
+      tenant_id:tenantId, 
+      client_id:clientId, 
+      qn_number:finalQn, 
+      date, 
+      status: masterStatusValue, 
+      custom_metadata:dynamicData, 
+      created_by_email:creator 
+    };
+
+    // Attach follow-up date only if it's new
+    if (computedFollowUpDate) {
+      upsertPayload.follow_up_due_date = computedFollowUpDate;
+    }
+
     try {
-      const { error } = await supabase.from("quotations").upsert([{ id:quoteId, tenant_id:tenantId, client_id:clientId, qn_number:finalQn, date, status: masterStatusValue, custom_metadata:dynamicData, created_by_email:creator }], { onConflict:'id' });
+      const { error } = await supabase.from("quotations").upsert([upsertPayload], { onConflict:'id' });
       if (error) throw error;
+
       const items=[], atts=[];
       blueprint.filter(b=>b.allow_multiple).forEach(sec=>{
         const rows=dynamicData[sec.title]||[], lt=sec.title.toLowerCase();
@@ -356,8 +394,38 @@ export default function ClientDashboard() {
       }
       if (items.length) await supabase.from('quotation_items').insert(items);
       if (atts.length) await supabase.from('quotation_attachments').insert(atts);
-      setEditingId(null); setCurrentView("pipeline"); await fetchRecords(tenantId);
+      
+      setEditingId(null); 
+      setCurrentView("pipeline"); 
+      await fetchRecords(tenantId);
     } catch (err) { alert("Deployment Error: " + err.message); }
+  };
+
+  const handleTriggerAgent = async (quote) => {
+    setDispatchingId(quote.id);
+    try {
+      const res = await fetch(getApiUrl('/api/trigger-agent'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteId: quote.id,
+          tenantId: tenantId,
+          agentEmail: user?.email
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to trigger AI agent.");
+      }
+      
+      alert(`AI Agent successfully dispatched for Quote ${quote.qn_number}`);
+      await fetchRecords(tenantId); // Refresh to update the 'Agent Dispatched' status
+    } catch(e) {
+      alert("Error Dispatching Agent: " + e.message);
+    } finally {
+      setDispatchingId(null);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -524,18 +592,10 @@ export default function ClientDashboard() {
           margin: [0.5, 0, 0.5, 0], 
           filename: `${name}.pdf`,
           image: { type: 'jpeg', quality: 1.0 },
-          html2canvas: { 
-            scale: 2, 
-            useCORS: true, 
-            windowWidth: 800, 
-            scrollY: 0,
-            x: 0,
-            y: 0
-          },
+          html2canvas: { scale: 2, useCORS: true, windowWidth: 800, scrollY: 0, x: 0, y: 0 },
           jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
 
-        // For the web version, we simply instruct html2pdf to save directly to the browser downloads
         window.html2pdf().set(opt).from(printHtml).save();
       };
     } catch (err) {
@@ -647,7 +707,6 @@ export default function ClientDashboard() {
         customSender: customSender || ""
       };
 
-      // Native Web Fetch instead of Capacitor HTTP
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -723,7 +782,7 @@ export default function ClientDashboard() {
   );
 
   return (
-    <div className="flex min-h-screen bg-white text-gray-800 font-sans">
+    <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans">
       {!isMobileMenuOpen && !selectedRecord && !viewingDoc && !showEmailModal && (
         <button onClick={()=>setIsMobileMenuOpen(true)} className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-md active:scale-95 transition-transform">☰</button>
       )}
@@ -735,8 +794,19 @@ export default function ClientDashboard() {
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          {[['dashboard','📊 Intelligence'],['pipeline','🚀 Quotes'],['docs','📄 Docs'],['settings','⚙️ Settings']].map(([v,label])=>(
-            <div key={v} onClick={()=>{setCurrentView(v);setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView===v?'bg-gray-900 text-white shadow-md':'text-gray-500 hover:bg-gray-50'}`}>{label}</div>
+          {[
+            ['dashboard','📊 Intelligence'],
+            ['alerts','⚡ Action Needed'],
+            ['pipeline','🚀 Quotes'],
+            ['docs','📄 Docs'],
+            ['settings','⚙️ Settings']
+          ].map(([v,label])=>(
+            <div key={v} onClick={()=>{setCurrentView(v);setIsMobileMenuOpen(false);}} className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView===v?'bg-gray-900 text-white shadow-md':'text-gray-500 hover:bg-gray-50'}`}>
+              <span>{label}</span>
+              {v === 'alerts' && pendingAlerts.length > 0 && (
+                <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
+              )}
+            </div>
           ))}
           <div className="pt-4 pb-2"><div className="border-t border-gray-100"></div></div>
           <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-600 hover:bg-indigo-50'}`}>🤖 Bloomgard AI</div>
@@ -762,6 +832,67 @@ export default function ClientDashboard() {
                 <h3 className="text-sm font-bold text-amber-900">Workspace Connection Missing</h3>
                 <p className="text-xs text-amber-800 mt-1">This client account does not have a <code>tenant_id</code> assigned in the database. Quotes and AI features cannot load until this is fixed. Please update their profile in Supabase.</p>
              </div>
+          </div>
+        )}
+
+        {currentView === "alerts" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
+            <header className="mb-10">
+              <h2 className="text-3xl font-bold text-gray-900">Action Needed</h2>
+              <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">AI Follow-Up Triage</p>
+            </header>
+
+            <div className="relative rounded-[2rem] p-6 md:p-10 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+              {/* Glassmorphism Background Elements */}
+              <div className="absolute inset-0 bg-white/40 backdrop-blur-xl z-0 pointer-events-none"></div>
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl z-0 pointer-events-none"></div>
+              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl z-0 pointer-events-none"></div>
+
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-8 pb-4 border-b border-indigo-100/50">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <span className="text-amber-500">⚡</span> Pending Follow-ups
+                  </h3>
+                  <span className="bg-indigo-100/80 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">{pendingAlerts.length} Due</span>
+                </div>
+
+                {pendingAlerts.length === 0 ? (
+                  <div className="text-center py-16">
+                    <span className="text-4xl mb-4 block opacity-50">✨</span>
+                    <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
+                    <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here 3 days after creation.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingAlerts.map(r => (
+                      <div key={r.id} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm hover:shadow-md hover:bg-white/80 transition-all gap-4">
+                        <div>
+                          <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
+                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider">Due: {new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center gap-4 w-full md:w-auto">
+                          <div className="hidden md:block text-right pr-4 border-r border-indigo-100/50">
+                             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Amount</p>
+                             <p className="text-xs font-bold text-gray-700">₹{getFieldValue(r, {name: 'subtotal'})}</p>
+                          </div>
+                          <button
+                            onClick={() => handleTriggerAgent(r)}
+                            disabled={dispatchingId === r.id}
+                            className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 ${dispatchingId === r.id ? 'bg-indigo-100/50 text-indigo-400 cursor-not-allowed border border-indigo-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-500 hover:shadow-lg hover:shadow-indigo-200'}`}
+                          >
+                            {dispatchingId === r.id ? (
+                              <><div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div> Dispatching...</>
+                            ) : (
+                              <>🤖 Approve Agent</>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
