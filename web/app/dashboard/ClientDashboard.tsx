@@ -892,10 +892,10 @@ export default function ClientDashboard() {
   );
 
   const isGlass = userPreferences.wallpaper !== 'legacy';
-  const isDark = userPreferences.theme === 'dark' && isGlass;
+  const isDark = userPreferences.theme === 'dark';
 
   return (
-    <div className={`flex min-h-screen font-sans transition-colors duration-500 ${isDark ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode' : ''} bg-gray-50 dark:bg-[#030712]`}>
+    <div className={`flex min-h-screen font-sans transition-colors duration-500 ${isDark ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode !bg-transparent' : 'bg-gray-50 dark:bg-[#030712]'}`}>
       {!isMobileMenuOpen && !selectedRecord && !viewingDoc && !showEmailModal && (
         <button onClick={()=>setIsMobileMenuOpen(true)} className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-md active:scale-95 transition-transform">☰</button>
       )}
@@ -903,7 +903,7 @@ export default function ClientDashboard() {
 
       <aside className={`fixed z-[100] w-64 flex flex-col shadow-2xl md:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-in-out 
         ${isMobileMenuOpen ? 'inset-y-0 left-0 translate-x-0 rounded-none border-r' : 'top-4 bottom-4 left-4 -translate-x-[120%] md:translate-x-0 rounded-3xl'} 
-        ${isGlass ? 'bg-white/40 dark:bg-black/40 backdrop-blur-3xl border border-white/40 dark:border-white/10' : (isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200')}`}>
+        ${isGlass ? 'bg-white/80 dark:bg-black/60 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200')}`}>
         <div className="p-8 pb-4">
           <h1 className="text-4xl font-bold tracking-tighter text-gray-900">Bloomgard.</h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
@@ -927,15 +927,15 @@ export default function ClientDashboard() {
           <div className="pt-4 pb-2"><div className="border-t border-gray-100"></div></div>
           <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
         </nav>
-        <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/30 dark:bg-black/30 border-white/10' : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800'}`}>
+        <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-black/40 border-white/30' : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800'}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center text-gray-700 text-xs font-bold uppercase border border-gray-300">{user?.email?.charAt(0)||'O'}</div>
             <div className="overflow-hidden">
-              <p className="text-[11px] font-semibold truncate text-gray-700">{user?.email||'Operator'}</p>
+              <p className="text-[11px] font-semibold truncate text-gray-900 dark:text-gray-100">{user?.email||'Operator'}</p>
               <p className="text-[9px] text-gray-500 uppercase font-medium tracking-widest mt-0.5">{user?.role||"Operator"}</p>
             </div>
           </div>
-          <button onClick={handleLogout} className="w-full py-2.5 rounded-lg bg-white text-red-600 text-[11px] font-semibold uppercase tracking-wider border border-red-100 hover:bg-red-50 transition-colors shadow-sm active:scale-95">Sign Out</button>
+          <button onClick={handleLogout} className="w-full py-2.5 rounded-lg bg-red-50 text-red-600 text-[11px] font-bold uppercase tracking-wider border border-red-200 hover:bg-red-100 transition-all shadow-sm active:scale-95">Sign Out</button>
         </div>
       </aside>
 
