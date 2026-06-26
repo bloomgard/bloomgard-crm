@@ -46,18 +46,26 @@ input:-webkit-autofill:active {
   -webkit-text-fill-color: white !important;
 }
 
-/* Glassmorphism Overrides */
-.glass-mode .bg-white, .glass-mode .bg-gray-50, .glass-mode .bg-white\/60, .glass-mode .bg-[#F8F9FA] {
-    background-color: rgba(255, 255, 255, 0.25) !important;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    border-color: rgba(255, 255, 255, 0.3) !important;
+/* Premium Liquid Glassmorphism */
+.glass-mode .bg-white, .glass-mode .bg-gray-50, .glass-mode .bg-white\/60, .glass-mode .bg-\[\#F8F9FA\] {
+    background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 100%) !important;
+    backdrop-filter: blur(40px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(40px) saturate(160%) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.7) !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.5) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.15) !important;
 }
-.glass-mode.dark .bg-white, .glass-mode.dark .bg-gray-50, .glass-mode.dark .bg-white\/60, .glass-mode.dark .bg-[#F8F9FA] {
-    background-color: rgba(0, 0, 0, 0.35) !important;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    border-color: rgba(255, 255, 255, 0.1) !important;
+.glass-mode.dark .bg-white, .glass-mode.dark .bg-gray-50, .glass-mode.dark .bg-white\/60, .glass-mode.dark .bg-\[\#F8F9FA\] {
+    background: linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.2) 100%) !important;
+    backdrop-filter: blur(40px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4) !important;
     color: #f3f4f6 !important;
 }
 .glass-mode input:-webkit-autofill {

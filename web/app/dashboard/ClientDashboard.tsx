@@ -892,9 +892,10 @@ export default function ClientDashboard() {
   );
 
   const isGlass = userPreferences.wallpaper !== 'legacy';
+  const isDark = userPreferences.theme === 'dark' && isGlass;
 
   return (
-    <div className={`flex min-h-screen font-sans transition-colors duration-500 ${userPreferences.theme === 'dark' ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode' : ''} bg-gray-50 dark:bg-[#030712]`}>
+    <div className={`flex min-h-screen font-sans transition-colors duration-500 ${isDark ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode' : ''} bg-gray-50 dark:bg-[#030712]`}>
       {!isMobileMenuOpen && !selectedRecord && !viewingDoc && !showEmailModal && (
         <button onClick={()=>setIsMobileMenuOpen(true)} className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-md active:scale-95 transition-transform">☰</button>
       )}
@@ -943,8 +944,8 @@ export default function ClientDashboard() {
         {isGlass && (
           <>
             <div className="fixed inset-0 z-[-2] bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url('/wallpapers/${userPreferences.wallpaper}.jpg')` }}></div>
-            {userPreferences.theme === 'dark' && <div className="fixed inset-0 z-[-1] bg-black/60 transition-opacity duration-700"></div>}
-            {userPreferences.theme === 'light' && <div className="fixed inset-0 z-[-1] bg-white/20 transition-opacity duration-700"></div>}
+            {isDark && <div className="fixed inset-0 z-[-1] bg-black/60 transition-opacity duration-700"></div>}
+            {!isDark && <div className="fixed inset-0 z-[-1] bg-white/20 transition-opacity duration-700"></div>}
           </>
         )}
 
@@ -1067,8 +1068,6 @@ export default function ClientDashboard() {
                     >
                       <option value="legacy">Legacy UI (Solid Background)</option>
                       <option value="wp1">Glassmorphism - Wallpaper 1</option>
-                      <option value="wp2">Glassmorphism - Wallpaper 2</option>
-                      <option value="wp3">Glassmorphism - Wallpaper 3</option>
                     </select>
                   </div>
                 </div>
