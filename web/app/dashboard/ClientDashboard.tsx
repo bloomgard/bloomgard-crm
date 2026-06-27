@@ -81,6 +81,7 @@ export default function ClientDashboard() {
   const [editedSnippets, setEditedSnippets] = useState({});
   const [userPreferences, setUserPreferences] = useState({ theme: 'light', wallpaper: 'legacy' });
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+  const [agentQuoteSearch, setAgentQuoteSearch] = useState("");
 
   const getApiUrl = (endpoint) => endpoint;
 
@@ -1236,8 +1237,20 @@ export default function ClientDashboard() {
                   </div>
                   <div>
                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 mb-2 block">Assign Quotes to Agent</label>
+                    <input 
+                      type="text" 
+                      value={agentQuoteSearch} 
+                      onChange={e=>setAgentQuoteSearch(e.target.value)} 
+                      className="w-full mb-3 bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs outline-none focus:border-indigo-400 shadow-sm" 
+                      placeholder="Search by QN Number or Client Name..." 
+                    />
                     <div className="w-full bg-gray-50 border border-gray-200 rounded-xl max-h-48 overflow-y-auto p-2 space-y-1">
-                      {records.map(r => (
+                      {records.filter(r => {
+                          const qnStr = (r.qn_number || r.qn || r.id || "").toLowerCase();
+                          const clientStr = (r.clients?.company_name || r.custom_metadata?.client_name || 'Client').toLowerCase();
+                          const searchStr = agentQuoteSearch.toLowerCase();
+                          return qnStr.includes(searchStr) || clientStr.includes(searchStr);
+                      }).map(r => (
                         <label key={r.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
                           <input 
                             type="checkbox" 
@@ -1773,6 +1786,36 @@ export default function ClientDashboard() {
                  </div>
               </div>
 
+              {selectedRecord.custom_metadata?.agent_conversations && selectedRecord.custom_metadata.agent_conversations.length > 0 && (
+                <div className="mb-8">
+                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3 px-2 flex items-center gap-2">
+                     <span className="text-indigo-500">🤖</span> AI Conversation Log
+                   </h4>
+                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-5 space-y-6">
+                      {selectedRecord.custom_metadata?.agent_summary && (
+                        <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl">
+                          <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
+                          <p className="text-sm text-indigo-900 font-medium leading-relaxed">{selectedRecord.custom_metadata.agent_summary}</p>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                        {selectedRecord.custom_metadata.agent_conversations.map((msg: any, idx: number) => (
+                          <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
+                            <div className="flex items-center gap-2 mb-1 px-1">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
+                              <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
+                            </div>
+                            <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
+                              {msg.content}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                   </div>
+                </div>
+              )}
+
               <div className="space-y-8">
                 {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => {
                   return (
@@ -1824,6 +1867,34 @@ export default function ClientDashboard() {
                 <button onClick={() => handleViewDocument(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Preview PDF</button>
                 <button onClick={() => handleGeneratePDF(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Download PDF</button>
                 <button onClick={() => handleOpenEmailComposer(selectedRecord)} className="bg-gray-900 text-white py-3.5 rounded-xl font-semibold text-xs shadow-md hover:bg-gray-800 active:scale-95 transition-transform">Mail</button>
+                <button 
+                  onClick={async () => {
+                    const msg = prompt("Enter a simulated client reply:");
+                    if (!msg) return;
+                    
+                    const res = await fetch('/api/inbound-email', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        quoteId: selectedRecord.id,
+                        tenantId: selectedRecord.tenant_id,
+                        clientMessage: msg,
+                        agentEmail: user?.email
+                      })
+                    });
+                    
+                    const data = await res.json();
+                    if (data.success) {
+                      alert("Simulated reply processed! AI Agent has replied and updated the summary.");
+                      await refreshData();
+                    } else {
+                      alert("Failed: " + data.error);
+                    }
+                  }} 
+                  className="bg-indigo-50 border border-indigo-200 text-indigo-700 py-3.5 rounded-xl font-semibold text-xs shadow-sm hover:bg-indigo-100 active:scale-95 transition-transform"
+                >
+                  Simulate Client Reply
+                </button>
               </div>
             </div>
           </div>
