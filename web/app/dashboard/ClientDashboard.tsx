@@ -40,6 +40,7 @@ const ALIASES = {
 export default function ClientDashboard() {
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
+  const iframeRef = useRef(null);
 
   const [authState, setAuthState] = useState('checking');
   const [loading, setLoading] = useState(true);
@@ -349,13 +350,36 @@ export default function ClientDashboard() {
 
   const safeUUID = () => (typeof window !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString() + Math.random();
 
+  const updateDynamicDataField = (sectionTitle, fieldName, value, rowIndex = null) => {
+    setDynamicData(prev => {
+      const nd = { ...prev };
+      if (rowIndex !== null) {
+        const arr = [...(nd[sectionTitle] || [])];
+        if (arr[rowIndex]) {
+          arr[rowIndex] = { ...arr[rowIndex], [fieldName]: value };
+        }
+        nd[sectionTitle] = arr;
+      } else {
+        nd[sectionTitle] = { ...(nd[sectionTitle] || {}), [fieldName]: value };
+      }
+      return nd;
+    });
+  };
+
   const handleSave = async () => {
     if (isSavingRecord) return;
     setIsSavingRecord(true);
-    try {
-      if (!tenantId) return alert("No workspace connected. Contact your administrator.");
-    const generatedQn = qn || `QN-${new Date().getFullYear()}-${(records.length+1).toString().padStart(3,'0')}`;
-    if (!editingId) setQn(generatedQn);
+    if (!tenantId) { setIsSavingRecord(false); return alert("No workspace connected. Contact your administrator."); }
+    
+    let maxNum = 0;
+    records.forEach(r => {
+      const m = r.qn_number?.match(/QN-\d+-(\d+)/i);
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    });
+    const autoGenQn = `QN-${new Date().getFullYear()}-${(maxNum+1).toString().padStart(3,'0')}`;
+    const generatedQn = qn || autoGenQn;
+    
+    if (!editingId && !qn) setQn(autoGenQn);
     let finalQn = generatedQn;
     if (editingId) {
       const cur = records.find(r => r.id === editingId);
@@ -827,6 +851,8 @@ Command: ${dashCommand}`;
       quoteId: r.id,
       status: r.status,
       to: "",
+      cc: "",
+      bcc: "",
       subject: `Document: ${name}`,
       message: `Hello,\n\nPlease find the attached official document.\n\nBest regards,\n${user?.email}`,
       attachments: [],
@@ -1925,8 +1951,14 @@ Command: ${dashCommand}`;
 
         {currentView === "new_entry" && (
           <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-              <h2 className="text-3xl font-bold text-gray-900">{editingId ? "Revise Entry" : "Create Entry"}</h2>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-gray-100 pb-6">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-3xl font-bold text-gray-900">{editingId ? "Revise Entry" : "Create Entry"}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Quote ID:</span>
+                   <input type="text" value={qn} onChange={(e) => setQn(e.target.value)} className="bg-transparent border-b border-dashed border-gray-300 hover:border-gray-500 focus:border-indigo-500 text-xs font-bold text-gray-700 outline-none w-48 transition-colors" placeholder="Auto-generated on Save" />
+                </div>
+              </div>
               <div className="flex items-center gap-3">
                 <button onClick={()=>{setEditingId(null);setCurrentView('pipeline');setSelectedRecord(null);}} className="px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-900 active:scale-95 transition-transform">Discard</button>
                 <button onClick={handleSave} disabled={isSavingRecord} className={`bg-white text-white px-6 py-2.5 rounded-xl font-semibold text-xs shadow-sm transition-transform ${isSavingRecord ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-800 active:scale-95'}`} style={{ backgroundColor: '#111827' }}>{isSavingRecord ? 'Saving...' : 'Save'}</button>
@@ -1965,7 +1997,7 @@ Command: ${dashCommand}`;
                               {f.type === "dropdown" || f.type === "master_status" ? (
                                 <select 
                                   value={row[f.name]||""} 
-                                  onChange={e=>{const nd={...dynamicData};nd[section.title][rIdx][f.name]=e.target.value;setDynamicData(nd);}} 
+                                  onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value, rIdx)} 
                                   className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm"
                                 >
                                   <option value="">Select...</option>
@@ -1975,7 +2007,7 @@ Command: ${dashCommand}`;
                                 <input type="text" readOnly value={user?.email||""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none shadow-sm cursor-not-allowed text-gray-500" />
                               ) : f.type === "file" || f.type === "attachment" ? (
                                 <div className="flex flex-col gap-1">
-                                  <input type="file" onChange={e=>{const file=e.target.files[0];if(file){const reader=new FileReader();reader.onload=(ev)=>{const nd={...dynamicData};nd[section.title][rIdx][f.name]=ev.target.result;setDynamicData(nd);};reader.readAsDataURL(file);}}} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                                  <input type="file" onChange={e=>{const file=e.target.files[0];if(file){const reader=new FileReader();reader.onload=(ev)=>{updateDynamicDataField(section.title, f.name, ev.target.result, rIdx)};reader.readAsDataURL(file);}}} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
                                   {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
                                 </div>
                               ) : (
@@ -1983,7 +2015,7 @@ Command: ${dashCommand}`;
                                   type={f.type==="number"?"number":f.type==="date"?"date":"text"} 
                                   value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name]||"")} 
                                   readOnly={f.type==="calculated"} 
-                                  onChange={e=>{const nd={...dynamicData};nd[section.title][rIdx][f.name]=e.target.value;setDynamicData(nd);}} 
+                                  onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value, rIdx)} 
                                   className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type==='calculated'?'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold':''}`} 
                                   placeholder="..."
                                 />
@@ -2002,7 +2034,7 @@ Command: ${dashCommand}`;
                           {f.type === "dropdown" || f.type === "master_status" ? (
                             <select 
                               value={dynamicData[section.title]?.[f.name]||""} 
-                              onChange={e=>{const nd={...dynamicData};nd[section.title][f.name]=e.target.value;setDynamicData(nd);}} 
+                              onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value)} 
                               className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400"
                             >
                               <option value="">Select...</option>
@@ -2012,7 +2044,7 @@ Command: ${dashCommand}`;
                             <input type="text" readOnly value={user?.email||""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
                           ) : f.type === "file" || f.type === "attachment" ? (
                             <div className="flex flex-col gap-1">
-                              <input type="file" onChange={e=>{const file=e.target.files[0];if(file){const reader=new FileReader();reader.onload=(ev)=>{const nd={...dynamicData};nd[section.title][f.name]=ev.target.result;setDynamicData(nd);};reader.readAsDataURL(file);}}} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                              <input type="file" onChange={e=>{const file=e.target.files[0];if(file){const reader=new FileReader();reader.onload=(ev)=>{updateDynamicDataField(section.title, f.name, ev.target.result)};reader.readAsDataURL(file);}}} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
                               {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
                             </div>
                           ) : (
@@ -2020,7 +2052,7 @@ Command: ${dashCommand}`;
                               type={f.type==="number"?"number":f.type==="date"?"date":"text"} 
                               value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name]||"")} 
                               readOnly={f.type==="calculated"} 
-                              onChange={e=>{const nd={...dynamicData};nd[section.title][f.name]=e.target.value;setDynamicData(nd);}} 
+                              onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value)} 
                               className={`w-full border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400 ${f.type==='calculated'?'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed':'bg-gray-50 hover:bg-white focus:bg-white'}`} 
                               placeholder="..."
                             />
@@ -2223,19 +2255,38 @@ Command: ${dashCommand}`;
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  <button onClick={() => {
+                    if (iframeRef.current && iframeRef.current.contentDocument) {
+                      setViewingDoc({...viewingDoc, html: iframeRef.current.contentDocument.documentElement.outerHTML});
+                      alert("Edits saved! You can now export or email the updated document.");
+                    }
+                  }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-sm active:scale-95 transition-transform">Save Edits</button>
                   <button onClick={() => downloadDirectPDF(viewingDoc.html, viewingDoc.title)} className="bg-white border border-gray-200 hover:border-gray-400 text-gray-700 px-4 py-2 rounded-lg text-[10px] font-semibold uppercase tracking-wider shadow-sm hidden sm:block active:scale-95 transition-transform">Export PDF</button>
                   <button onClick={() => setViewingDoc(null)} className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-red-500 hover:text-white rounded-lg font-bold transition-colors active:scale-95 transition-transform">✕</button>
                 </div>
               </div>
               <div className="flex-1 bg-gray-100 p-2 md:p-6 flex justify-center overflow-hidden">
                 <div className="w-full max-w-4xl h-full bg-white shadow-xl overflow-y-auto border border-gray-300">
-                  <iframe srcDoc={viewingDoc.html} className="w-full h-full border-none" title="Document Render"/>
+                  <iframe 
+                    ref={iframeRef}
+                    srcDoc={viewingDoc.html} 
+                    onLoad={(e) => {
+                      try {
+                        const doc = e.target.contentDocument;
+                        if (doc) doc.body.contentEditable = "true";
+                      } catch(err) {}
+                    }}
+                    className="w-full h-full border-none" 
+                    title="Document Render"
+                  />
                 </div>
               </div>
             </div>
           </div>
         )}
 
+        </main>
+        
         {showEmailModal && (
           <div className="fixed inset-0 z-[300] bg-gray-900/60 backdrop-blur-sm flex justify-center items-center p-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-200 max-h-[90vh]">
@@ -2245,6 +2296,10 @@ Command: ${dashCommand}`;
               </div>
               <div className="p-6 space-y-5 flex-1 overflow-y-auto">
                 <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Recipient</label><input type="email" value={emailDraft.to} onChange={e=>setEmailDraft({...emailDraft,to:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="client@company.com"/></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">CC</label><input type="text" value={emailDraft.cc || ""} onChange={e=>setEmailDraft({...emailDraft,cc:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="Optional"/></div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">BCC</label><input type="text" value={emailDraft.bcc || ""} onChange={e=>setEmailDraft({...emailDraft,bcc:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="Optional"/></div>
+                </div>
                 <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Subject</label><input value={emailDraft.subject} onChange={e=>setEmailDraft({...emailDraft,subject:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400"/></div>
                 <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Message</label><textarea rows={5} value={emailDraft.message} onChange={e=>setEmailDraft({...emailDraft,message:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm outline-none focus:border-gray-400 resize-none"/></div>
                 
@@ -2330,7 +2385,6 @@ Command: ${dashCommand}`;
             </div>
           </div>
         )}
-      </main>
     </div>
   );
 }

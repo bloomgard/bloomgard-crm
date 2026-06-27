@@ -18,7 +18,7 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { to, subject, message, attachments, agentEmail, companyName, customSender } = body;
+    const { to, cc, bcc, subject, message, attachments, agentEmail, companyName, customSender } = body;
 
     if (!to || !subject || !message) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400, headers: corsHeaders });
@@ -33,14 +33,19 @@ export async function POST(req: Request) {
       content: att.base64.includes(',') ? att.base64.split(',')[1] : att.base64,
     })) || [];
 
-    const { data, error } = await resend.emails.send({
+    const emailPayload: any = {
       from: fromString,
-      to: [to],
+      to: to.split(',').map((s: string)=>s.trim()),
       replyTo: agentEmail,
       subject: subject,
       text: message, 
       attachments: formattedAttachments,
-    });
+    };
+    
+    if (cc && cc.trim()) emailPayload.cc = cc.split(',').map((s: string)=>s.trim());
+    if (bcc && bcc.trim()) emailPayload.bcc = bcc.split(',').map((s: string)=>s.trim());
+
+    const { data, error } = await resend.emails.send(emailPayload);
 
     if (error) {
       console.error('Resend API Rejection:', error);
