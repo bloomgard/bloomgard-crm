@@ -83,6 +83,7 @@ export default function ClientDashboard() {
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [agentQuoteSearch, setAgentQuoteSearch] = useState("");
   const [selectedAgentView, setSelectedAgentView] = useState(null);
+  const [agentViewTab, setAgentViewTab] = useState('due');
 
   const getApiUrl = (endpoint) => endpoint;
 
@@ -1190,7 +1191,7 @@ export default function ClientDashboard() {
                 <button onClick={handleRunCoordinator} disabled={isRunningCoordinator || agents.length === 0} className="bg-white text-gray-900 border border-gray-200 px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-transform disabled:opacity-50">
                   {isRunningCoordinator ? "Syncing..." : "▶ Run Daily Sync"}
                 </button>
-                <button onClick={() => setEditingAgent({ name: '', email: customSender || '', importance: 5, task: '', instructions: '' })} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform">
+                <button onClick={() => setEditingAgent({ name: '', email: customSender || '', importance: 5, frequency: 'Immediate', auto_send: true, task: '', instructions: '' })} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform">
                   + Create Agent
                 </button>
               </div>
@@ -1229,6 +1230,34 @@ export default function ClientDashboard() {
                     <div className="flex justify-between text-[9px] font-bold text-gray-400 mt-2 px-1">
                       <span>Low Priority</span>
                       <span>Critical</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Follow-up Frequency</label>
+                      <select 
+                        value={editingAgent.frequency || 'Immediate'} 
+                        onChange={e => setEditingAgent({...editingAgent, frequency: e.target.value})}
+                        className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400"
+                      >
+                        <option value="Immediate">Immediate (Next Sync)</option>
+                        <option value="Daily">Daily</option>
+                        <option value="3 Days">Every 3 Days</option>
+                        <option value="Weekly">Weekly</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Action Control</label>
+                      <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" className="sr-only peer" checked={editingAgent.auto_send !== false} onChange={e => setEditingAgent({...editingAgent, auto_send: e.target.checked})} />
+                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                        <span className="text-sm font-semibold text-gray-700">
+                          {editingAgent.auto_send !== false ? 'Auto-Send' : 'Manual Review'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -1328,8 +1357,12 @@ export default function ClientDashboard() {
                   </div>
                 </div>
 
-                <div className="space-y-8">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Quotes & Conversations</h4>
+                <div className="space-y-6">
+                  <div className="flex gap-4 border-b border-gray-100">
+                    <button onClick={() => setAgentViewTab('due')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'due' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Action Needed (Due)</button>
+                    <button onClick={() => setAgentViewTab('history')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Follow-up History</button>
+                  </div>
+
                   {(() => {
                     const assignedQuotes = records.filter(r => {
                       let m = r.custom_metadata;
@@ -1337,11 +1370,34 @@ export default function ClientDashboard() {
                       return m?.agent_id === selectedAgentView.id;
                     });
 
-                    if (assignedQuotes.length === 0) {
-                      return <p className="text-sm text-gray-500 font-medium">No quotes currently assigned to this agent.</p>;
+                    // Filter based on tab
+                    const displayedQuotes = assignedQuotes.filter(q => {
+                      const isHistory = q.follow_up_status != null;
+                      if (agentViewTab === 'history') return isHistory;
+                      
+                      // For 'due' tab:
+                      if (isHistory) return false;
+                      
+                      const freq = selectedAgentView.frequency || 'Immediate';
+                      if (freq === 'Immediate') return true;
+                      
+                      const targetDate = new Date(q.created_at);
+                      if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
+                      if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
+                      if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                      
+                      return new Date() >= targetDate;
+                    });
+
+                    if (displayedQuotes.length === 0) {
+                      return (
+                        <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
+                          <p className="text-sm text-gray-500 font-medium">No quotes found in this section.</p>
+                        </div>
+                      );
                     }
 
-                    return assignedQuotes.map((q) => {
+                    return displayedQuotes.map((q) => {
                       let meta = q.custom_metadata;
                       if(typeof meta==='string') { try { meta = JSON.parse(meta); } catch(e){ meta={}; } }
                       
@@ -1352,59 +1408,95 @@ export default function ClientDashboard() {
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number}</p>
                               <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
                             </div>
-                            <button 
-                              onClick={async () => {
-                                const msg = prompt("Enter a simulated client reply:");
-                                if (!msg) return;
-                                const res = await fetch('/api/inbound-email', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    quoteId: q.id,
-                                    tenantId: q.tenant_id,
-                                    clientMessage: msg,
-                                    agentEmail: selectedAgentView.email
-                                  })
-                                });
-                                const data = await res.json();
-                                if (data.success) {
-                                  alert("Simulated reply processed!");
-                                  await fetchRecords(tenantId);
-                                } else {
-                                  alert("Failed: " + data.error);
-                                }
-                              }} 
-                              className="px-4 py-2 bg-white text-indigo-600 border border-gray-200 rounded-lg text-[10px] font-bold shadow-sm hover:border-indigo-300 transition-colors"
-                            >
-                              Simulate Client Reply
-                            </button>
+                            
+                            {agentViewTab === 'due' ? (
+                              <button 
+                                onClick={async () => {
+                                  // Dispatch Agent Manually
+                                  try {
+                                    const res = await fetch('/api/trigger-agent', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        quoteId: q.id,
+                                        tenantId: q.tenant_id,
+                                        agentEmail: selectedAgentView.email
+                                      })
+                                    });
+                                    const data = await res.json();
+                                    if(data.success) {
+                                      alert("Agent Dispatched successfully!");
+                                      await fetchRecords(tenantId);
+                                    } else {
+                                      alert("Failed to dispatch: " + data.error);
+                                    }
+                                  } catch (e) {
+                                    alert("Error: " + e.message);
+                                  }
+                                }}
+                                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 transition-colors"
+                              >
+                                Dispatch Agent Manually
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={async () => {
+                                  const msg = prompt("Enter a simulated client reply:");
+                                  if (!msg) return;
+                                  const res = await fetch('/api/inbound-email', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      quoteId: q.id,
+                                      tenantId: q.tenant_id,
+                                      clientMessage: msg,
+                                      agentEmail: selectedAgentView.email
+                                    })
+                                  });
+                                  const data = await res.json();
+                                  if (data.success) {
+                                    alert("Simulated reply processed!");
+                                    await fetchRecords(tenantId);
+                                  } else {
+                                    alert("Failed: " + data.error);
+                                  }
+                                }} 
+                                className="px-4 py-2 bg-white text-indigo-600 border border-gray-200 rounded-lg text-[10px] font-bold shadow-sm hover:border-indigo-300 transition-colors"
+                              >
+                                Simulate Client Reply
+                              </button>
+                            )}
                           </div>
 
-                          {meta?.agent_summary && (
-                            <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
-                              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
-                              <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
-                            </div>
-                          )}
-
-                          {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
-                            <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
-                              {meta.agent_conversations.map((msg: any, idx: number) => (
-                                <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
-                                  <div className="flex items-center gap-2 mb-1 px-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
-                                    <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
-                                  </div>
-                                  <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
-                                    {msg.content}
-                                  </div>
+                          {agentViewTab === 'history' && (
+                            <>
+                              {meta?.agent_summary && (
+                                <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
+                                  <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
+                                  <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
                                 </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
-                              <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
-                            </div>
+                              )}
+
+                              {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
+                                <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
+                                  {meta.agent_conversations.map((msg: any, idx: number) => (
+                                    <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
+                                      <div className="flex items-center gap-2 mb-1 px-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
+                                        <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
+                                      </div>
+                                      <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
+                                        {msg.content}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
+                                  <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       );

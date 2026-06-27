@@ -56,7 +56,23 @@ export async function POST(request: Request) {
       if (meta && meta.agent_id) {
          const assignedAgent = customAgents.find((a: any) => a.id === meta.agent_id);
          if (assignedAgent) {
-             tasks.push({ quote: q, agent: assignedAgent });
+             // Respect manual control (auto_send)
+             if (assignedAgent.auto_send === false) return;
+             
+             // Respect frequency
+             const freq = assignedAgent.frequency || 'Immediate';
+             let isDue = true;
+             if (freq !== 'Immediate') {
+                 const targetDate = new Date(q.created_at);
+                 if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
+                 if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
+                 if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                 if (new Date() < targetDate) isDue = false;
+             }
+             
+             if (isDue) {
+                 tasks.push({ quote: q, agent: assignedAgent });
+             }
          }
       }
     });
