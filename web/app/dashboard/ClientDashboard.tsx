@@ -987,7 +987,7 @@ Command: ${dashCommand}`;
           <h1 className="text-4xl font-bold tracking-tighter text-gray-900">Bloomgard.</h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
         </div>
-        <nav className="flex-1 px-4 space-y-2 mt-4">
+        <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto scrollbar-hide">
           {[
             ['dashboard','📊 Intelligence'],
             ['alerts','⚡ Action Needed'],
@@ -1004,8 +1004,7 @@ Command: ${dashCommand}`;
               )}
             </div>
           ))}
-          <div className="pt-4 pb-2"><div className="border-t border-gray-100/50"></div></div>
-          <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
+          <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm mt-2 ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
         </nav>
         <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-black/40 border-white/30' : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800'}`}>
           <div className="flex items-center gap-3">
