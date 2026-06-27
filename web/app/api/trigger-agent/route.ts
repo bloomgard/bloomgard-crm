@@ -109,7 +109,22 @@ export async function POST(request: Request) {
     await transporter.sendMail(mailOptions);
     const now = new Date().toISOString();
     
-    await supabase.from('quotations').update({ follow_up_status: 'Agent Dispatched', last_contact_date: now }).eq('id', quoteId);
+    let meta = quote.custom_metadata;
+    if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) { meta = {}; } }
+    if (!meta) meta = {};
+    if (!meta.agent_conversations) meta.agent_conversations = [];
+    
+    meta.agent_conversations.push({
+      role: 'agent',
+      content: emailBody,
+      timestamp: now
+    });
+    
+    if (!meta.agent_summary) {
+      meta.agent_summary = "Initial Follow-up Email Sent.";
+    }
+
+    await supabase.from('quotations').update({ follow_up_status: 'Agent Dispatched', last_contact_date: now, custom_metadata: meta }).eq('id', quoteId);
     await supabase.from('status_logs').insert([{ quotation_id: quoteId, old_status: quote.status, new_status: quote.status, comments: `AI Agent dispatched automated follow-up email. Triggered by ${agentEmail}.` }]);
 
     return NextResponse.json({ success: true, message: 'Agent dispatched successfully' });

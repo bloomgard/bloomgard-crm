@@ -205,7 +205,23 @@ export async function POST(request: Request) {
 
             await transporter.sendMail(mailOptions);
             
-            await supabase.from('quotations').update({ follow_up_status: 'Email Dispatched', last_contact_date: new Date().toISOString() }).eq('id', quote.id);
+            const now = new Date().toISOString();
+            let meta = quote.custom_metadata;
+            if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) { meta = {}; } }
+            if (!meta) meta = {};
+            if (!meta.agent_conversations) meta.agent_conversations = [];
+            
+            meta.agent_conversations.push({
+              role: 'agent',
+              content: emailBody,
+              timestamp: now
+            });
+            
+            if (!meta.agent_summary) {
+              meta.agent_summary = "Initial Follow-up Email Sent.";
+            }
+
+            await supabase.from('quotations').update({ follow_up_status: 'Email Dispatched', last_contact_date: now, custom_metadata: meta }).eq('id', quote.id);
             await supabase.from('status_logs').insert([{ quotation_id: quote.id, old_status: quote.status, new_status: quote.status, comments: `Autonomous Agent [${agent.name}] dispatched EMAIL based on Importance Level ${agent.importance}.` }]);
             
             processedCount++;
