@@ -964,7 +964,7 @@ Command: ${dashCommand}`;
       )}
       {isMobileMenuOpen && <div onClick={()=>setIsMobileMenuOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity"></div>}
 
-      <aside className={`fixed z-[100] w-64 flex flex-col shadow-2xl md:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-in-out 
+      <aside className={`fixed z-[100] w-64 flex flex-col shadow-2xl md:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-in-out overflow-hidden
         ${isMobileMenuOpen ? 'inset-y-0 left-0 translate-x-0 rounded-none border-r' : 'top-4 bottom-4 left-4 -translate-x-[120%] md:translate-x-0 rounded-3xl'} 
         ${isGlass ? 'glass-sidebar bg-white/80 dark:bg-black/60 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200')}`}>
         <div className="p-8 pb-4">
@@ -980,15 +980,15 @@ Command: ${dashCommand}`;
             ['docs','📄 Docs'],
             ['settings','⚙️ Settings']
           ].map(([v,label])=>(
-            <div key={v} onClick={()=>{setCurrentView(v);setIsMobileMenuOpen(false);}} className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView===v?'bg-gray-900 text-white shadow-md':'text-gray-500 hover:bg-gray-50'}`}>
+            <div key={v} onClick={()=>{setCurrentView(v);setIsMobileMenuOpen(false);}} className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm ${currentView===v?'bg-gray-900 text-white shadow-md':'text-gray-800 hover:bg-gray-100/50'}`}>
               <span>{label}</span>
               {v === 'alerts' && pendingAlerts.length > 0 && (
                 <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
               )}
             </div>
           ))}
-          <div className="pt-4 pb-2"><div className="border-t border-gray-100"></div></div>
-          <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-medium text-sm ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
+          <div className="pt-4 pb-2"><div className="border-t border-gray-100/50"></div></div>
+          <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
         </nav>
         <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-black/40 border-white/30' : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800'}`}>
           <div className="flex items-center gap-3">
