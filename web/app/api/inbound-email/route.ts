@@ -15,36 +15,64 @@ export async function POST(request: Request) {
     let { quoteId, tenantId, clientMessage, agentEmail } = body;
 
     // --- RESEND INBOUND WEBHOOK PARSING ---
-    // Resend sends webhooks like { type: 'email.received', data: { subject, text, from, to... } }
     const isResendWebhook = body.type === 'email.received' || (body.subject && (body.text || body.html));
     
     if (isResendWebhook) {
       const emailData = body.type === 'email.received' ? body.data : body;
       const subject = emailData.subject || '';
-      
-      // Extract QN-1234 from subject
-      const match = subject.match(/(QN-\d+)/i);
-      if (!match) {
-        return NextResponse.json({ success: false, error: 'No Quote ID found in subject' }, { status: 400 });
-      }
-      
-      const qnNumber = match[1].toUpperCase();
-      
-      // Lookup Quote ID and Tenant ID from database
-      const { data: foundQuote, error: lookupError } = await supabase
-        .from('quotations')
-        .select('id, tenant_id')
-        .eq('qn_number', qnNumber)
-        .single();
-        
-      if (lookupError || !foundQuote) {
-        return NextResponse.json({ success: false, error: `Quote not found: ${qnNumber}` }, { status: 404 });
-      }
-
-      quoteId = foundQuote.id;
-      tenantId = foundQuote.tenant_id;
-      clientMessage = emailData.text || emailData.html || 'No message body.';
       agentEmail = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || 'agent@bloomgard.com');
+      const senderEmail = emailData.from || 'unknown@example.com';
+      clientMessage = emailData.text || emailData.html || 'No message body.';
+      
+      const match = subject.match(/(QN-\d+)/i);
+      if (match) {
+        // --- EXISTING QUOTE LOGIC ---
+        const qnNumber = match[1].toUpperCase();
+        const { data: foundQuote, error: lookupError } = await supabase
+          .from('quotations').select('id, tenant_id').eq('qn_number', qnNumber).single();
+          
+        if (lookupError || !foundQuote) return NextResponse.json({ success: false, error: `Quote not found: ${qnNumber}` }, { status: 404 });
+        quoteId = foundQuote.id;
+        tenantId = foundQuote.tenant_id;
+      } else {
+        // --- COLD LEAD LOGIC (NO QN NUMBER) ---
+        const { data: tenantFound, error: tErr } = await supabase
+          .from('tenants').select('id').eq('custom_email_sender', agentEmail).maybeSingle();
+        
+        // If not found by exact email (e.g. testing), try finding any tenant to prevent crash during demo
+        const finalTenantId = tenantFound ? tenantFound.id : (await supabase.from('tenants').select('id').limit(1).single()).data?.id;
+        if (!finalTenantId) return NextResponse.json({ success: false, error: 'No tenant found for routing' }, { status: 404 });
+
+        let clientId = null;
+        const { data: clientFound } = await supabase.from('clients').select('id').eq('tenant_id', finalTenantId).eq('email_id', senderEmail).maybeSingle();
+        if (clientFound) clientId = clientFound.id;
+        else {
+           const { data: newClient } = await supabase.from('clients').insert([{
+              tenant_id: finalTenantId, company_name: senderEmail.split('@')[0], email_id: senderEmail
+           }]).select('id').single();
+           clientId = newClient?.id;
+        }
+
+        const parsePrompt = `You are a sales AI. Read the following cold email and extract the items the customer wants to buy. Output ONLY a JSON array of objects with keys: item_name (string), quantity (number), unit_price (number - estimate if not provided, else 0). Email: ${clientMessage}`;
+        let aiParsedItems = [];
+        try {
+           const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST", headers: { "Authorization": `Bearer ${AI_API_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ model: AI_MODEL, messages: [{ role: "system", content: parsePrompt }] })
+           });
+           const aiData = await aiRes.json();
+           const jsonStr = aiData.choices[0].message.content.match(/\[.*\]/s)?.[0] || '[]';
+           aiParsedItems = JSON.parse(jsonStr);
+        } catch (e) {}
+
+        const newQn = 'LD-' + Math.floor(1000 + Math.random() * 9000);
+        await supabase.from('quotations').insert([{
+           tenant_id: finalTenantId, client_id: clientId, qn_number: newQn, status: 'Lead',
+           custom_metadata: { lead_email_body: clientMessage, lead_email_subject: subject, ai_parsed_items: aiParsedItems, agent_email: agentEmail }
+        }]);
+
+        return NextResponse.json({ success: true, message: 'Processed as Cold Lead' });
+      }
     }
 
     if (!quoteId || !tenantId || !clientMessage) {

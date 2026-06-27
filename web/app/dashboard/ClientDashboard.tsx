@@ -233,7 +233,7 @@ export default function ClientDashboard() {
   }
 
   const isManager = user?.role?.toLowerCase() === 'manager' || user?.role?.toLowerCase() === 'admin';
-  const visibleRecords = isManager ? records : records.filter(r => r.created_by_email === user?.email);
+  const visibleRecords = (isManager ? records : records.filter(r => r.created_by_email === user?.email)).filter(r => currentView === 'leadgen' ? r.status === 'Lead' : r.status !== 'Lead');
   const docsRecords = visibleRecords.filter(r => r.status === 'Approved' || r.custom_metadata?.has_pdf_generated === true);
 
   // DERIVED STATE: AI Alerts Triage
@@ -603,6 +603,22 @@ export default function ClientDashboard() {
         }
       });
     });
+    
+    // Convert AI Parsed Items to actual Quotation Items when promoting a Lead
+    if (oldStatus === 'Lead' && newStatus === 'Draft' && targetRec.custom_metadata?.ai_parsed_items?.length > 0) {
+      const parsedItems = targetRec.custom_metadata.ai_parsed_items.map(ai => ({
+        quotation_id: id,
+        tenant_id: tenantId,
+        item_name: ai.item_name,
+        quantity: ai.quantity || 1,
+        hsn_code: '',
+        unit_price: ai.unit_price || 0,
+        amount: (ai.quantity || 1) * (ai.unit_price || 0),
+        tax_rate: 0,
+        total_amount: (ai.quantity || 1) * (ai.unit_price || 0),
+      }));
+      await supabase.from("quotation_items").insert(parsedItems);
+    }
     setSelectedRecord(p => p ? ({ 
       ...p, 
       status: newStatus, 
@@ -977,6 +993,7 @@ Command: ${dashCommand}`;
             ['alerts','⚡ Action Needed'],
             ['agents','🤖 Agent Fleet'],
             ['pipeline','🚀 Quotes'],
+            ['leadgen','🎯 Lead Gen'],
             ['docs','📄 Docs'],
             ['settings','⚙️ Settings']
           ].map(([v,label])=>(
@@ -1837,22 +1854,24 @@ Command: ${dashCommand}`;
           </div>
         )}
 
-        {currentView === "pipeline" && (
+        {(currentView === "pipeline" || currentView === "leadgen") && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-6xl mx-auto">
             <div className="flex flex-col gap-4 mb-6">
               <div className="flex items-center justify-start gap-6">
-                <h2 className="text-3xl font-bold text-gray-900">Quotes</h2>
-                <button 
-                  onClick={()=>{
-                    setEditingId(null);
-                    setQn("");
-                    setDynamicData(blueprint.reduce((acc,s)=>({...acc,[s.title]:s.allow_multiple?[{}]:{}}),{}));
-                    setCurrentView('new_entry');
-                  }} 
-                  className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform"
-                >
-                  + New Entry
-                </button>
+                <h2 className="text-3xl font-bold text-gray-900">{currentView === "leadgen" ? "Lead Generation" : "Quotes"}</h2>
+                {currentView !== "leadgen" && (
+                  <button 
+                    onClick={()=>{
+                      setEditingId(null);
+                      setQn("");
+                      setDynamicData(blueprint.reduce((acc,s)=>({...acc,[s.title]:s.allow_multiple?[{}]:{}}),{}));
+                      setCurrentView('new_entry');
+                    }} 
+                    className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform"
+                  >
+                    + New Entry
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[180px] max-w-xs">
@@ -2122,17 +2141,26 @@ Command: ${dashCommand}`;
                   <p className="text-sm font-bold text-gray-900">{selectedRecord.status}</p>
                 </div>
                 <div className="flex-1 overflow-x-auto pb-1 scrollbar-hide w-full">
-                  <div className="flex gap-2 w-max">
-                    {allStatuses.map(s => (
+                  <div className="flex gap-2 mb-6">
+                    {selectedRecord.status === 'Lead' ? (
                       <button 
-                        key={s} 
-                        onClick={() => updateStatus(selectedRecord.id, s)} 
-                        disabled={selectedRecord.status === s} 
-                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-sm active:scale-95 transition-all whitespace-nowrap ${selectedRecord.status === s ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                        onClick={() => updateStatus(selectedRecord.id, 'Draft')} 
+                        className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest shadow-md active:scale-95 transition-all bg-indigo-600 text-white w-full"
                       >
-                        {s}
+                        ⚡ Convert to Quote
                       </button>
-                    ))}
+                    ) : (
+                      ['Draft','Pending','Approved','Rejected','Lost'].map(s=>(
+                        <button 
+                          key={s} 
+                          onClick={() => updateStatus(selectedRecord.id, s)} 
+                          disabled={selectedRecord.status === s} 
+                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-sm active:scale-95 transition-all whitespace-nowrap ${selectedRecord.status === s ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                        >
+                          {s}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -2192,6 +2220,39 @@ Command: ${dashCommand}`;
               </div>
 
               <div className="space-y-8">
+                {selectedRecord.status === 'Lead' && (
+                  <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-200 shadow-sm mb-8">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-4 border-b border-amber-200 pb-2">📬 Original Lead Email</h4>
+                    <div className="mb-4">
+                      <p className="text-[9px] font-bold text-amber-600 uppercase">Subject</p>
+                      <p className="text-sm font-medium text-amber-900">{selectedRecord.custom_metadata?.lead_email_subject || 'No Subject'}</p>
+                    </div>
+                    <div className="mb-6">
+                      <p className="text-[9px] font-bold text-amber-600 uppercase">Message Body</p>
+                      <div className="bg-white/80 p-4 rounded-xl text-xs text-gray-800 whitespace-pre-wrap border border-amber-100 mt-1 max-h-60 overflow-y-auto">
+                        {selectedRecord.custom_metadata?.lead_email_body || 'No Body'}
+                      </div>
+                    </div>
+                    
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-500 mb-4 border-b border-indigo-100 pb-2 mt-8">🤖 AI Extracted Items</h4>
+                    {selectedRecord.custom_metadata?.ai_parsed_items?.length > 0 ? (
+                      <div className="space-y-3">
+                        {selectedRecord.custom_metadata.ai_parsed_items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-lg border border-indigo-50">
+                            <div>
+                              <p className="text-sm font-bold text-gray-900">{item.item_name}</p>
+                              <p className="text-[9px] text-gray-400">Est. Price: ${item.unit_price}</p>
+                            </div>
+                            <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">x{item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 italic">No items extracted.</p>
+                    )}
+                  </div>
+                )}
+
                 {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => {
                   return (
                     <div key={sIdx} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
