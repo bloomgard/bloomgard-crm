@@ -50,9 +50,9 @@ input:-webkit-autofill:active {
 
 /* Premium Liquid Glassmorphism */
 .glass-mode .bg-white, .glass-mode .bg-gray-50, .glass-mode .bg-white\/60, .glass-mode .bg-\[\#F8F9FA\], .glass-mode .glass-panel {
-    background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.5) 100%) !important;
-    backdrop-filter: blur(20px) saturate(140%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+    background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.3) 100%) !important;
+    backdrop-filter: blur(24px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(140%) !important;
     border-top: 1px solid rgba(255, 255, 255, 0.4) !important;
     border-left: 1px solid rgba(255, 255, 255, 0.3) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
@@ -60,19 +60,19 @@ input:-webkit-autofill:active {
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1) !important;
 }
 .glass-mode .glass-sidebar {
-    background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.2) 100%) !important;
-    backdrop-filter: blur(30px) saturate(160%) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(160%) !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.7) !important;
+    background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 100%) !important;
+    backdrop-filter: blur(35px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(35px) saturate(160%) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.6) !important;
     border-left: 1px solid rgba(255, 255, 255, 0.5) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
     box-shadow: 4px 0 32px 0 rgba(0, 0, 0, 0.05) !important;
 }
 .glass-mode.dark .bg-white, .glass-mode.dark .bg-gray-50, .glass-mode.dark .bg-white\/60, .glass-mode.dark .bg-\[\#F8F9FA\], .glass-mode.dark .glass-panel {
-    background: linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 100%) !important;
-    backdrop-filter: blur(20px) saturate(140%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+    background: linear-gradient(135deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.05) 100%) !important;
+    backdrop-filter: blur(24px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(140%) !important;
     border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
     border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.02) !important;
@@ -81,9 +81,9 @@ input:-webkit-autofill:active {
     color: #f3f4f6 !important;
 }
 .glass-mode.dark .glass-sidebar {
-    background: linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 100%) !important;
-    backdrop-filter: blur(30px) saturate(160%) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(160%) !important;
+    background: linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.1) 100%) !important;
+    backdrop-filter: blur(35px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(35px) saturate(160%) !important;
     border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
     border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.02) !important;

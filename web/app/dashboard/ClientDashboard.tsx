@@ -1008,8 +1008,8 @@ Command: ${dashCommand}`;
         {isGlass && (
           <>
             <div className="fixed inset-0 z-[-2] bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url('/wallpapers/${userPreferences.wallpaper}.jpg')` }}></div>
-            {isDark && <div className="fixed inset-0 z-[-1] bg-black/60 transition-opacity duration-700"></div>}
-            {!isDark && <div className="fixed inset-0 z-[-1] bg-white/20 transition-opacity duration-700"></div>}
+            {isDark && <div className="fixed inset-0 z-[-1] bg-black/30 transition-opacity duration-700"></div>}
+            {!isDark && <div className="fixed inset-0 z-[-1] bg-white/10 transition-opacity duration-700"></div>}
           </>
         )}
 
@@ -1195,7 +1195,13 @@ Command: ${dashCommand}`;
                       className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors cursor-pointer"
                     >
                       <option value="legacy">Legacy UI (Solid Background)</option>
-                      <option value="wp1">Glassmorphism - Wallpaper 1</option>
+                      <option value="wp1">Abstract - Midnight Blue</option>
+                      <option value="wp2">Abstract - Pastel Frost</option>
+                      <option value="wp3">Nature - Sunset Ocean</option>
+                      <option value="wp4">Nature - Misty Forest</option>
+                      <option value="wp5">City - Cyberpunk Neon</option>
+                      <option value="wp6">Nature - Snowy Twilight</option>
+                      <option value="wp7">Abstract - Liquid Gold Marble</option>
                     </select>
                   </div>
                 </div>
