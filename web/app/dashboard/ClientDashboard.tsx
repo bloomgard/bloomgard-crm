@@ -3,7 +3,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line, AreaChart, Area, CartesianGrid } from "recharts";
 import Handlebars from "handlebars";
 
 // BULLETPROOF FORMATTER
@@ -654,13 +654,28 @@ export default function ClientDashboard() {
 
   const handleGenerateDashInsights = async () => {
     if (!dashCommand.trim() || !tenantId) return; setIsBuildingDash(true);
-    const instruction = `CRITICAL: Return ONLY a valid JSON array, no markdown. Format: [{"type":"metric"|"bar_chart"|"pie_chart"|"line_chart"|"list","title":"Title","value":"Summary","data":[{"name":"x","value":1}]}]. Command: ${dashCommand}`;
-    const lightweightData = visibleRecords.map(r => ({
-      id: r.qn_number || r.qn,
-      status: r.status,
-      client: extractValue(r, 'client_name', 'Client Information') || "Unknown",
-      source: extractValue(r, 'source_ref', 'Client Information') || "Unknown" 
-    }));
+    const instruction = `CRITICAL: Return ONLY a valid JSON array. Format: [{"type":"metric"|"bar_chart"|"pie_chart"|"line_chart"|"list","title":"Title","value":"Summary","data":[{"name":"x","value":1}]}].
+RULES:
+1. Perform robust aggregations (e.g., sum up 'value' instead of counting rows if appropriate).
+2. For charts, SORT the data (e.g., highest value first for bar charts, chronological for line charts).
+3. Keep 'name' labels concise (MAX 15 chars), truncate with '...' if needed.
+4. Limit to top 7-10 data points per chart to prevent clutter.
+5. Do not return markdown, only the raw JSON array.
+Command: ${dashCommand}`;
+
+    const lightweightData = visibleRecords.map(r => {
+      const valStr = getFieldValue(r, {name: 'subtotal'}) || getFieldValue(r, {name: 'total'}) || "0";
+      const numVal = parseFloat(String(valStr).replace(/[^0-9.]/g, '')) || 0;
+      return {
+        id: r.qn_number || r.qn,
+        status: r.status,
+        date: r.date,
+        value: numVal,
+        agent: r.created_by_email,
+        client: (extractValue(r, 'client_name', 'Client Information') || "Unknown").slice(0, 20),
+        source: extractValue(r, 'source_ref', 'Client Information') || "Unknown" 
+      };
+    });
     try {
       const res = await fetch(getApiUrl('/api/ask-ai'), { 
         method:'POST', 
@@ -1651,8 +1666,49 @@ export default function ClientDashboard() {
                         <button onClick={()=>removeInsightCard(insight.id)} className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-white font-bold text-xs z-10 active:scale-95 transition-transform">✕</button>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 pr-6">{insight.title}</p>
                         {insight.type==='metric'&&<p className="text-5xl font-bold tracking-tighter text-gray-900">{insight.value}</p>}
-                        {insight.type?.includes('chart')&&cd.length>0&&<div className="h-64 w-full pt-4"><ResponsiveContainer width="100%" height="100%">{insight.type==='pie_chart'?<PieChart><Pie data={cd} nameKey="name" dataKey="value" innerRadius={60} outerRadius={85} paddingAngle={4} stroke="none">{cd.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}</Pie><Tooltip/></PieChart>:insight.type==='line_chart'?<LineChart data={cd} margin={{top:0,right:0,left:-20,bottom:0}}><XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false}/><YAxis fontSize={11} tickLine={false} axisLine={false}/><Tooltip/><Line type="monotone" dataKey="value" stroke="#4F46E5" strokeWidth={3}/></LineChart>:<BarChart data={cd} margin={{top:0,right:0,left:-20,bottom:0}}><XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false}/><YAxis fontSize={11} tickLine={false} axisLine={false}/><Tooltip cursor={{fill:'#F3F4F6'}}/><Bar dataKey="value" fill="#111827" radius={[6,6,0,0]} barSize={40}/></BarChart>}</ResponsiveContainer></div>}
-                        {insight.type==='list'&&<div className="space-y-3">{cd.map((d,i)=><div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"><span className="text-xs font-bold text-gray-700">{d.name}</span><span className="text-xs font-black bg-gray-100 px-2.5 py-1 rounded-md">{d.value}</span></div>)}</div>}
+                        {insight.type?.includes('chart')&&cd.length>0&&(
+                          <div className="h-64 w-full pt-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                              {insight.type==='pie_chart' ? (
+                                <PieChart>
+                                  <Pie data={cd} nameKey="name" dataKey="value" innerRadius={60} outerRadius={85} paddingAngle={5} stroke="none">
+                                    {cd.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}
+                                  </Pie>
+                                  <Tooltip contentStyle={{borderRadius:'12px',border:'none',boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)',fontWeight:600}}/>
+                                </PieChart>
+                              ) : insight.type==='line_chart' ? (
+                                <AreaChart data={cd} margin={{top:10,right:10,left:-20,bottom:20}}>
+                                  <defs>
+                                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3}/>
+                                      <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                                    </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                  <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} dy={10} angle={-35} textAnchor="end" height={50} />
+                                  <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val)=>val>=1000?`${(val/1000).toFixed(1)}k`:val} />
+                                  <Tooltip cursor={{fill:'#F3F4F6'}} contentStyle={{borderRadius:'12px',border:'none',boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)'}}/>
+                                  <Area type="monotone" dataKey="value" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+                                </AreaChart>
+                              ) : (
+                                <BarChart data={cd} margin={{top:10,right:10,left:-20,bottom:20}}>
+                                  <defs>
+                                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#111827" stopOpacity={1}/>
+                                      <stop offset="100%" stopColor="#374151" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                  <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} dy={10} angle={-35} textAnchor="end" height={50} />
+                                  <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val)=>val>=1000?`${(val/1000).toFixed(1)}k`:val} />
+                                  <Tooltip cursor={{fill:'#F3F4F6'}} contentStyle={{borderRadius:'12px',border:'none',boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)'}}/>
+                                  <Bar dataKey="value" fill="url(#barGradient)" radius={[6,6,0,0]} barSize={32} />
+                                </BarChart>
+                              )}
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                        {insight.type==='list'&&<div className="space-y-3">{cd.map((d,i)=><div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"><span className="text-xs font-bold text-gray-700 truncate pr-4">{d.name}</span><span className="text-xs font-black bg-gray-100 px-2.5 py-1 rounded-md shrink-0">{d.value}</span></div>)}</div>}
                       </div>
                     );
                   })}
