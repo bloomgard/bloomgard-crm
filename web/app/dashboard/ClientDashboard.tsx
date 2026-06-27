@@ -84,6 +84,8 @@ export default function ClientDashboard() {
   const [agentQuoteSearch, setAgentQuoteSearch] = useState("");
   const [selectedAgentView, setSelectedAgentView] = useState(null);
   const [agentViewTab, setAgentViewTab] = useState('due');
+  const [triageTab, setTriageTab] = useState('due');
+  const [expandedHistoryId, setExpandedHistoryId] = useState(null);
 
   const getApiUrl = (endpoint) => endpoint;
 
@@ -981,112 +983,126 @@ export default function ClientDashboard() {
               <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl z-0 pointer-events-none"></div>
 
               <div className="relative z-10">
-                {historyAlerts.length > 0 && (
-                  <div className="mb-12">
-                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-indigo-100/50">
-                      <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <span className="text-indigo-500">📜</span> Follow-up History
-                      </h3>
-                      <span className="bg-gray-100/80 text-gray-600 text-xs font-bold px-3 py-1 rounded-full">{historyAlerts.length} Dispatched</span>
-                    </div>
-                    <div className="space-y-4">
-                      {historyAlerts.map(r => (
-                        <div key={`hist-${r.id}`} className="bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm gap-4">
-                           <div className="flex justify-between items-start mb-4">
-                             <div>
-                               <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
-                               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Status: {r.follow_up_status || r.custom_metadata?.follow_up_status}</p>
-                             </div>
-                           </div>
-                           
-                           {r.custom_metadata?.agent_summary && (
-                             <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-4">
-                               <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
-                               <p className="text-sm text-indigo-900 font-medium leading-relaxed">{r.custom_metadata.agent_summary}</p>
-                             </div>
-                           )}
-
-                           {r.custom_metadata?.agent_conversations && r.custom_metadata.agent_conversations.length > 0 && (
-                             <div className="space-y-4 bg-white/80 p-6 rounded-2xl border border-gray-200 max-h-[300px] overflow-y-auto">
-                               {r.custom_metadata.agent_conversations.map((msg: any, idx: number) => (
-                                 <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
-                                   <div className="flex items-center gap-2 mb-1 px-1">
-                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
-                                     <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
-                                   </div>
-                                   <div className={`p-3 rounded-2xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
-                                     {msg.content}
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
-                           )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between mb-8 pb-4 border-b border-indigo-100/50">
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <span className="text-amber-500">⚡</span> Pending Follow-ups
-                  </h3>
-                  <span className="bg-indigo-100/80 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">{pendingAlerts.length} Due</span>
+                <div className="flex gap-4 border-b border-indigo-100/50 mb-8">
+                  <button onClick={() => setTriageTab('due')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'due' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                    <span className="text-amber-500">⚡</span> Pending Follow-ups <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
+                  </button>
+                  <button onClick={() => setTriageTab('history')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                    <span className="text-indigo-500">📜</span> Follow-up History <span className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full">{historyAlerts.length}</span>
+                  </button>
                 </div>
 
-                {pendingAlerts.length === 0 && historyAlerts.length === 0 ? (
-                  <div className="text-center py-16">
-                    <span className="text-4xl mb-4 block opacity-50">✨</span>
-                    <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
-                    <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here 3 days after creation.</p>
-                  </div>
-                ) : pendingAlerts.length === 0 ? (
-                   <div className="text-center py-12">
-                     <p className="text-gray-500 font-medium text-sm">No pending follow-ups right now.</p>
-                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {pendingAlerts.map(r => {
-                      const defaultSnippet = `Hi ${extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote (${r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.`;
-                      const currentVal = editedSnippets[r.id] !== undefined ? editedSnippets[r.id] : defaultSnippet;
-                      
-                      return (
-                      <div key={r.id} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm hover:shadow-md hover:bg-white/80 transition-all gap-4">
-                        <div className="flex-1 w-full md:w-auto">
-                          <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
-                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-3">Due: {r.follow_up_due_date || r.custom_metadata?.follow_up_due_date ? new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString() : 'Overdue (> 3 days)'}</p>
-                          <div className="bg-white p-3 rounded-lg border border-indigo-100/50 shadow-sm relative group focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
-                            <textarea
-                              value={currentVal}
-                              onChange={(e) => setEditedSnippets({...editedSnippets, [r.id]: e.target.value})}
-                              className="w-full text-xs text-gray-600 italic bg-transparent outline-none resize-none min-h-[48px]"
-                            />
-                            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2 flex justify-between items-center">
-                              <span>Suggested Email Snippet • Waiting for Approval</span>
-                              <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">✎ Edit</span>
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 w-full md:w-auto">
-                          <div className="hidden md:block text-right pr-4 border-r border-indigo-100/50">
-                             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Amount</p>
-                             <p className="text-xs font-bold text-gray-700">₹{getFieldValue(r, {name: 'subtotal'})}</p>
-                          </div>
-                          <button
-                            onClick={() => handleTriggerAgent(r)}
-                            disabled={dispatchingId === r.id}
-                            className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 ${dispatchingId === r.id ? 'bg-indigo-100/50 text-indigo-400 cursor-not-allowed border border-indigo-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-500 hover:shadow-lg hover:shadow-indigo-200'}`}
-                          >
-                            {dispatchingId === r.id ? (
-                              <><div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div> Dispatching...</>
-                            ) : (
-                              <>🤖 Approve Agent</>
-                            )}
-                          </button>
-                        </div>
+                {triageTab === 'due' && (
+                  <>
+                    {pendingAlerts.length === 0 ? (
+                      <div className="text-center py-16">
+                        <span className="text-4xl mb-4 block opacity-50">✨</span>
+                        <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
+                        <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here 3 days after creation.</p>
                       </div>
-                    )})}
-                  </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {pendingAlerts.map(r => {
+                          const defaultSnippet = `Hi ${extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote (${r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.`;
+                          const currentVal = editedSnippets[r.id] !== undefined ? editedSnippets[r.id] : defaultSnippet;
+                          
+                          return (
+                          <div key={r.id} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm hover:shadow-md hover:bg-white/80 transition-all gap-4">
+                            <div className="flex-1 w-full md:w-auto">
+                              <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
+                              <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-3">Due: {r.follow_up_due_date || r.custom_metadata?.follow_up_due_date ? new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString() : 'Overdue (> 3 days)'}</p>
+                              <div className="bg-white p-3 rounded-lg border border-indigo-100/50 shadow-sm relative group focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+                                <textarea
+                                  value={currentVal}
+                                  onChange={(e) => setEditedSnippets({...editedSnippets, [r.id]: e.target.value})}
+                                  className="w-full text-xs text-gray-600 italic bg-transparent outline-none resize-none min-h-[48px]"
+                                />
+                                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2 flex justify-between items-center">
+                                  <span>Suggested Email Snippet • Waiting for Approval</span>
+                                  <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">✎ Edit</span>
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                              <div className="hidden md:block text-right pr-4 border-r border-indigo-100/50">
+                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Amount</p>
+                                 <p className="text-xs font-bold text-gray-700">₹{getFieldValue(r, {name: 'subtotal'})}</p>
+                              </div>
+                              <button
+                                onClick={() => handleTriggerAgent(r)}
+                                disabled={dispatchingId === r.id}
+                                className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 ${dispatchingId === r.id ? 'bg-indigo-100/50 text-indigo-400 cursor-not-allowed border border-indigo-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-500 hover:shadow-lg hover:shadow-indigo-200'}`}
+                              >
+                                {dispatchingId === r.id ? (
+                                  <><div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div> Dispatching...</>
+                                ) : (
+                                  <>🤖 Approve Agent</>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )})}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {triageTab === 'history' && (
+                  <>
+                    {historyAlerts.length === 0 ? (
+                      <div className="text-center py-16">
+                        <span className="text-4xl mb-4 block opacity-50">📜</span>
+                        <p className="text-gray-500 font-medium text-sm">No follow-up history yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {historyAlerts.map(r => (
+                          <div 
+                            key={`hist-${r.id}`} 
+                            onClick={() => setExpandedHistoryId(expandedHistoryId === r.id ? null : r.id)}
+                            className="bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm transition-all hover:bg-white/80 hover:shadow-md cursor-pointer"
+                          >
+                             <div className="flex justify-between items-center">
+                               <div>
+                                 <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
+                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status: {r.follow_up_status || r.custom_metadata?.follow_up_status}</p>
+                               </div>
+                               <span className="text-indigo-400 text-xs font-bold bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100/50">
+                                 {expandedHistoryId === r.id ? 'Close ▲' : 'View Log ▼'}
+                               </span>
+                             </div>
+                             
+                             {expandedHistoryId === r.id && (
+                               <div className="mt-6 pt-6 border-t border-indigo-100/50 cursor-default" onClick={e => e.stopPropagation()}>
+                                 {r.custom_metadata?.agent_summary && (
+                                   <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-4">
+                                     <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
+                                     <p className="text-sm text-indigo-900 font-medium leading-relaxed">{r.custom_metadata.agent_summary}</p>
+                                   </div>
+                                 )}
+
+                                 {r.custom_metadata?.agent_conversations && r.custom_metadata.agent_conversations.length > 0 && (
+                                   <div className="space-y-4 bg-white/80 p-6 rounded-2xl border border-gray-200 max-h-[300px] overflow-y-auto">
+                                     {r.custom_metadata.agent_conversations.map((msg: any, idx: number) => (
+                                       <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
+                                         <div className="flex items-center gap-2 mb-1 px-1">
+                                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
+                                           <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
+                                         </div>
+                                         <div className={`p-3 rounded-2xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
+                                           {msg.content}
+                                         </div>
+                                       </div>
+                                     ))}
+                                   </div>
+                                 )}
+                               </div>
+                             )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
