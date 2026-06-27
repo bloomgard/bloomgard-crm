@@ -1189,7 +1189,7 @@ export default function ClientDashboard() {
                 <button onClick={handleRunCoordinator} disabled={isRunningCoordinator || agents.length === 0} className="bg-white text-gray-900 border border-gray-200 px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-transform disabled:opacity-50">
                   {isRunningCoordinator ? "Syncing..." : "▶ Run Daily Sync"}
                 </button>
-                <button onClick={() => setEditingAgent({ name: '', email: customSender || '', phone: '', importance: 5, task: '', instructions: '' })} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform">
+                <button onClick={() => setEditingAgent({ name: '', email: customSender || '', importance: 5, task: '', instructions: '' })} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform">
                   + Create Agent
                 </button>
               </div>
@@ -1212,14 +1212,22 @@ export default function ClientDashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Agent Phone</label>
-                      <input type="text" value={editingAgent.phone} onChange={e=>setEditingAgent({...editingAgent, phone: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" placeholder="+1 234 567 890" />
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Importance Level</label>
+                      <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded shadow-sm">{editingAgent.importance || 5}</span>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Importance Level (1-10)</label>
-                      <input type="number" min="1" max="10" value={editingAgent.importance} onChange={e=>setEditingAgent({...editingAgent, importance: parseInt(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400" />
+                    <input 
+                      type="range" 
+                      min="1" 
+                      max="10" 
+                      value={editingAgent.importance || 5} 
+                      onChange={e=>setEditingAgent({...editingAgent, importance: parseInt(e.target.value)})} 
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
+                    />
+                    <div className="flex justify-between text-[9px] font-bold text-gray-400 mt-2 px-1">
+                      <span>Low Priority</span>
+                      <span>Critical</span>
                     </div>
                   </div>
                   <div>

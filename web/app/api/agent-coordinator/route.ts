@@ -44,7 +44,6 @@ export async function POST(request: Request) {
       .from('quotations')
       .select(`*, clients (*), quotation_items (*)`)
       .eq('tenant_id', tenantId)
-      .eq('status', 'Inquiry')
       .is('follow_up_status', null);
 
     if (quotesErr || !quotes) throw new Error("Could not load quotes.");
