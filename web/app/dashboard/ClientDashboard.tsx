@@ -82,6 +82,7 @@ export default function ClientDashboard() {
   const [userPreferences, setUserPreferences] = useState({ theme: 'light', wallpaper: 'legacy' });
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [agentQuoteSearch, setAgentQuoteSearch] = useState("");
+  const [selectedAgentView, setSelectedAgentView] = useState(null);
 
   const getApiUrl = (endpoint) => endpoint;
 
