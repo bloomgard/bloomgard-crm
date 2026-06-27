@@ -12,10 +12,43 @@ const AI_MODEL = 'openai/gpt-3.5-turbo';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { quoteId, tenantId, clientMessage, agentEmail } = body;
+    let { quoteId, tenantId, clientMessage, agentEmail } = body;
+
+    // --- RESEND INBOUND WEBHOOK PARSING ---
+    // Resend sends webhooks like { type: 'email.received', data: { subject, text, from, to... } }
+    const isResendWebhook = body.type === 'email.received' || (body.subject && (body.text || body.html));
+    
+    if (isResendWebhook) {
+      const emailData = body.type === 'email.received' ? body.data : body;
+      const subject = emailData.subject || '';
+      
+      // Extract QN-1234 from subject
+      const match = subject.match(/(QN-\d+)/i);
+      if (!match) {
+        return NextResponse.json({ success: false, error: 'No Quote ID found in subject' }, { status: 400 });
+      }
+      
+      const qnNumber = match[1].toUpperCase();
+      
+      // Lookup Quote ID and Tenant ID from database
+      const { data: foundQuote, error: lookupError } = await supabase
+        .from('quotations')
+        .select('id, tenant_id')
+        .eq('qn_number', qnNumber)
+        .single();
+        
+      if (lookupError || !foundQuote) {
+        return NextResponse.json({ success: false, error: `Quote not found: ${qnNumber}` }, { status: 404 });
+      }
+
+      quoteId = foundQuote.id;
+      tenantId = foundQuote.tenant_id;
+      clientMessage = emailData.text || emailData.html || 'No message body.';
+      agentEmail = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || 'agent@bloomgard.com');
+    }
 
     if (!quoteId || !tenantId || !clientMessage) {
-      return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Missing required fields or invalid webhook payload' }, { status: 400 });
     }
 
     // 1. Fetch Quote & Tenant Schema
