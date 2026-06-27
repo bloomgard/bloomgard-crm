@@ -573,12 +573,12 @@ export default function ClientDashboard() {
         }
       });
     });
-    setSelectedRecord(p => ({ 
+    setSelectedRecord(p => p ? ({ 
       ...p, 
       status: newStatus, 
       custom_metadata: updatedMetadata,
       status_logs: p.status_logs ? [...p.status_logs, newLog] : [newLog]
-    })); 
+    }) : null); 
     await fetchRecords(tenantId);
   };
 
@@ -818,10 +818,12 @@ Command: ${dashCommand}`;
     const name = `${r.qn_number} - ${getManifestTitle(r)}`;
     
     setEmailDraft({
+      quoteId: r.id,
+      status: r.status,
       to: "",
       subject: `Document: ${name}`,
       message: `Hello,\n\nPlease find the attached official document.\n\nBest regards,\n${user?.email}`,
-      attachmentBase64: "", // Clear this since we removed the heavy PDF generator logic
+      attachments: [],
       filename: `${name}.pdf`
     });
     setShowEmailModal(true);
@@ -848,19 +850,24 @@ Command: ${dashCommand}`;
       }); 
         
       const responseText = await res.text();
-      let r;
+      let responseData;
       try { 
-        r = JSON.parse(responseText); 
-      } catch (parseError) { 
+        responseData = JSON.parse(responseText); 
+      } catch(e) { 
         throw new Error(`Parse Error: ${responseText.slice(0, 40)}...`); 
       }
-        
-      if (r.success) {
-        setShowEmailModal(false);
-        alert("Email sent successfully!");
-      } else {
-        throw new Error(r.error || "Server failed to send."); 
+      
+      if (!res.ok || !responseData.success) {
+        throw new Error(responseData.error || "Server failed to send."); 
       }
+      
+      // Auto-transition status if an attachment is sent and it's currently an Inquiry
+      if (emailDraft.attachments?.length > 0 && emailDraft.quoteId && (!emailDraft.status || emailDraft.status === "Inquiry")) {
+         await updateStatus(emailDraft.quoteId, "Quotation Given");
+      }
+
+      alert("Email sent successfully!");
+      setShowEmailModal(false);
       
     } catch(e) { 
       alert("Delivery Failed: " + e.message); 
