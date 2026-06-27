@@ -1199,9 +1199,6 @@ Command: ${dashCommand}`;
                       <option value="wp2">Abstract - Pastel Frost</option>
                       <option value="wp3">Nature - Sunset Ocean</option>
                       <option value="wp4">Nature - Misty Forest</option>
-                      <option value="wp5">City - Cyberpunk Neon</option>
-                      <option value="wp6">Nature - Snowy Twilight</option>
-                      <option value="wp7">Abstract - Liquid Gold Marble</option>
                     </select>
                   </div>
                 </div>
