@@ -903,7 +903,7 @@ export default function ClientDashboard() {
 
       <aside className={`fixed z-[100] w-64 flex flex-col shadow-2xl md:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-in-out 
         ${isMobileMenuOpen ? 'inset-y-0 left-0 translate-x-0 rounded-none border-r' : 'top-4 bottom-4 left-4 -translate-x-[120%] md:translate-x-0 rounded-3xl'} 
-        ${isGlass ? 'bg-white/80 dark:bg-black/60 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200')}`}>
+        ${isGlass ? 'glass-sidebar bg-white/80 dark:bg-black/60 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200')}`}>
         <div className="p-8 pb-4">
           <h1 className="text-4xl font-bold tracking-tighter text-gray-900">Bloomgard.</h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
