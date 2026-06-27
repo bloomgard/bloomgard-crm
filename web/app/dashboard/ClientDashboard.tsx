@@ -2096,6 +2096,7 @@ Command: ${dashCommand}`;
             </div>
           </div>
         )}
+        </main>
 
         {selectedRecord && (
           <div className="fixed inset-0 z-[150] flex justify-end bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200">
