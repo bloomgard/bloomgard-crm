@@ -2285,8 +2285,6 @@ Command: ${dashCommand}`;
             </div>
           </div>
         )}
-
-        </main>
         
         {showEmailModal && (
           <div className="fixed inset-0 z-[300] bg-gray-900/60 backdrop-blur-sm flex justify-center items-center p-4 animate-in fade-in zoom-in-95 duration-200">
