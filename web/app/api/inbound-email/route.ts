@@ -149,8 +149,11 @@ export async function POST(request: Request) {
       auth: { user: 'resend', pass: process.env.RESEND_API_KEY || '' }
     });
 
+    const senderEmail = agentEmail || 'ai@bloomgard.co';
+    const senderName = quote.clients?.company_name ? `${quote.clients.company_name} AI` : 'Bloomgard AI';
+
     const mailOptions = {
-      from: `Bloomgard Quotes <onboarding@resend.dev>`, 
+      from: `${senderName} <${senderEmail}>`, 
       to: clientEmail,
       subject: `Re: Following up on Quote ${quote.qn_number}`,
       text: agentReply
