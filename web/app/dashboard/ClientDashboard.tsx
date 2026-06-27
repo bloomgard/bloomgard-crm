@@ -1292,6 +1292,125 @@ export default function ClientDashboard() {
                   </button>
                 </div>
               </div>
+            ) : selectedAgentView ? (
+              <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-start mb-8 pb-6 border-b border-gray-100">
+                  <div>
+                    <button onClick={() => setSelectedAgentView(null)} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-indigo-600 flex items-center gap-1 mb-4">
+                      ← Back to Fleet
+                    </button>
+                    <h3 className="text-2xl font-bold text-gray-900">{selectedAgentView.name}</h3>
+                    <p className="text-sm font-medium text-gray-500 mt-1">{selectedAgentView.email}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Rank {selectedAgentView.importance}</span>
+                      <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-3 py-1 rounded-full">{selectedAgentView.task}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => {
+                      const assigned = records.filter(r => {
+                        let m = r.custom_metadata;
+                        if(typeof m==='string') { try { m = JSON.parse(m); } catch(e){ m={}; } }
+                        return m?.agent_id === selectedAgentView.id;
+                      }).map(r => r.id);
+                      setEditingAgent({...selectedAgentView, assigned_quote_ids: assigned});
+                      setSelectedAgentView(null);
+                    }} className="px-6 py-2 bg-gray-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm">
+                      Edit Agent
+                    </button>
+                    <button onClick={() => {
+                      handleDeleteAgent(selectedAgentView.id);
+                      setSelectedAgentView(null);
+                    }} className="px-6 py-2 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors border border-red-100 shadow-sm">
+                      Delete Agent
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Quotes & Conversations</h4>
+                  {(() => {
+                    const assignedQuotes = records.filter(r => {
+                      let m = r.custom_metadata;
+                      if(typeof m==='string') { try { m = JSON.parse(m); } catch(e){ m={}; } }
+                      return m?.agent_id === selectedAgentView.id;
+                    });
+
+                    if (assignedQuotes.length === 0) {
+                      return <p className="text-sm text-gray-500 font-medium">No quotes currently assigned to this agent.</p>;
+                    }
+
+                    return assignedQuotes.map((q) => {
+                      let meta = q.custom_metadata;
+                      if(typeof meta==='string') { try { meta = JSON.parse(meta); } catch(e){ meta={}; } }
+                      
+                      return (
+                        <div key={q.id} className="bg-gray-50/50 border border-gray-200 rounded-2xl p-6 shadow-sm">
+                          <div className="flex justify-between items-center mb-6">
+                            <div>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number}</p>
+                              <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
+                            </div>
+                            <button 
+                              onClick={async () => {
+                                const msg = prompt("Enter a simulated client reply:");
+                                if (!msg) return;
+                                const res = await fetch('/api/inbound-email', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    quoteId: q.id,
+                                    tenantId: q.tenant_id,
+                                    clientMessage: msg,
+                                    agentEmail: selectedAgentView.email
+                                  })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                  alert("Simulated reply processed!");
+                                  await fetchRecords(tenantId);
+                                } else {
+                                  alert("Failed: " + data.error);
+                                }
+                              }} 
+                              className="px-4 py-2 bg-white text-indigo-600 border border-gray-200 rounded-lg text-[10px] font-bold shadow-sm hover:border-indigo-300 transition-colors"
+                            >
+                              Simulate Client Reply
+                            </button>
+                          </div>
+
+                          {meta?.agent_summary && (
+                            <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
+                              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
+                              <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
+                            </div>
+                          )}
+
+                          {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
+                            <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
+                              {meta.agent_conversations.map((msg: any, idx: number) => (
+                                <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
+                                  <div className="flex items-center gap-2 mb-1 px-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
+                                    <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
+                                  </div>
+                                  <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
+                                    {msg.content}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
+                              <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {agents.length === 0 ? (
@@ -1302,27 +1421,19 @@ export default function ClientDashboard() {
                   </div>
                 ) : (
                   agents.map(a => (
-                    <div key={a.id} className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                    <div key={a.id} onClick={() => setSelectedAgentView(a)} className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-indigo-300 group flex flex-col justify-between">
                       <div>
                         <div className="flex justify-between items-start mb-4">
                           <div>
-                            <h3 className="font-bold text-gray-900">{a.name}</h3>
+                            <h3 className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{a.name}</h3>
                             <p className="text-[10px] text-gray-500 uppercase tracking-widest">{a.email}</p>
                           </div>
                           <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-full">Rank {a.importance}</span>
                         </div>
                         <p className="text-xs text-gray-600 mb-4 line-clamp-2">{a.task}</p>
                       </div>
-                      <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
-                        <button onClick={() => {
-                          const assigned = records.filter(r => {
-                            let m = r.custom_metadata;
-                            if(typeof m==='string') { try { m = JSON.parse(m); } catch(e){ m={}; } }
-                            return m?.agent_id === a.id;
-                          }).map(r => r.id);
-                          setEditingAgent({...a, assigned_quote_ids: assigned});
-                        }} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
-                        <button onClick={() => handleDeleteAgent(a.id)} className="text-xs font-semibold text-red-500 hover:text-red-700 ml-4">Delete</button>
+                      <div className="flex justify-end pt-4 border-t border-gray-50">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 group-hover:text-indigo-600 transition-colors">View Details & Logs →</span>
                       </div>
                     </div>
                   ))
@@ -1794,36 +1905,6 @@ export default function ClientDashboard() {
                  </div>
               </div>
 
-              {selectedRecord.custom_metadata?.agent_conversations && selectedRecord.custom_metadata.agent_conversations.length > 0 && (
-                <div className="mb-8">
-                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3 px-2 flex items-center gap-2">
-                     <span className="text-indigo-500">🤖</span> AI Conversation Log
-                   </h4>
-                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-5 space-y-6">
-                      {selectedRecord.custom_metadata?.agent_summary && (
-                        <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl">
-                          <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
-                          <p className="text-sm text-indigo-900 font-medium leading-relaxed">{selectedRecord.custom_metadata.agent_summary}</p>
-                        </div>
-                      )}
-                      
-                      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                        {selectedRecord.custom_metadata.agent_conversations.map((msg: any, idx: number) => (
-                          <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
-                            <div className="flex items-center gap-2 mb-1 px-1">
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
-                              <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
-                            </div>
-                            <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
-                              {msg.content}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                   </div>
-                </div>
-              )}
-
               <div className="space-y-8">
                 {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => {
                   return (
@@ -1875,34 +1956,6 @@ export default function ClientDashboard() {
                 <button onClick={() => handleViewDocument(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Preview PDF</button>
                 <button onClick={() => handleGeneratePDF(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Download PDF</button>
                 <button onClick={() => handleOpenEmailComposer(selectedRecord)} className="bg-gray-900 text-white py-3.5 rounded-xl font-semibold text-xs shadow-md hover:bg-gray-800 active:scale-95 transition-transform">Mail</button>
-                <button 
-                  onClick={async () => {
-                    const msg = prompt("Enter a simulated client reply:");
-                    if (!msg) return;
-                    
-                    const res = await fetch('/api/inbound-email', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        quoteId: selectedRecord.id,
-                        tenantId: selectedRecord.tenant_id,
-                        clientMessage: msg,
-                        agentEmail: user?.email
-                      })
-                    });
-                    
-                    const data = await res.json();
-                    if (data.success) {
-                      alert("Simulated reply processed! AI Agent has replied and updated the summary.");
-                      await refreshData();
-                    } else {
-                      alert("Failed: " + data.error);
-                    }
-                  }} 
-                  className="bg-indigo-50 border border-indigo-200 text-indigo-700 py-3.5 rounded-xl font-semibold text-xs shadow-sm hover:bg-indigo-100 active:scale-95 transition-transform"
-                >
-                  Simulate Client Reply
-                </button>
               </div>
             </div>
           </div>

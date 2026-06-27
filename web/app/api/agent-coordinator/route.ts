@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const desperation = aiSettingsConfig?.desperation || 'Low';
 
     if (!customAgents || customAgents.length === 0) {
-       return NextResponse.json({ success: true, message: 'No autonomous agents configured.' });
+       return NextResponse.json({ success: true, message: 'No autonomous agents configured in this workspace.' });
     }
 
     // 2. Fetch all quotes needing follow-up (Inquiry status, not dispatched)
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     });
 
     if (tasks.length === 0) {
-      return NextResponse.json({ success: true, message: 'No quotes assigned to autonomous agents require action.' });
+      return NextResponse.json({ success: true, message: 'No pending actions required. All assigned quotes have already been followed up on.' });
     }
 
     // 4. Group by Agent Email & Rank by Importance
