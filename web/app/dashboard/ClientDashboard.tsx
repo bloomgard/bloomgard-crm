@@ -81,6 +81,7 @@ export default function ClientDashboard() {
   const [editedSnippets, setEditedSnippets] = useState({});
   const [userPreferences, setUserPreferences] = useState({ theme: 'light', wallpaper: 'legacy' });
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [agentQuoteSearch, setAgentQuoteSearch] = useState("");
   const [selectedAgentView, setSelectedAgentView] = useState(null);
   const [agentViewTab, setAgentViewTab] = useState('due');
@@ -349,7 +350,10 @@ export default function ClientDashboard() {
   const safeUUID = () => (typeof window !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString() + Math.random();
 
   const handleSave = async () => {
-    if (!tenantId) return alert("No workspace connected. Contact your administrator.");
+    if (isSavingRecord) return;
+    setIsSavingRecord(true);
+    try {
+      if (!tenantId) return alert("No workspace connected. Contact your administrator.");
     const generatedQn = qn || `QN-${new Date().getFullYear()}-${(records.length+1).toString().padStart(3,'0')}`;
     if (!editingId) setQn(generatedQn);
     let finalQn = generatedQn;
@@ -438,9 +442,11 @@ export default function ClientDashboard() {
       if (atts.length) await supabase.from('quotation_attachments').insert(atts);
       
       setEditingId(null); 
+      alert(`Successfully saved ${finalQn}!`);
       setCurrentView("pipeline"); 
       await fetchRecords(tenantId);
-    } catch (err) { alert("Deployment Error: " + err.message); }
+    } catch (err) { alert("Save Failed: " + err.message); }
+    finally { setIsSavingRecord(false); }
   };
 
   const handleTriggerAgent = async (quote) => {
@@ -1923,7 +1929,7 @@ Command: ${dashCommand}`;
               <h2 className="text-3xl font-bold text-gray-900">{editingId ? "Revise Entry" : "Create Entry"}</h2>
               <div className="flex items-center gap-3">
                 <button onClick={()=>{setEditingId(null);setCurrentView('pipeline');setSelectedRecord(null);}} className="px-4 py-2 text-xs font-semibold text-gray-500 hover:text-gray-900 active:scale-95 transition-transform">Discard</button>
-                <button onClick={handleSave} className="bg-white text-white px-6 py-2.5 rounded-xl font-semibold text-xs shadow-sm hover:bg-gray-800 active:scale-95 transition-transform" style={{ backgroundColor: '#111827' }}>Save</button>
+                <button onClick={handleSave} disabled={isSavingRecord} className={`bg-white text-white px-6 py-2.5 rounded-xl font-semibold text-xs shadow-sm transition-transform ${isSavingRecord ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-800 active:scale-95'}`} style={{ backgroundColor: '#111827' }}>{isSavingRecord ? 'Saving...' : 'Save'}</button>
               </div>
             </div>
             
