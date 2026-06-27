@@ -60,13 +60,17 @@ export async function POST(request: Request) {
              if (assignedAgent.auto_send === false) return;
              
              // Respect frequency
-             const freq = assignedAgent.frequency || 'Immediate';
+             const freq = assignedAgent.frequency;
              let isDue = true;
-             if (freq !== 'Immediate') {
+             if (freq !== 0 && freq !== 'Immediate') {
                  const targetDate = new Date(q.created_at);
-                 if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
-                 if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
-                 if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                 if (typeof freq === 'number') {
+                    targetDate.setDate(targetDate.getDate() + freq);
+                 } else {
+                    if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
+                    if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
+                    if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                 }
                  if (new Date() < targetDate) isDue = false;
              }
              

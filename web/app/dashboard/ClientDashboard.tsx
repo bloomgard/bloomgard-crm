@@ -250,6 +250,10 @@ export default function ClientDashboard() {
     return new Date(dueDate) <= new Date();
   });
 
+  const historyAlerts = visibleRecords.filter(r => {
+    return r.follow_up_status != null || r.custom_metadata?.follow_up_status != null;
+  });
+
   const extractMasterStatuses = () => {
     let options = new Set();
     blueprint.forEach(section => {
@@ -977,6 +981,52 @@ export default function ClientDashboard() {
               <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl z-0 pointer-events-none"></div>
 
               <div className="relative z-10">
+                {historyAlerts.length > 0 && (
+                  <div className="mb-12">
+                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-indigo-100/50">
+                      <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <span className="text-indigo-500">📜</span> Follow-up History
+                      </h3>
+                      <span className="bg-gray-100/80 text-gray-600 text-xs font-bold px-3 py-1 rounded-full">{historyAlerts.length} Dispatched</span>
+                    </div>
+                    <div className="space-y-4">
+                      {historyAlerts.map(r => (
+                        <div key={`hist-${r.id}`} className="bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm gap-4">
+                           <div className="flex justify-between items-start mb-4">
+                             <div>
+                               <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
+                               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Status: {r.follow_up_status || r.custom_metadata?.follow_up_status}</p>
+                             </div>
+                           </div>
+                           
+                           {r.custom_metadata?.agent_summary && (
+                             <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-4">
+                               <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
+                               <p className="text-sm text-indigo-900 font-medium leading-relaxed">{r.custom_metadata.agent_summary}</p>
+                             </div>
+                           )}
+
+                           {r.custom_metadata?.agent_conversations && r.custom_metadata.agent_conversations.length > 0 && (
+                             <div className="space-y-4 bg-white/80 p-6 rounded-2xl border border-gray-200 max-h-[300px] overflow-y-auto">
+                               {r.custom_metadata.agent_conversations.map((msg: any, idx: number) => (
+                                 <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
+                                   <div className="flex items-center gap-2 mb-1 px-1">
+                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
+                                     <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
+                                   </div>
+                                   <div className={`p-3 rounded-2xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
+                                     {msg.content}
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between mb-8 pb-4 border-b border-indigo-100/50">
                   <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                     <span className="text-amber-500">⚡</span> Pending Follow-ups
@@ -984,12 +1034,16 @@ export default function ClientDashboard() {
                   <span className="bg-indigo-100/80 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">{pendingAlerts.length} Due</span>
                 </div>
 
-                {pendingAlerts.length === 0 ? (
+                {pendingAlerts.length === 0 && historyAlerts.length === 0 ? (
                   <div className="text-center py-16">
                     <span className="text-4xl mb-4 block opacity-50">✨</span>
                     <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
                     <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here 3 days after creation.</p>
                   </div>
+                ) : pendingAlerts.length === 0 ? (
+                   <div className="text-center py-12">
+                     <p className="text-gray-500 font-medium text-sm">No pending follow-ups right now.</p>
+                   </div>
                 ) : (
                   <div className="space-y-4">
                     {pendingAlerts.map(r => {
@@ -1233,30 +1287,44 @@ export default function ClientDashboard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Follow-up Frequency</label>
-                      <select 
-                        value={editingAgent.frequency || 'Immediate'} 
-                        onChange={e => setEditingAgent({...editingAgent, frequency: e.target.value})}
-                        className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-indigo-400"
-                      >
-                        <option value="Immediate">Immediate (Next Sync)</option>
-                        <option value="Daily">Daily</option>
-                        <option value="3 Days">Every 3 Days</option>
-                        <option value="Weekly">Weekly</option>
-                      </select>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Follow-up Frequency</label>
+                        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded shadow-sm">
+                          {editingAgent.frequency === 0 || editingAgent.frequency === 'Immediate' ? 'Immediate' : `${editingAgent.frequency} Days`}
+                        </span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="14" 
+                        value={typeof editingAgent.frequency === 'number' ? editingAgent.frequency : (editingAgent.frequency === 'Immediate' ? 0 : (editingAgent.frequency === 'Daily' ? 1 : (editingAgent.frequency === '3 Days' ? 3 : (editingAgent.frequency === 'Weekly' ? 7 : 0))))} 
+                        onChange={e => setEditingAgent({...editingAgent, frequency: parseInt(e.target.value)})}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <div className="flex justify-between text-[9px] font-bold text-gray-400 mt-2 px-1">
+                        <span>Immediate</span>
+                        <span>14 Days</span>
+                      </div>
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Action Control</label>
-                      <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" className="sr-only peer" checked={editingAgent.auto_send !== false} onChange={e => setEditingAgent({...editingAgent, auto_send: e.target.checked})} />
-                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                        </label>
-                        <span className="text-sm font-semibold text-gray-700">
-                          {editingAgent.auto_send !== false ? 'Auto-Send' : 'Manual Review'}
-                        </span>
+                      <div className="flex p-1 bg-gray-100 rounded-xl border border-gray-200">
+                        <button 
+                          type="button"
+                          onClick={() => setEditingAgent({...editingAgent, auto_send: true})}
+                          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${editingAgent.auto_send !== false ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                          Auto-Send
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setEditingAgent({...editingAgent, auto_send: false})}
+                          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${editingAgent.auto_send === false ? 'bg-white text-amber-600 shadow-sm border border-amber-100' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                          Manual Review
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1378,13 +1446,17 @@ export default function ClientDashboard() {
                       // For 'due' tab:
                       if (isHistory) return false;
                       
-                      const freq = selectedAgentView.frequency || 'Immediate';
-                      if (freq === 'Immediate') return true;
+                      const freq = selectedAgentView.frequency;
+                      if (freq === 0 || freq === 'Immediate') return true;
                       
                       const targetDate = new Date(q.created_at);
-                      if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
-                      if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
-                      if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                      if (typeof freq === 'number') {
+                        targetDate.setDate(targetDate.getDate() + freq);
+                      } else {
+                        if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
+                        if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
+                        if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                      }
                       
                       return new Date() >= targetDate;
                     });
