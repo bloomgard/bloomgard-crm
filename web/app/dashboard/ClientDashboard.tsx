@@ -670,7 +670,11 @@ export default function ClientDashboard() {
     await fetchRecords(tenantId);
   };
 
-  const handleLogout = async () => { await supabase.auth.signOut(); window.location.replace("/"); };
+  const handleLogout = async () => { 
+    try { await supabase.auth.signOut(); } catch (e) { console.error("Sign out error", e); } 
+    localStorage.clear();
+    window.location.replace("/"); 
+  };
 
   const handleExportData = (format) => {
     if (!visibleRecords.length) return alert("No data to export.");
