@@ -61,9 +61,12 @@ export async function POST(request: Request) {
               body: JSON.stringify({ model: AI_MODEL, messages: [{ role: "system", content: parsePrompt }] })
            });
            const aiData = await aiRes.json();
-           const jsonStr = aiData.choices[0].message.content.match(/\[.*\]/s)?.[0] || '[]';
+           const content = aiData?.choices?.[0]?.message?.content;
+           const jsonStr = content ? (content.match(/\[[\s\S]*\]/)?.[0] || '[]') : '[]';
            aiParsedItems = JSON.parse(jsonStr);
-        } catch (e) {}
+        } catch (e) {
+           console.error("AI Parse Error:", e);
+        }
 
         const newQn = 'LD-' + Math.floor(1000 + Math.random() * 9000);
         await supabase.from('quotations').insert([{

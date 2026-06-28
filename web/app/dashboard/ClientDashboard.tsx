@@ -88,6 +88,9 @@ export default function ClientDashboard() {
   const [agentViewTab, setAgentViewTab] = useState('due');
   const [triageTab, setTriageTab] = useState('due');
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+  const [htmlTemplate, setHtmlTemplate] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [tenantUsers, setTenantUsers] = useState([]);
 
   const getApiUrl = (endpoint) => endpoint;
 
@@ -129,18 +132,30 @@ export default function ClientDashboard() {
             if (tenantData.custom_email_sender) setCustomSender(tenantData.custom_email_sender);
           }
 
-          const { data: schema } = await supabase.from("tenant_schemas").select("schema_config").eq("tenant_id", profile.tenant_id).maybeSingle();
+          const { data: schema } = await supabase.from("tenant_schemas").select("schema_config, html_template").eq("tenant_id", profile.tenant_id).maybeSingle();
+          if (schema) {
+            setHtmlTemplate(schema.html_template || "");
+          }
           if (schema?.schema_config) {
             const agentConfig = schema.schema_config.find(s => s.is_agent_config);
             if (agentConfig) setAgents(agentConfig.agents || []);
             const aiSettingsConfig = schema.schema_config.find(s => s.is_ai_settings);
             if (aiSettingsConfig) setAiSettings({ tone: aiSettingsConfig.tone || 'Professional', englishLevel: aiSettingsConfig.englishLevel || 'Native', desperation: aiSettingsConfig.desperation || 'Low' });
-            const actualBlueprint = schema.schema_config.filter(s => !s.is_agent_config && !s.is_ai_settings);
+            const brandingConfig = schema.schema_config.find(s => s.is_branding);
+            if (brandingConfig) setLogoUrl(brandingConfig.logo_url || "");
+            
+            const actualBlueprint = schema.schema_config.filter(s => !s.is_agent_config && !s.is_ai_settings && !s.is_branding);
             setBlueprint(actualBlueprint);
             const init = {};
             actualBlueprint.forEach(s => { init[s.title] = s.allow_multiple ? [{}] : {}; });
             setDynamicData(init);
           }
+          
+          if (fullUser.role === 'admin' || fullUser.role === 'manager') {
+            const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", profile.tenant_id);
+            if (users) setTenantUsers(users);
+          }
+          
           await fetchRecords(profile.tenant_id);
         }
       } catch (err) {
@@ -577,6 +592,33 @@ export default function ClientDashboard() {
     setAgents(updatedAgents);
   };
 
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+      if (error) throw error;
+      setTenantUsers(tenantUsers.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    } catch (err) {
+      alert("Error changing role: " + err.message);
+    }
+  };
+
+  const handleResetPassword = async (targetUserId) => {
+    if (!confirm("Are you sure you want to reset this user's password? The new password will be shown once.")) return;
+    try {
+      const res = await fetch(getApiUrl('/api/reset-password'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: targetUserId, tenantId: tenantId, requesterId: user.id })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Reset failed");
+      alert(`Password reset successful!\nNew Password: ${data.newPassword}\n\nPlease copy this now, it won't be shown again.`);
+    } catch (err) {
+      alert("Error resetting password: " + err.message);
+    }
+  };
+
+
   const handleDelete = async (id) => {
     if (!confirm("Permanently delete this manifest?")) return;
     const { error } = await supabase.from("quotations").delete().eq("id", id);
@@ -830,6 +872,7 @@ Command: ${dashCommand}`;
     });
 
     templateData['subtotal'] = formatValue(record.subtotal || extractValue(record, 'subtotal', 'Quote Details') || "0", true);
+    templateData['company_logo'] = logoUrl || "";
 
     try {
       if (!Handlebars.helpers['math']) {
@@ -1266,12 +1309,13 @@ Command: ${dashCommand}`;
                     const newSchemaConfig = [
                       ...blueprint,
                       { is_agent_config: true, agents, title: "system_agents" },
-                      { ...aiSettings, is_ai_settings: true, title: "ai_settings" }
+                      { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
+                      { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
                     ];
 
                     const [res1, res2] = await Promise.all([
                       supabase.from('tenants').update({ custom_email_sender: customSender }).eq('id', tenantId),
-                      supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig }).eq('tenant_id', tenantId)
+                      supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
                     ]);
                     
                     setIsSavingSettings(false);
@@ -1319,6 +1363,100 @@ Command: ${dashCommand}`;
                   </select>
                 </div>
               </div>
+
+              {/* BRANDING / LOGO CONFIGURATION */}
+              <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                <span className="text-2xl">🎨</span>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Brand Identity</h3>
+                </div>
+              </div>
+              <div className="space-y-4 max-w-md">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Logo URL</label>
+                  <input 
+                    type="url" 
+                    value={logoUrl} 
+                    onChange={e => setLogoUrl(e.target.value)} 
+                    placeholder="https://example.com/logo.png"
+                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                    Accessible in the template as <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-500">{"{{company_logo}}"}</code>
+                  </p>
+                </div>
+              </div>
+
+              {/* HTML TEMPLATE EDITOR */}
+              <div className="flex justify-between items-center mt-10 mb-6 border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">📝</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Quotation Template Editor</h3>
+                    <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Live Document Engine</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col lg:flex-row gap-6 h-[800px] mb-12">
+                <div className="flex-1 bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-inner">
+                  <div className="bg-gray-950 px-6 py-4 border-b border-gray-800 flex justify-between items-center"><span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Source Code</span><span className="text-[10px] font-black text-indigo-400">{'{{db_key}}'} Supported</span></div>
+                  <textarea className="w-full flex-1 bg-transparent text-gray-300 font-mono text-[11px] p-6 outline-none resize-none leading-relaxed" value={htmlTemplate} onChange={e => setHtmlTemplate(e.target.value)} spellCheck={false} placeholder="Paste pure HTML here..." />
+                </div>
+                <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
+                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
+                  {htmlTemplate ? (
+                    <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace('{{company_logo}}', logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview"/></div>
+                  ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
+                </div>
+              </div>
+
+              {/* TEAM MANAGEMENT */}
+              {(user?.role === 'admin' || user?.role === 'manager') && (
+                <>
+                  <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                    <span className="text-2xl">👥</span>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Team Management</h3>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-4xl">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#F8F9FA] border-b border-gray-100 text-xs text-gray-500 uppercase tracking-widest">
+                          <th className="p-4 font-bold">Email</th>
+                          <th className="p-4 font-bold">Role</th>
+                          <th className="p-4 font-bold">Joined</th>
+                          <th className="p-4 font-bold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {tenantUsers.map((u) => (
+                          <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="p-4 text-gray-900 text-sm font-medium">{u.email || 'Unknown'}</td>
+                            <td className="p-4">
+                              <select 
+                                value={u.role || 'agent'} 
+                                onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer border ${u.role === 'admin' ? 'bg-black text-white border-black' : u.role === 'manager' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                              >
+                                <option value="agent">Agent</option>
+                                <option value="manager">Manager</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                            </td>
+                            <td className="p-4 text-gray-500 text-sm">{new Date(u.created_at).toLocaleDateString()}</td>
+                            <td className="p-4 text-right">
+                              <button onClick={() => handleResetPassword(u.id)} className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md uppercase tracking-wider transition-colors">Reset Password</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {tenantUsers.length === 0 && <div className="p-12 text-center text-gray-500 text-sm">No team members found.</div>}
+                  </div>
+                </>
+              )}
+
             </div>
           </div>
         )}
