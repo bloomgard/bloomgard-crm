@@ -14,15 +14,25 @@ export async function POST(request: Request) {
     const body = await request.json();
     let { quoteId, tenantId, clientMessage, agentEmail } = body;
 
-    // --- RESEND INBOUND WEBHOOK PARSING ---
-    const isResendWebhook = body.type === 'email.received' || (body.subject && (body.text || body.html));
+    // --- POSTAL & RESEND INBOUND WEBHOOK PARSING ---
+    const isPostalWebhook = !!body.rcpt_to && !!body.mail_from;
+    const isResendWebhook = !isPostalWebhook && (body.type === 'email.received' || (body.subject && (body.text || body.html)));
     
-    if (isResendWebhook) {
-      const emailData = body.type === 'email.received' ? body.data : body;
+    let senderEmail = 'unknown@example.com';
+    
+    if (isPostalWebhook || isResendWebhook) {
+      const emailData = isResendWebhook ? (body.type === 'email.received' ? body.data : body) : body;
       const subject = emailData.subject || '';
-      agentEmail = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || 'agent@bloomgard.com');
-      const senderEmail = emailData.from || 'unknown@example.com';
-      clientMessage = emailData.text || emailData.html || 'No message body.';
+      
+      if (isPostalWebhook) {
+        agentEmail = emailData.rcpt_to || 'agent@bloomgard.com';
+        senderEmail = emailData.mail_from || 'unknown@example.com';
+        clientMessage = emailData.plain_body || emailData.html_body || 'No message body.';
+      } else {
+        agentEmail = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || 'agent@bloomgard.com');
+        senderEmail = emailData.from || 'unknown@example.com';
+        clientMessage = emailData.text || emailData.html || 'No message body.';
+      }
       
       const match = subject.match(/(QN-\d+)/i);
       if (match) {
@@ -174,17 +184,21 @@ export async function POST(request: Request) {
     const agentReply = aiData.choices[0].message.content.trim();
 
     // 5. Send Email via Nodemailer
+    const isPostal = process.env.EMAIL_PROVIDER === 'postal';
     const transporter = nodemailer.createTransport({
-      host: 'smtp.resend.com',
-      port: 465,
-      auth: { user: 'resend', pass: process.env.RESEND_API_KEY || '' }
+      host: isPostal ? process.env.POSTAL_SMTP_HOST : 'smtp.resend.com',
+      port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '2525') : 465,
+      auth: { 
+        user: isPostal ? process.env.POSTAL_SMTP_USER || '' : 'resend', 
+        pass: isPostal ? process.env.POSTAL_SMTP_PASS || '' : process.env.RESEND_API_KEY || '' 
+      }
     });
 
-    const senderEmail = agentEmail || 'ai@bloomgard.co';
+    const outboundSenderEmail = agentEmail || 'ai@bloomgard.co';
     const senderName = quote.clients?.company_name ? `${quote.clients.company_name} AI` : 'Bloomgard AI';
 
     const mailOptions = {
-      from: `${senderName} <${senderEmail}>`, 
+      from: `${senderName} <${outboundSenderEmail}>`, 
       to: clientEmail,
       subject: `Re: Following up on Quote ${quote.qn_number}`,
       text: agentReply

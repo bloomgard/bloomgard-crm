@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 'dummy_key');
 
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
     const formattedAttachments = attachments?.map((att: any) => ({
       filename: att.filename,
       content: att.base64.includes(',') ? att.base64.split(',')[1] : att.base64,
+      encoding: 'base64'
     })) || [];
 
     const emailPayload: any = {
@@ -45,11 +47,26 @@ export async function POST(req: Request) {
     if (cc && cc.trim()) emailPayload.cc = cc.split(',').map((s: string)=>s.trim());
     if (bcc && bcc.trim()) emailPayload.bcc = bcc.split(',').map((s: string)=>s.trim());
 
-    const { data, error } = await resend.emails.send(emailPayload);
+    let data;
+    const isPostal = process.env.EMAIL_PROVIDER === 'postal';
 
-    if (error) {
-      console.error('Resend API Rejection:', error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 400, headers: corsHeaders });
+    if (isPostal) {
+      const transporter = nodemailer.createTransport({
+        host: process.env.POSTAL_SMTP_HOST,
+        port: parseInt(process.env.POSTAL_SMTP_PORT || '2525'),
+        auth: { 
+          user: process.env.POSTAL_SMTP_USER || '', 
+          pass: process.env.POSTAL_SMTP_PASS || '' 
+        }
+      });
+      data = await transporter.sendMail(emailPayload);
+    } else {
+      const result = await resend.emails.send(emailPayload);
+      if (result.error) {
+        console.error('Resend API Rejection:', result.error);
+        return NextResponse.json({ success: false, error: result.error.message }, { status: 400, headers: corsHeaders });
+      }
+      data = result.data;
     }
 
     return NextResponse.json({ success: true, data }, { status: 200, headers: corsHeaders });

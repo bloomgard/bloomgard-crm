@@ -93,10 +93,14 @@ export async function POST(request: Request) {
     const aiData = await aiResponse.json();
     const emailBody = aiData.choices[0].message.content.trim();
 
+    const isPostal = process.env.EMAIL_PROVIDER === 'postal';
     const transporter = nodemailer.createTransport({
-      host: 'smtp.resend.com',
-      port: 465,
-      auth: { user: 'resend', pass: process.env.RESEND_API_KEY || '' }
+      host: isPostal ? process.env.POSTAL_SMTP_HOST : 'smtp.resend.com',
+      port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '2525') : 465,
+      auth: { 
+        user: isPostal ? process.env.POSTAL_SMTP_USER || '' : 'resend', 
+        pass: isPostal ? process.env.POSTAL_SMTP_PASS || '' : process.env.RESEND_API_KEY || '' 
+      }
     });
 
     const mailOptions = {
