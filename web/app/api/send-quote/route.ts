@@ -19,7 +19,7 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { to, cc, bcc, subject, message, attachments, agentEmail, companyName, customSender } = body;
+    const { to, cc, bcc, subject, message, attachments, agentEmail, companyName, customSender, provider } = body;
 
     if (!to || !subject || !message) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400, headers: corsHeaders });
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     if (bcc && bcc.trim()) emailPayload.bcc = bcc.split(',').map((s: string)=>s.trim());
 
     let data;
-    const isPostal = process.env.EMAIL_PROVIDER === 'postal';
+    const isPostal = provider === 'postal' || process.env.EMAIL_PROVIDER === 'postal';
 
     if (isPostal) {
       const transporter = nodemailer.createTransport({

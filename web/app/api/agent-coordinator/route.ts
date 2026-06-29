@@ -25,6 +25,12 @@ export async function POST(request: Request) {
       .eq('tenant_id', tenantId)
       .single();
 
+    const { data: tenantData } = await supabase
+      .from('tenants')
+      .select('company_name, custom_email_sender, email_provider')
+      .eq('id', tenantId)
+      .single();
+
     if (schemaErr || !schema) throw new Error("Could not load schema.");
     
     const agentConfig = schema.schema_config.find((s: any) => s.is_agent_config);
@@ -92,7 +98,7 @@ export async function POST(request: Request) {
     let processedCount = 0;
 
     // 5. Execute scheduled follow-ups
-    const isPostal = process.env.EMAIL_PROVIDER === 'postal';
+    const isPostal = (tenantData?.email_provider || 'resend') === 'postal' || process.env.EMAIL_PROVIDER === 'postal';
     const transporter = nodemailer.createTransport({
       host: isPostal ? process.env.POSTAL_SMTP_HOST : 'smtp.resend.com',
       port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '2525') : 465,
@@ -101,6 +107,10 @@ export async function POST(request: Request) {
         pass: isPostal ? process.env.POSTAL_SMTP_PASS || '' : process.env.RESEND_API_KEY || '' 
       }
     });
+
+    const fallbackSender = 'bloomgarderp@gmail.com'; 
+    const senderAddress = tenantData?.custom_email_sender || fallbackSender;
+    const fromString = `${tenantData?.company_name || 'Bloomgard System'} <${senderAddress}>`;
 
     for (const task of tasks) {
       const { quote, agent } = task;
@@ -205,7 +215,7 @@ export async function POST(request: Request) {
             const emailBody = aiData.choices[0].message.content.trim();
 
             const mailOptions = {
-              from: `${agent.name} <onboarding@resend.dev>`, 
+              from: fromString, 
               to: clientEmail,
               subject: `Regarding Quote ${quote.qn_number}`,
               text: emailBody

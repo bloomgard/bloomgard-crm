@@ -17,11 +17,12 @@ export async function POST(request: Request) {
     // --- POSTAL & RESEND INBOUND WEBHOOK PARSING ---
     const isPostalWebhook = !!body.rcpt_to && !!body.mail_from;
     const isResendWebhook = !isPostalWebhook && (body.type === 'email.received' || (body.subject && (body.text || body.html)));
+    const isCloudflareWebhook = !!body.raw_message && !!body.to && !!body.from;
     
     let senderEmail = 'unknown@example.com';
     let parsedSubject = '';
     
-    if (isPostalWebhook || isResendWebhook) {
+    if (isPostalWebhook || isResendWebhook || isCloudflareWebhook) {
       const emailData = isResendWebhook ? (body.type === 'email.received' ? body.data : body) : body;
       parsedSubject = emailData.subject || '';
       
@@ -29,6 +30,10 @@ export async function POST(request: Request) {
         agentEmail = emailData.rcpt_to || 'agent@bloomgard.com';
         senderEmail = emailData.mail_from || 'unknown@example.com';
         clientMessage = emailData.plain_body || emailData.html_body || 'No message body.';
+      } else if (isCloudflareWebhook) {
+        agentEmail = emailData.to || 'agent@bloomgard.com';
+        senderEmail = emailData.from || 'unknown@example.com';
+        clientMessage = emailData.raw_message || 'No message body.';
       } else {
         agentEmail = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || 'agent@bloomgard.com');
         senderEmail = emailData.from || 'unknown@example.com';
@@ -60,12 +65,16 @@ export async function POST(request: Request) {
         tenantId = foundQuote.tenant_id;
       } else {
         // --- COLD LEAD LOGIC (NO QN NUMBER) ---
+        const routingSlug = (agentEmail || '').split('@')[0].toLowerCase();
         const { data: tenantFound, error: tErr } = await supabase
-          .from('tenants').select('id').eq('custom_email_sender', agentEmail).maybeSingle();
+          .from('tenants').select('id').eq('routing_slug', routingSlug).maybeSingle();
         
-        // If not found by exact email (e.g. testing), try finding any tenant to prevent crash during demo
-        const finalTenantId = tenantFound ? tenantFound.id : (await supabase.from('tenants').select('id').limit(1).single()).data?.id;
-        if (!finalTenantId) return NextResponse.json({ success: false, error: 'No tenant found for routing' }, { status: 404 });
+        if (!tenantFound) {
+          console.error(`Rejected email: No tenant found for slug "${routingSlug}"`);
+          return NextResponse.json({ success: false, error: `Invalid routing alias: ${routingSlug}` }, { status: 400 });
+        }
+        
+        const finalTenantId = tenantFound.id;
 
         let clientId = null;
         const { data: clientFound } = await supabase.from('clients').select('id').eq('tenant_id', finalTenantId).eq('email_id', senderEmail).maybeSingle();

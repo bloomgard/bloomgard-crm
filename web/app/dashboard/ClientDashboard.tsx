@@ -62,6 +62,8 @@ export default function ClientDashboard() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [customSender, setCustomSender] = useState("");
+  const [routingSlug, setRoutingSlug] = useState("");
+  const [emailProvider, setEmailProvider] = useState("resend");
   const [aiSettings, setAiSettings] = useState({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low' });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
@@ -126,11 +128,13 @@ export default function ClientDashboard() {
         if (profile.tenant_id) {
           setTenantId(profile.tenant_id);
 
-          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled, custom_email_sender").eq("id", profile.tenant_id).maybeSingle();
+          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled, custom_email_sender, routing_slug, email_provider").eq("id", profile.tenant_id).maybeSingle();
           if (tenantData) {
             if (tenantData.company_name) setCompanyName(tenantData.company_name);
             if (tenantData.ai_enabled === false) setAiEnabled(false);
             if (tenantData.custom_email_sender) setCustomSender(tenantData.custom_email_sender);
+            if (tenantData.routing_slug) setRoutingSlug(tenantData.routing_slug);
+            if (tenantData.email_provider) setEmailProvider(tenantData.email_provider);
           }
 
           const { data: schema } = await supabase.from("tenant_schemas").select("schema_config, html_template").eq("tenant_id", profile.tenant_id).maybeSingle();
@@ -946,7 +950,8 @@ Command: ${dashCommand}`;
         attachments: emailDraft.attachments || [], 
         agentEmail: user?.email,              
         companyName: companyName || "",
-        customSender: customSender || ""
+        customSender: customSender || "",
+        provider: emailProvider || "resend"
       };
 
       const res = await fetch(url, {
@@ -1316,7 +1321,34 @@ Command: ${dashCommand}`;
                     This email must belong to the domain you verified in GoDaddy/Resend.
                   </p>
                 </div>
+                <div className="space-y-1.5 mt-4">
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Domain Alias (Routing Slug)</label>
+                  <input 
+                    type="text" 
+                    value={routingSlug} 
+                    onChange={e => setRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} 
+                    placeholder="e.g. jeevanecotex"
+                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                    Used to route incoming emails sent to alias@bloomgard.co. Must be unique.
+                  </p>
+                </div>
 
+                <div className="space-y-1.5 mt-4">
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Provider</label>
+                  <select 
+                    value={emailProvider} 
+                    onChange={e => setEmailProvider(e.target.value)} 
+                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors cursor-pointer"
+                  >
+                    <option value="resend">Resend (Default)</option>
+                    <option value="postal">Postal (Self-Hosted)</option>
+                  </select>
+                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                    Temporary toggle for testing Postal architecture.
+                  </p>
+                </div>
                 <button 
                   onClick={async () => {
                     if (!tenantId) return;
@@ -1330,7 +1362,7 @@ Command: ${dashCommand}`;
                     ];
 
                     const [res1, res2] = await Promise.all([
-                      supabase.from('tenants').update({ custom_email_sender: customSender }).eq('id', tenantId),
+                      supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
                       supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
                     ]);
                     

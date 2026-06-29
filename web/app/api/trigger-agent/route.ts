@@ -43,6 +43,12 @@ export async function POST(request: Request) {
       .select('schema_config')
       .eq('tenant_id', tenantId)
       .single();
+      
+    const { data: tenantData } = await supabase
+      .from('tenants')
+      .select('company_name, custom_email_sender, email_provider')
+      .eq('id', tenantId)
+      .single();
     
     let tone = 'Professional', englishLevel = 'Native', desperation = 'Low';
     if (schema?.schema_config) {
@@ -93,7 +99,7 @@ export async function POST(request: Request) {
     const aiData = await aiResponse.json();
     const emailBody = aiData.choices[0].message.content.trim();
 
-    const isPostal = process.env.EMAIL_PROVIDER === 'postal';
+    const isPostal = (tenantData?.email_provider || 'resend') === 'postal' || process.env.EMAIL_PROVIDER === 'postal';
     const transporter = nodemailer.createTransport({
       host: isPostal ? process.env.POSTAL_SMTP_HOST : 'smtp.resend.com',
       port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '2525') : 465,
@@ -103,8 +109,12 @@ export async function POST(request: Request) {
       }
     });
 
+    const fallbackSender = 'bloomgarderp@gmail.com'; 
+    const senderAddress = tenantData?.custom_email_sender || fallbackSender;
+    const fromString = `${tenantData?.company_name || 'Bloomgard System'} <${senderAddress}>`;
+
     const mailOptions = {
-      from: `Bloomgard Quotes <onboarding@resend.dev>`, 
+      from: fromString, 
       to: clientEmail,
       subject: `Following up on Quote ${quote.qn_number}`,
       text: emailBody
