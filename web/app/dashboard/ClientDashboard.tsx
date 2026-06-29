@@ -91,6 +91,7 @@ export default function ClientDashboard() {
   const [htmlTemplate, setHtmlTemplate] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [tenantUsers, setTenantUsers] = useState([]);
+  const [inboxLogs, setInboxLogs] = useState([]);
 
   const getApiUrl = (endpoint) => endpoint;
 
@@ -246,6 +247,16 @@ export default function ClientDashboard() {
       console.error("Fetch Error:", err);
     }
   }
+  async function fetchInboxLogs() {
+    try {
+      const { data, error } = await supabase.from('webhook_logs').select('*').order('created_at', { ascending: false }).limit(50);
+      if (!error && data) setInboxLogs(data);
+    } catch (err) { console.error("Inbox Fetch Error:", err); }
+  }
+
+  useEffect(() => {
+    if (currentView === 'inbox') fetchInboxLogs();
+  }, [currentView]);
 
   const isManager = user?.role?.toLowerCase() === 'manager' || user?.role?.toLowerCase() === 'admin';
   const visibleRecords = (isManager ? records : records.filter(r => r.created_by_email === user?.email)).filter(r => currentView === 'leadgen' ? r.status === 'Lead' : r.status !== 'Lead');
@@ -1041,6 +1052,7 @@ Command: ${dashCommand}`;
             ['agents','🤖 Agent Fleet'],
             ['pipeline','🚀 Quotes'],
             ['leadgen','🎯 Lead Gen'],
+            ['inbox','📥 Inbox Logs'],
             ['docs','📄 Docs'],
             ['settings','⚙️ Settings']
           ].map(([v,label])=>(
@@ -2080,6 +2092,59 @@ Command: ${dashCommand}`;
                       </tr>
                     )) : (
                       <tr><td colSpan={tableColumns.length+4} className="py-8 text-center"><p className="text-gray-400 font-medium text-[11px] tracking-wider">No Records Found.</p></td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentView === "inbox" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
+            <header className="mb-10 flex items-center justify-between">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Inbox Logs (Webhook Debugger)</h2>
+              <button onClick={() => fetchInboxLogs()} className="px-4 py-2 bg-indigo-50 text-indigo-700 text-[11px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider active:scale-95 shadow-sm">Refresh Logs</button>
+            </header>
+            <div className="bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800">
+                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest w-40">Timestamp</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest w-24">Provider</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Sender</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Target Agent</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Subject</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest w-24 text-center">Payload</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {inboxLogs.length > 0 ? inboxLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group">
+                        <td className="px-6 py-4 text-[11px] font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-wider shadow-sm ${log.source === 'postal' ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-orange-50 text-orange-600 border border-orange-200'}`}>
+                            {log.source || 'Resend'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-[12px] font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{log.parsed_sender || 'N/A'}</td>
+                        <td className="px-6 py-4 text-[11px] font-medium text-gray-600 dark:text-gray-300 truncate max-w-[200px]">{log.parsed_receiver || 'N/A'}</td>
+                        <td className="px-6 py-4 text-[11px] font-medium text-gray-600 dark:text-gray-300 truncate max-w-[250px]">{log.parsed_subject || 'No Subject'}</td>
+                        <td className="px-6 py-4 text-center">
+                          <button onClick={() => {
+                            const newWin = window.open('', '_blank');
+                            if(newWin) {
+                               newWin.document.write(`<pre style="font-family:monospace;padding:20px;background:#111;color:#0f0;line-height:1.5;">${JSON.stringify(log.payload, null, 2)}</pre>`);
+                               newWin.document.close();
+                            } else {
+                               alert(JSON.stringify(log.payload, null, 2));
+                            }
+                          }} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all uppercase tracking-wider">Raw JSON</button>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={6} className="py-16 text-center text-[12px] font-bold text-gray-400 uppercase tracking-widest">No Incoming Emails Logged Yet.</td></tr>
                     )}
                   </tbody>
                 </table>

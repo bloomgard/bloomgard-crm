@@ -19,10 +19,11 @@ export async function POST(request: Request) {
     const isResendWebhook = !isPostalWebhook && (body.type === 'email.received' || (body.subject && (body.text || body.html)));
     
     let senderEmail = 'unknown@example.com';
+    let parsedSubject = '';
     
     if (isPostalWebhook || isResendWebhook) {
       const emailData = isResendWebhook ? (body.type === 'email.received' ? body.data : body) : body;
-      const subject = emailData.subject || '';
+      parsedSubject = emailData.subject || '';
       
       if (isPostalWebhook) {
         agentEmail = emailData.rcpt_to || 'agent@bloomgard.com';
@@ -33,8 +34,21 @@ export async function POST(request: Request) {
         senderEmail = emailData.from || 'unknown@example.com';
         clientMessage = emailData.text || emailData.html || 'No message body.';
       }
+
+      // 🔍 Log the webhook payload to Supabase
+      try {
+        await supabase.from('webhook_logs').insert([{
+          source: isPostalWebhook ? 'postal' : 'resend',
+          payload: body,
+          parsed_sender: senderEmail,
+          parsed_receiver: agentEmail,
+          parsed_subject: parsedSubject
+        }]);
+      } catch (logErr) {
+        console.error("Failed to log webhook:", logErr);
+      }
       
-      const match = subject.match(/(QN-\d+)/i);
+      const match = parsedSubject.match(/(QN-\d+)/i);
       if (match) {
         // --- EXISTING QUOTE LOGIC ---
         const qnNumber = match[1].toUpperCase();
@@ -81,7 +95,7 @@ export async function POST(request: Request) {
         const newQn = 'LD-' + Math.floor(1000 + Math.random() * 9000);
         await supabase.from('quotations').insert([{
            tenant_id: finalTenantId, client_id: clientId, qn_number: newQn, status: 'Lead',
-           custom_metadata: { lead_email_body: clientMessage, lead_email_subject: subject, ai_parsed_items: aiParsedItems, agent_email: agentEmail }
+           custom_metadata: { lead_email_body: clientMessage, lead_email_subject: parsedSubject, ai_parsed_items: aiParsedItems, agent_email: agentEmail }
         }]);
 
         return NextResponse.json({ success: true, message: 'Processed as Cold Lead' });
