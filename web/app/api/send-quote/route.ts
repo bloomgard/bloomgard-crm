@@ -46,8 +46,14 @@ export async function POST(req: Request) {
     if (cc && cc.trim()) emailPayload.cc = cc.split(',').map((s: string)=>s.trim());
     if (bcc && bcc.trim()) emailPayload.bcc = bcc.split(',').map((s: string)=>s.trim());
 
-    const transporter = getMailTransporter(provider);
-    data = await transporter.sendMail(emailPayload);
+    let data;
+    try {
+      const transporter = getMailTransporter(provider);
+      data = await transporter.sendMail(emailPayload);
+    } catch (sendError: any) {
+      console.error('Email Delivery Error:', sendError);
+      return NextResponse.json({ success: false, error: sendError.message || 'Failed to send email' }, { status: 400, headers: corsHeaders });
+    }
 
     return NextResponse.json({ success: true, data }, { status: 200, headers: corsHeaders });
 
