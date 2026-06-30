@@ -5,7 +5,7 @@ export const getMailTransporter = (providerOverride?: string) => {
   
   return nodemailer.createTransport({
     host: isPostal ? (process.env.POSTAL_SMTP_HOST || 'mail.bloomgard.co') : 'smtp.resend.com',
-    port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '587') : 465,
+    port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '2525') : 465,
     // Port 587 and 2525 use standard STARTTLS upgrade, so secure (implicit SSL) is false
     secure: isPostal ? (process.env.POSTAL_SMTP_SECURE === 'true') : true, 
     auth: { 
