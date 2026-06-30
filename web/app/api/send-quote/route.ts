@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
-import nodemailer from 'nodemailer';
-
-const resend = new Resend(process.env.RESEND_API_KEY || 'dummy_key');
+import { getMailTransporter } from '@/lib/postal';
 
 // Define headers that allow Android WebView to communicate with the server
 const corsHeaders = {
@@ -25,15 +22,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400, headers: corsHeaders });
     }
 
-    const fallbackSender = 'bloomgarderp@gmail.com'; 
+    const fallbackSender = 'info@bloomgard.co'; 
     const senderAddress = customSender || fallbackSender;
     const fromString = `${companyName || 'Bloomgard System'} <${senderAddress}>`;
 
-    const formattedAttachments = attachments?.map((att: any) => ({
-      filename: att.filename,
-      content: att.base64.includes(',') ? att.base64.split(',')[1] : att.base64,
-      encoding: 'base64'
-    })) || [];
+    const formattedAttachments = attachments?.map((att: any) => {
+      const base64Data = att.base64.includes(',') ? att.base64.split(',')[1] : att.base64;
+      return {
+        filename: att.filename,
+        content: Buffer.from(base64Data, 'base64')
+      };
+    }) || [];
 
     const emailPayload: any = {
       from: fromString,
@@ -47,27 +46,8 @@ export async function POST(req: Request) {
     if (cc && cc.trim()) emailPayload.cc = cc.split(',').map((s: string)=>s.trim());
     if (bcc && bcc.trim()) emailPayload.bcc = bcc.split(',').map((s: string)=>s.trim());
 
-    let data;
-    const isPostal = provider === 'postal' || process.env.EMAIL_PROVIDER === 'postal';
-
-    if (isPostal) {
-      const transporter = nodemailer.createTransport({
-        host: process.env.POSTAL_SMTP_HOST,
-        port: parseInt(process.env.POSTAL_SMTP_PORT || '2525'),
-        auth: { 
-          user: process.env.POSTAL_SMTP_USER || '', 
-          pass: process.env.POSTAL_SMTP_PASS || '' 
-        }
-      });
-      data = await transporter.sendMail(emailPayload);
-    } else {
-      const result = await resend.emails.send(emailPayload);
-      if (result.error) {
-        console.error('Resend API Rejection:', result.error);
-        return NextResponse.json({ success: false, error: result.error.message }, { status: 400, headers: corsHeaders });
-      }
-      data = result.data;
-    }
+    const transporter = getMailTransporter(provider);
+    data = await transporter.sendMail(emailPayload);
 
     return NextResponse.json({ success: true, data }, { status: 200, headers: corsHeaders });
 

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
-
+import { getMailTransporter } from '@/lib/postal';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -99,17 +98,9 @@ export async function POST(request: Request) {
     const aiData = await aiResponse.json();
     const emailBody = aiData.choices[0].message.content.trim();
 
-    const isPostal = (tenantData?.email_provider || 'resend') === 'postal' || process.env.EMAIL_PROVIDER === 'postal';
-    const transporter = nodemailer.createTransport({
-      host: isPostal ? process.env.POSTAL_SMTP_HOST : 'smtp.resend.com',
-      port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '2525') : 465,
-      auth: { 
-        user: isPostal ? process.env.POSTAL_SMTP_USER || '' : 'resend', 
-        pass: isPostal ? process.env.POSTAL_SMTP_PASS || '' : process.env.RESEND_API_KEY || '' 
-      }
-    });
+    const transporter = getMailTransporter(tenantData?.email_provider);
 
-    const fallbackSender = 'bloomgarderp@gmail.com'; 
+    const fallbackSender = 'info@bloomgard.co'; 
     const senderAddress = tenantData?.custom_email_sender || fallbackSender;
     const fromString = `${tenantData?.company_name || 'Bloomgard System'} <${senderAddress}>`;
 
