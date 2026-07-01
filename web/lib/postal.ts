@@ -14,3 +14,19 @@ export const getMailTransporter = (providerOverride?: string) => {
     }
   });
 };
+
+export const getDynamicSender = (
+  companyName?: string, 
+  customEmail?: string, 
+  tenantDomain?: string
+): string => {
+  let email = customEmail;
+  if (!email && tenantDomain) {
+    email = `billing@${tenantDomain}`;
+  }
+  if (!email) {
+    email = 'info@bloomgard.co'; // Master fallback
+  }
+  const name = companyName || 'Bloomgard erp';
+  return `${name} <${email}>`;
+};

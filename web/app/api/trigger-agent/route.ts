@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getMailTransporter } from '@/lib/postal';
+import { getMailTransporter, getDynamicSender } from '@/lib/postal';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -100,9 +100,8 @@ export async function POST(request: Request) {
 
     const transporter = getMailTransporter(tenantData?.email_provider);
 
-    const fallbackSender = 'info@bloomgard.co'; 
-    const senderAddress = tenantData?.custom_email_sender || fallbackSender;
-    const fromString = `${tenantData?.company_name || 'Bloomgard System'} <${senderAddress}>`;
+    const tenantDomain = tenantData?.website ? new URL(tenantData.website).hostname.replace('www.', '') : undefined;
+    const fromString = getDynamicSender(tenantData?.company_name, tenantData?.custom_email_sender, tenantDomain);
 
     const mailOptions = {
       from: fromString, 

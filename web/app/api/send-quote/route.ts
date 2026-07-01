@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMailTransporter } from '@/lib/postal';
+import { getMailTransporter, getDynamicSender } from '@/lib/postal';
 
 // Define headers that allow Android WebView to communicate with the server
 const corsHeaders = {
@@ -22,9 +22,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400, headers: corsHeaders });
     }
 
-    const fallbackSender = 'info@bloomgard.co'; 
-    const senderAddress = customSender || fallbackSender;
-    const fromString = `${companyName || 'Bloomgard System'} <${senderAddress}>`;
+    // Extract domain from user email if tenant domain not explicitly passed
+    const tenantDomain = agentEmail ? agentEmail.split('@')[1] : undefined;
+    const fromString = getDynamicSender(companyName, customSender, tenantDomain);
 
     const formattedAttachments = attachments?.map((att: any) => {
       const base64Data = att.base64.includes(',') ? att.base64.split(',')[1] : att.base64;
