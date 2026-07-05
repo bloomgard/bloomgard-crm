@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getMailTransporter, getDynamicSender, sendMailWithFallback } from '@/lib/postal';
+import { getDynamicSender, sendEmail } from '@/lib/postal';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     const aiData = await aiResponse.json();
     const emailBody = aiData.choices[0].message.content.trim();
 
-    const transporter = getMailTransporter(tenantData?.email_provider);
+    // Transporter removed in favor of native Resend
 
     const tenantDomain = tenantData?.website ? new URL(tenantData.website).hostname.replace('www.', '') : undefined;
     const fromString = getDynamicSender(tenantData?.company_name, tenantData?.custom_email_sender, tenantDomain);
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       text: emailBody
     };
 
-    await sendMailWithFallback(transporter, mailOptions);
+    await sendEmail(mailOptions);
     const now = new Date().toISOString();
     
     let meta = quote.custom_metadata;

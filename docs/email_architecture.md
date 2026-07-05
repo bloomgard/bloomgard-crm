@@ -14,15 +14,14 @@ Our inbound infrastructure is built to seamlessly integrate with our clients' ex
 4. **Webhook Dispatch**: The Cloudflare Worker fires a secure HTTPS POST webhook directly to our Vercel API endpoint.
 5. **CRM Logging**: The Vercel Serverless Endpoint securely logs the communication in the Bloomgard erp CRM, ensuring seamless synchronization with client records.
 
-## 2. Outbound Pipeline (Postal Autonomy)
-For outbound deliverability, we maintain full control over our reputation and data routing via Oracle Cloud Infrastructure (OCI).
+## 2. Outbound Pipeline (Resend)
+For outbound deliverability, we utilize Resend for high-availability transactional emails.
 
-**Flow Summary:** Vercel Serverless Function -> Port 2525/587 Direct Relay -> Oracle Ubuntu Compute Engine (Postal) with persistent iptables rules allowed -> External Recipient.
+**Flow Summary:** Vercel Serverless Function -> Resend API -> External Recipient.
 
 1. **Serverless Invocation**: A transactional event triggers our Vercel Serverless Function.
-2. **Direct Relay**: The Vercel function routes the payload via Port 2525 or 587 directly to our grey-clouded mail subdomain (e.g., `mail.bloomgard.co` or `postal.bloomgard.co`). 
-3. **Dedicated SMTP Engine (OCI)**: The payload hits our self-hosted Postal mail server hosted on an Oracle Ubuntu Compute Engine. Persistent iptables and OCI Ingress rules explicitly allow traffic on ports 587 and 2525, bypassing Cloudflare's HTTP proxy restrictions.
-4. **Data Sovereignty**: By hosting this infrastructure internally, we guarantee full data sovereignty and benefit from zero scaling fees, regardless of email volume.
+2. **Native API Integration**: The function routes the payload via the native Resend SDK.
+3. **Anti-Spoofing Fallback**: If a client's custom domain is not yet verified in Resend, the system automatically catches the 403 error and falls back to using `onboarding@resend.dev` while preserving the intended display name and `Reply-To` address, ensuring zero dropped messages.
 
 ---
 

@@ -1,24 +1,21 @@
-import { getMailTransporter, getDynamicSender, sendMailWithFallback } from './lib/postal';
-import nodemailer from 'nodemailer';
+import { getDynamicSender, sendEmail } from './lib/postal';
 
 async function test() {
-  const provider = 'postal';
   const companyName = 'Test Company';
   const customSender = 'test@example.com';
   
   const fromString = getDynamicSender(companyName, customSender, undefined);
   console.log('Sending from:', fromString);
   
-  const transporter = getMailTransporter(provider);
   try {
-    const result = await sendMailWithFallback(transporter, {
+    const result = await sendEmail({
       from: fromString,
-      to: 'anshagarwal@example.com',
-      subject: 'Test Custom Sender',
-      text: 'Testing if custom sender works'
+      to: 'anshag239@gmail.com',
+      subject: 'Test Custom Sender with Resend',
+      text: 'Testing if native Resend implementation and fallback work properly'
     });
     console.log('Result with fallback:', result);
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error with fallback:', err.message);
   }
 }
