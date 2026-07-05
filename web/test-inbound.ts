@@ -10,7 +10,7 @@ async function testWebhook(type: 'normal' | 'google_trap') {
   const payload = {
     type: 'email.received',
     data: {
-      to: 'demo@inbound.bloomgard.co', // Assuming 'demo' is the inbound_routing_id
+      to: 'jeevanecotex890@inbound.bloomgard.co', // Assuming 'demo' is the inbound_routing_id
       from: type === 'google_trap' ? 'forwarding-noreply@google.com' : 'client@example.com',
       subject: type === 'google_trap' ? 'Gmail Forwarding Confirmation' : 'Hello about my quote',
       text: 'This is the plain text body of the email.',

@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       .single();
 
     if (tenantError || !tenant) {
-      console.error(`Tenant not found for routing ID: ${routingId}`);
+      console.error(`Tenant not found for routing ID: ${routingId}`, tenantError);
       // Returning 200 even on failure prevents Resend from endlessly retrying bad addresses
       return NextResponse.json({ error: 'Tenant not found' }, { status: 200 });
     }
