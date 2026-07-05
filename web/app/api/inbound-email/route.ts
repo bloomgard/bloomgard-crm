@@ -225,7 +225,7 @@ export async function POST(request: Request) {
       text: agentReply
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendMailWithFallback(transporter, mailOptions);
     
     // 6. Append Agent Reply to Conversation Log
     conversations.push({ role: 'agent', content: agentReply, timestamp: new Date().toISOString() });

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMailTransporter, getDynamicSender } from '@/lib/postal';
+import { getMailTransporter, getDynamicSender, sendMailWithFallback } from '@/lib/postal';
 
 // Define headers that allow Android WebView to communicate with the server
 const corsHeaders = {
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     let data;
     try {
       const transporter = getMailTransporter(provider);
-      data = await transporter.sendMail(emailPayload);
+      data = await sendMailWithFallback(transporter, emailPayload);
     } catch (sendError: any) {
       console.error('Email Delivery Error:', sendError);
       return NextResponse.json({ success: false, error: sendError.message || 'Failed to send email' }, { status: 400, headers: corsHeaders });
