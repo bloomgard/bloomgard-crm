@@ -7,8 +7,8 @@ async function testResend() {
   console.log('Testing Resend...');
   try {
     const result = await resend.emails.send({
-      from: 'Bloomgard System <info@bloomgard.co>',
-      to: ['anshagarwal@example.com'],
+      from: 'onboarding@resend.dev',
+      to: ['anshag239@gmail.com'],
       subject: 'Test Resend',
       text: 'This is a test message',
     });

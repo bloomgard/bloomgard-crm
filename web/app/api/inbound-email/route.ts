@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
-
+import { getMailTransporter, getDynamicSender } from '@/lib/postal';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -152,6 +152,12 @@ export async function POST(request: Request) {
       .select('schema_config')
       .eq('tenant_id', tenantId)
       .single();
+      
+    const { data: tenantData } = await supabase
+      .from('tenants')
+      .select('company_name, custom_email_sender, website, email_provider')
+      .eq('id', tenantId)
+      .single();
     
     let tone = 'Professional', englishLevel = 'Native', desperation = 'Low';
     if (schema?.schema_config) {
@@ -207,21 +213,13 @@ export async function POST(request: Request) {
     const agentReply = aiData.choices[0].message.content.trim();
 
     // 5. Send Email via Nodemailer
-    const isPostal = process.env.EMAIL_PROVIDER === 'postal';
-    const transporter = nodemailer.createTransport({
-      host: isPostal ? process.env.POSTAL_SMTP_HOST : 'smtp.resend.com',
-      port: isPostal ? parseInt(process.env.POSTAL_SMTP_PORT || '2525') : 465,
-      auth: { 
-        user: isPostal ? process.env.POSTAL_SMTP_USER || '' : 'resend', 
-        pass: isPostal ? process.env.POSTAL_SMTP_PASS || '' : process.env.RESEND_API_KEY || '' 
-      }
-    });
-
-    const outboundSenderEmail = agentEmail || 'ai@bloomgard.co';
-    const senderName = quote.clients?.company_name ? `${quote.clients.company_name} AI` : 'Bloomgard AI';
+    const transporter = getMailTransporter(tenantData?.email_provider);
+    
+    const tenantDomain = tenantData?.website ? new URL(tenantData.website).hostname.replace('www.', '') : undefined;
+    const fromString = getDynamicSender(tenantData?.company_name, tenantData?.custom_email_sender, tenantDomain);
 
     const mailOptions = {
-      from: `${senderName} <${outboundSenderEmail}>`, 
+      from: fromString, 
       to: clientEmail,
       subject: `Re: Following up on Quote ${quote.qn_number}`,
       text: agentReply
