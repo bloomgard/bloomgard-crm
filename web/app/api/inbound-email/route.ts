@@ -24,8 +24,12 @@ export async function POST(request: Request) {
     }
 
     // 2. Extract Tenant ID (Routing ID)
-    // e.g. "jeevan@inbound.bloomgard.co" -> "jeevan"
-    const routingId = toAddress.split('@')[0];
+    // Handle formats like "John Doe <jeevan@inbound.bloomgard.co>" or "jeevan@inbound..."
+    let routingId = toAddress.split('@')[0];
+    const match = toAddress.match(/([a-zA-Z0-9._-]+)@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    if (match) {
+      routingId = match[1];
+    }
 
     // 3. Database Lookup
     const { data: tenant, error: tenantError } = await supabase
