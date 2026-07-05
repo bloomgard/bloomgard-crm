@@ -94,6 +94,9 @@ export default function ClientDashboard() {
   const [logoUrl, setLogoUrl] = useState("");
   const [tenantUsers, setTenantUsers] = useState([]);
   const [inboxLogs, setInboxLogs] = useState([]);
+  const [selectedInboxEmail, setSelectedInboxEmail] = useState(null);
+  const [isAnalyzingEmail, setIsAnalyzingEmail] = useState(false);
+  const [emailAiAnalysis, setEmailAiAnalysis] = useState({});
 
   const getApiUrl = (endpoint) => endpoint;
 
@@ -253,7 +256,9 @@ export default function ClientDashboard() {
   }
   async function fetchInboxLogs() {
     try {
-      const { data, error } = await supabase.from('webhook_logs').select('*').order('created_at', { ascending: false }).limit(50);
+      let query = supabase.from('inbound_emails').select('*').order('created_at', { ascending: false }).limit(50);
+      if (tenantId) query = query.eq('tenant_id', tenantId);
+      const { data, error } = await query;
       if (!error && data) setInboxLogs(data);
     } catch (err) { console.error("Inbox Fetch Error:", err); }
   }
@@ -982,8 +987,29 @@ Command: ${dashCommand}`;
       
     } catch(e) { 
       alert("Delivery Failed: " + e.message); 
-    } finally { 
+    } finally {
       setIsSending(false); 
+    }
+  };
+
+  const handleAnalyzeEmail = async (email) => {
+    setIsAnalyzingEmail(true);
+    try {
+      const res = await fetch('/api/ai/analyze-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, blueprint })
+      });
+      const json = await res.json();
+      if (json.data) {
+        setEmailAiAnalysis(prev => ({ ...prev, [email.id]: json.data }));
+      } else {
+        alert(json.error || "Analysis failed.");
+      }
+    } catch(e) {
+      alert("Analysis failed: " + e.message);
+    } finally {
+      setIsAnalyzingEmail(false);
     }
   };
   
@@ -2133,54 +2159,97 @@ Command: ${dashCommand}`;
         )}
 
         {currentView === "inbox" && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
-            <header className="mb-10 flex items-center justify-between">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Inbox Logs (Webhook Debugger)</h2>
-              <button onClick={() => fetchInboxLogs()} className="px-4 py-2 bg-indigo-50 text-indigo-700 text-[11px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider active:scale-95 shadow-sm">Refresh Logs</button>
-            </header>
-            <div className="bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800">
-                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest w-40">Timestamp</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest w-24">Provider</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Sender</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Target Agent</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Subject</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest w-24 text-center">Payload</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {inboxLogs.length > 0 ? inboxLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group">
-                        <td className="px-6 py-4 text-[11px] font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-wider shadow-sm ${log.source === 'postal' ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-orange-50 text-orange-600 border border-orange-200'}`}>
-                            {log.source || 'Resend'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-[12px] font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{log.parsed_sender || 'N/A'}</td>
-                        <td className="px-6 py-4 text-[11px] font-medium text-gray-600 dark:text-gray-300 truncate max-w-[200px]">{log.parsed_receiver || 'N/A'}</td>
-                        <td className="px-6 py-4 text-[11px] font-medium text-gray-600 dark:text-gray-300 truncate max-w-[250px]">{log.parsed_subject || 'No Subject'}</td>
-                        <td className="px-6 py-4 text-center">
-                          <button onClick={() => {
-                            const newWin = window.open('', '_blank');
-                            if(newWin) {
-                               newWin.document.write(`<pre style="font-family:monospace;padding:20px;background:#111;color:#0f0;line-height:1.5;">${JSON.stringify(log.payload, null, 2)}</pre>`);
-                               newWin.document.close();
-                            } else {
-                               alert(JSON.stringify(log.payload, null, 2));
-                            }
-                          }} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all uppercase tracking-wider">Raw JSON</button>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr><td colSpan={6} className="py-16 text-center text-[12px] font-bold text-gray-400 uppercase tracking-widest">No Incoming Emails Logged Yet.</td></tr>
-                    )}
-                  </tbody>
-                </table>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-7xl mx-auto flex h-[80vh] gap-4">
+            <div className="w-1/3 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
+              <header className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Inbox</h2>
+                <button onClick={() => fetchInboxLogs()} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider active:scale-95 shadow-sm">Refresh</button>
+              </header>
+              <div className="flex-1 overflow-y-auto">
+                {inboxLogs.length > 0 ? inboxLogs.map((log) => (
+                  <div key={log.id} onClick={() => setSelectedInboxEmail(log)} className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'}`}>
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-sm font-bold text-gray-900 dark:text-white truncate pr-2">{log.sender_email}</span>
+                      <span className="text-[10px] text-gray-500 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate mb-1">{log.subject || 'No Subject'}</div>
+                    <div className="text-xs text-gray-500 truncate">{log.body_text?.substring(0, 50)}...</div>
+                    {log.status === 'ACTION_REQUIRED' && <div className="mt-2 inline-block px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold uppercase rounded-md">Action Required</div>}
+                  </div>
+                )) : (
+                  <div className="p-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">No Emails Yet</div>
+                )}
               </div>
+            </div>
+            <div className="w-2/3 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
+              {selectedInboxEmail ? (
+                <div className="flex-1 overflow-y-auto p-6">
+                  <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-800">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{selectedInboxEmail.subject}</h2>
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedInboxEmail.sender_email}</span>
+                      <span>•</span>
+                      <span>{new Date(selectedInboxEmail.created_at).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-800 dark:text-gray-300 whitespace-pre-wrap mb-8 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                    {selectedInboxEmail.body_text || selectedInboxEmail.body_html || "No Content"}
+                  </div>
+                  
+                  <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 flex items-center gap-2">
+                        <span>🤖</span> Bloomgard AI Analysis
+                      </h3>
+                      {!emailAiAnalysis[selectedInboxEmail.id] && (
+                        <button onClick={() => handleAnalyzeEmail(selectedInboxEmail)} disabled={isAnalyzingEmail} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-md disabled:opacity-50">
+                          {isAnalyzingEmail ? "Analyzing..." : "Generate AI Actions"}
+                        </button>
+                      )}
+                    </div>
+                    
+                    {emailAiAnalysis[selectedInboxEmail.id] && (
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-2">Summary</h4>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">{emailAiAnalysis[selectedInboxEmail.id].summary}</p>
+                          <button onClick={() => alert("Summary marked as reviewed!")} className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 text-[10px] font-bold rounded-lg hover:bg-indigo-50 transition-all uppercase tracking-wider">Approve Summary</button>
+                        </div>
+                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800">
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2">Lead Gen Quote Extracted</h4>
+                          <pre className="text-[10px] text-gray-600 dark:text-gray-400 mb-4 max-h-32 overflow-y-auto bg-white/50 p-2 rounded">
+                            {JSON.stringify(emailAiAnalysis[selectedInboxEmail.id].lead_gen_quote, null, 2)}
+                          </pre>
+                          <button onClick={() => {
+                            setEditingId("new");
+                            setQn("");
+                            setDynamicData(emailAiAnalysis[selectedInboxEmail.id].lead_gen_quote);
+                            setCurrentView("new_entry");
+                          }} className="px-3 py-1.5 bg-emerald-600 text-white border border-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-all uppercase tracking-wider">Approve & Open Quote</button>
+                        </div>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Drafted Auto-Reply</h4>
+                          <div className="text-sm text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap bg-white/50 p-3 rounded">{emailAiAnalysis[selectedInboxEmail.id].auto_reply}</div>
+                          <button onClick={() => {
+                            setEmailDraft({
+                              to: selectedInboxEmail.sender_email,
+                              subject: "Re: " + selectedInboxEmail.subject,
+                              message: emailAiAnalysis[selectedInboxEmail.id].auto_reply,
+                              attachments: [], filename: ""
+                            });
+                            setShowEmailModal(true);
+                          }} className="px-3 py-1.5 bg-blue-600 text-white border border-blue-700 text-[10px] font-bold rounded-lg hover:bg-blue-700 transition-all uppercase tracking-wider">Approve & Open Draft</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-gray-400 font-medium text-sm flex-col gap-3">
+                  <span className="text-4xl">📥</span>
+                  <p>Select an email to view contents</p>
+                </div>
+              )}
             </div>
           </div>
         )}
