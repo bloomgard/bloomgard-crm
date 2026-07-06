@@ -44,7 +44,8 @@ export async function POST(request: Request) {
     let bodyText = '';
     let bodyHtml = '';
 
-    const { data: fullEmail, error: fetchError } = await resend.emails.get(emailId);
+    const { data: fullEmail, error: fetchError } = await resend.emails.receiving.get(emailId);
+    console.log("INBOUND EMAIL PAYLOAD:", JSON.stringify(fullEmail, null, 2));
     
     if (fetchError || !fullEmail) {
       console.warn(`Could not fetch full email body for ${emailId}. Continuing without body.`, fetchError);
