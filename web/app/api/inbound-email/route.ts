@@ -41,11 +41,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing email_id in payload' }, { status: 400 });
     }
 
+    let bodyText = '';
+    let bodyHtml = '';
+
     const { data: fullEmail, error: fetchError } = await resend.emails.get(emailId);
     
     if (fetchError || !fullEmail) {
-      console.error('Failed to fetch full email from Resend:', fetchError);
-      return NextResponse.json({ error: 'Failed to fetch full email' }, { status: 500 });
+      console.warn(`Could not fetch full email body for ${emailId}. Continuing without body.`, fetchError);
+      // Fallback: we won't have the body, but we still want to save the email metadata!
+    } else {
+      bodyText = fullEmail.text || '';
+      bodyHtml = fullEmail.html || '';
     }
 
     // 5. Database Insertion
@@ -55,8 +61,8 @@ export async function POST(request: Request) {
         tenant_id: tenant.id,
         sender_email: payload.data.from,
         subject: payload.data.subject,
-        body_text: fullEmail.text || '',
-        body_html: fullEmail.html || '',
+        body_text: bodyText,
+        body_html: bodyHtml,
         message_id: payload.data.message_id || ''
       });
 
