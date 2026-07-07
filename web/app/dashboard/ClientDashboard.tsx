@@ -829,13 +829,12 @@ Command: ${dashCommand}`;
         const printHtml = `
           <style>
             body, html { margin: 0 !important; padding: 0 !important; background: #ffffff; }
-            .pdf-content { width: 800px; padding: 20px; box-sizing: border-box; text-align: left; }
           </style>
-          <div class="pdf-content">${html}</div>
+          ${html}
         `;
 
         const opt = {
-          margin: [0.5, 0, 0.5, 0], 
+          margin: 0, 
           filename: `${name}.pdf`,
           image: { type: 'jpeg', quality: 1.0 },
           html2canvas: { scale: 2, useCORS: true, windowWidth: 800, scrollY: 0, x: 0, y: 0 },
