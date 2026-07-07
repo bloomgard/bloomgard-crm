@@ -1458,6 +1458,32 @@ Command: ${dashCommand}`;
                   <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
                     Accessible in the template as <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-500">{"{{company_logo}}"}</code>
                   </p>
+                  <button 
+                    onClick={async () => {
+                      if (!tenantId) return;
+                      setIsSavingSettings(true);
+                      
+                      const newSchemaConfig = [
+                        ...blueprint,
+                        { is_agent_config: true, agents, title: "system_agents" },
+                        { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
+                        { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
+                      ];
+
+                      const [res1, res2] = await Promise.all([
+                        supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
+                        supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
+                      ]);
+                      
+                      setIsSavingSettings(false);
+                      if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
+                      else alert("Logo & Branding updated successfully!");
+                    }}
+                    disabled={isSavingSettings}
+                    className="mt-3 w-full bg-indigo-600 text-white px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-indigo-700 active:scale-95 transition-all disabled:bg-gray-400"
+                  >
+                    {isSavingSettings ? "Saving..." : "Save Logo URL"}
+                  </button>
                 </div>
               </div>
 
