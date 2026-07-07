@@ -1479,7 +1479,7 @@ Command: ${dashCommand}`;
                 <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
                   <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
                   {htmlTemplate ? (
-                    <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace('{{company_logo}}', logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview"/></div>
+                    <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace(/\\{\\{\\{?company_logo\\}\\}?\\}?/g, logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview"/></div>
                   ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
                 </div>
               </div>

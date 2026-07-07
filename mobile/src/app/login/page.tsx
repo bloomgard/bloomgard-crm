@@ -19,7 +19,7 @@ export default function Login() {
       
       if (session) {
         // If a session exists (even a stored refresh token), bypass login!
-        router.replace("/dashboard");
+        router.replace("/dashboard/");
       } else {
         // Only stop loading if there is truly no session
         setLoading(false);
@@ -45,7 +45,7 @@ export default function Login() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         
-        router.replace("/dashboard"); 
+        router.replace("/dashboard/"); 
       }
     } catch (err: any) {
       setError(err.message);

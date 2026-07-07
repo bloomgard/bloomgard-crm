@@ -17,7 +17,7 @@ export default function BloomgardLanding() {
       (window.location.href.includes('localhost') || window.origin.includes('capacitor'));
     
     if (isMobileApp) {
-      router.replace("/login"); // Instantly forces mobile app to jump to login
+      router.replace("/login/"); // Instantly forces mobile app to jump to login
     }
   }, [router]);
   // 👆 END OF MOBILE APP DETECTOR 👆
@@ -137,7 +137,7 @@ export default function BloomgardLanding() {
           
           <div className="w-full max-w-lg space-y-6 animate-in zoom-in-95 duration-500">
             <div 
-              onClick={() => router.push("/login")}
+              onClick={() => router.push("/login/")}
               className="group bg-white border border-gray-100 p-12 rounded-[3.5rem] shadow-2xl hover:scale-[1.02] transition-all cursor-pointer text-center"
             >
                <span className="text-4xl mb-6 block"></span>

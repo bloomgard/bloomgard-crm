@@ -65,7 +65,7 @@ export default function ClientDashboard() {
 
   const getApiUrl = (endpoint) => {
     if (Capacitor.isNativePlatform()) {
-      return `https://bloomgard.vercel.app${endpoint}`;
+      return `https://cma.bloomgard.co${endpoint}`;
     }
     return endpoint;
   };
@@ -111,7 +111,7 @@ export default function ClientDashboard() {
           if (schema?.schema_config) {
             setBlueprint(schema.schema_config);
             const init = {};
-            schema.schema_config.forEach(s => { init[s.title] = s.allow_multiple ? [{}] : {}; });
+            schema.schema_config?.forEach(s => { init[s.title] = s.allow_multiple ? [{}] : {}; });
             setDynamicData(init);
           }
           await fetchRecords(profile.tenant_id);
@@ -136,11 +136,11 @@ export default function ClientDashboard() {
     if (!blueprint.length) return;
     let updated = false;
     const newData = JSON.parse(JSON.stringify(dynamicData));
-    blueprint.forEach(section => {
-      section.fields.forEach(field => {
+    blueprint?.forEach(section => {
+      section.fields?.forEach(field => {
         if (field.type === 'logged_in') {
           if (section.allow_multiple && newData[section.title]) {
-            newData[section.title].forEach((row, rIdx) => {
+            newData[section.title]?.forEach((row, rIdx) => {
               if (row[field.name] !== user?.email) { newData[section.title][rIdx][field.name] = user?.email; updated = true; }
             });
           } else if (newData[section.title]) {
@@ -150,18 +150,18 @@ export default function ClientDashboard() {
         if (field.type === 'calculated' && field.options) {
           const processCross = (f) => {
             const ms = f.match(/SUM\[(.*?)\.(.*?)\]/g);
-            if (ms) ms.forEach(m => { const p = m.match(/SUM\[(.*?)\.(.*?)\]/); if (p) { const s = (newData[p[1]]||[]).reduce((a,r)=>a+(Number(r[p[2]])||0),0); f=f.replace(m,String(s)); } });
+            if (ms) ms?.forEach(m => { const p = m.match(/SUM\[(.*?)\.(.*?)\]/); if (p) { const s = (newData[p[1]]||[]).reduce((a,r)=>a+(Number(r[p[2]])||0),0); f=f.replace(m,String(s)); } });
             return f;
           };
           if (section.allow_multiple && newData[section.title]) {
-            newData[section.title].forEach((row,rIdx)=>{
+            newData[section.title]?.forEach((row,rIdx)=>{
               let f=processCross(field.options);
-              section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(row[sf.name])||0);});
+              section.fields?.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(row[sf.name])||0);});
               try{const r=new Function('return '+f)();if(row[field.name]!==r){newData[section.title][rIdx][field.name]=r;updated=true;}}catch(e){}
             });
           } else if (newData[section.title]) {
             let f=processCross(field.options);
-            section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(newData[section.title][sf.name])||0);});
+            section.fields?.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(newData[section.title][sf.name])||0);});
             try{const r=new Function('return '+f)();if(newData[section.title][field.name]!==r){newData[section.title][field.name]=r;updated=true;}}catch(e){}
           }
         }
@@ -197,14 +197,14 @@ export default function ClientDashboard() {
 
   const extractMasterStatuses = () => {
     let options = new Set();
-    blueprint.forEach(section => {
-      section.fields.forEach(field => {
+    blueprint?.forEach(section => {
+      section.fields?.forEach(field => {
         if (field.type === 'master_status' && field.options) {
-          field.options.split(',').forEach(opt => options.add(opt.trim()));
+          field.options.split(',')?.forEach(opt => options.add(opt.trim()));
         }
       });
     });
-    records.forEach(r => { if (r.status) options.add(r.status); });
+    records?.forEach(r => { if (r.status) options.add(r.status); });
     if (options.size === 0) { options.add("Inquiry"); options.add("Approved"); options.add("Lost"); }
     return Array.from(options);
   };
@@ -308,8 +308,8 @@ export default function ClientDashboard() {
       else { const { data: nc } = await supabase.from('clients').insert([cp]).select('id').single(); if (nc) clientId = nc.id; }
     } catch(e) {}
     let masterStatusValue = allStatuses[0] || "Inquiry";
-    blueprint.forEach(sec => {
-      sec.fields.forEach(f => {
+    blueprint?.forEach(sec => {
+      sec.fields?.forEach(f => {
         if (f.type === 'master_status') {
            if (!sec.allow_multiple && dynamicData[sec.title] && dynamicData[sec.title][f.name]) {
              masterStatusValue = dynamicData[sec.title][f.name];
@@ -322,9 +322,9 @@ export default function ClientDashboard() {
       const { error } = await supabase.from("quotations").upsert([{ id:quoteId, tenant_id:tenantId, client_id:clientId, qn_number:finalQn, date, status: masterStatusValue, custom_metadata:dynamicData, created_by_email:creator }], { onConflict:'id' });
       if (error) throw error;
       const items=[], atts=[];
-      blueprint.filter(b=>b.allow_multiple).forEach(sec=>{
+      blueprint.filter(b=>b.allow_multiple)?.forEach(sec=>{
         const rows=dynamicData[sec.title]||[], lt=sec.title.toLowerCase();
-        rows.forEach((row,i)=>{
+        rows?.forEach((row,i)=>{
           if (lt.includes('product')||lt.includes('item')) items.push({quotation_id:quoteId,display_order:i,item_name:row.item_name||`Item ${i+1}`,item_code:row.item_code||"",quantity:Number(row.quantity||0),uom:row.uom||"",item_rate:Number(row.item_rate||0),item_br:Number(row.item_br||0),custom_metadata:row});
           else if (lt.includes('attachment')||lt.includes('file')||lt.includes('document')) atts.push({quotation_id:quoteId,file_name:row.file_name||row.att_name||`File ${i+1}`,file_path:row.file_path||row.att||""});
         });
@@ -358,8 +358,8 @@ export default function ClientDashboard() {
         comments: `Status updated by ${user?.email}`
     }]).select().single();
     let updatedMetadata = { ...(targetRec.custom_metadata || {}) };
-    blueprint.forEach(sec => {
-      sec.fields.forEach(f => {
+    blueprint?.forEach(sec => {
+      sec.fields?.forEach(f => {
         if (f.type === 'master_status' && updatedMetadata[sec.title]) {
            updatedMetadata[sec.title][f.name] = newStatus;
         }
@@ -568,15 +568,15 @@ export default function ClientDashboard() {
     let html = schema?.html_template || "";
     let templateData = {};
 
-    Object.entries(record).forEach(([k, v]) => {
+    Object.entries(record)?.forEach(([k, v]) => {
       if (typeof v !== 'object') {
         templateData[k] = v;
       }
     });
 
-    blueprint.forEach(section => {
+    blueprint?.forEach(section => {
       if (!section.allow_multiple) {
-        section.fields.forEach(f => {
+        section.fields?.forEach(f => {
           templateData[f.name] = extractValue(record, f.name, section.title) ?? "";
         });
       } else {
@@ -589,14 +589,14 @@ export default function ClientDashboard() {
           }
           if (meta && typeof meta === 'object') {
             const lowerMeta = {};
-            Object.entries(meta).forEach(([k, v]) => { lowerMeta[k.toLowerCase()] = v; });
-            Object.entries(lowerMeta).forEach(([k, v]) => {
+            Object.entries(meta)?.forEach(([k, v]) => { lowerMeta[k.toLowerCase()] = v; });
+            Object.entries(lowerMeta)?.forEach(([k, v]) => {
               if (flat[k] == null || flat[k] === '' || flat[k] === 0) flat[k] = v;
             });
             flat = { ...lowerMeta, ...flat };
           }
           const rootLower = {};
-          Object.entries(flat).forEach(([k, v]) => { rootLower[k.toLowerCase()] = v; });
+          Object.entries(flat)?.forEach(([k, v]) => { rootLower[k.toLowerCase()] = v; });
           flat = { ...rootLower, ...flat };
           if (flat.gst != null && flat.gst !== '') {
             flat.gst = String(flat.gst).replace(/%/g, '').trim();
@@ -717,7 +717,7 @@ export default function ClientDashboard() {
     setDate(rec.date || new Date().toISOString().split('T')[0]); 
     let d = { ...(rec.custom_metadata || {}) };
     
-    blueprint.forEach(sec => { 
+    blueprint?.forEach(sec => { 
       if (sec.allow_multiple) {
         d[sec.title] = extractArray(rec, sec.title).map(item => {
            let meta = item.custom_metadata;
@@ -725,7 +725,7 @@ export default function ClientDashboard() {
                try { meta = JSON.parse(meta); } catch(e) { meta = {}; }
            }
            const rowState = { ...(meta || {}), ...item };
-           sec.fields.forEach(f => {
+           sec.fields?.forEach(f => {
                const val = extractValue({ ...item, custom_metadata: meta }, f.name, sec.title);
                if (val !== "" && val != null) { rowState[f.name] = val; }
            });
@@ -733,7 +733,7 @@ export default function ClientDashboard() {
         });
       } else { 
         if (!d[sec.title]) d[sec.title] = {}; 
-        sec.fields.forEach(f => {
+        sec.fields?.forEach(f => {
           const val = extractValue(rec, f.name, sec.title);
           if (val !== "" && val != null) { d[sec.title][f.name] = val; } 
           else if (d[sec.title][f.name] == null) { d[sec.title][f.name] = ""; }
@@ -1095,7 +1095,7 @@ export default function ClientDashboard() {
             </div>
             
             <div className="space-y-8 pb-20">
-              {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => (
+              {(blueprint || []).filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => (
                 <div key={sIdx} className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
                     <h3 className="text-lg font-bold text-gray-900 flex items-center gap-3"><span className="w-2 h-2 bg-gray-300 rounded-full"></span>{section.title}</h3>
@@ -1108,7 +1108,7 @@ export default function ClientDashboard() {
                     <div className="space-y-4">
                       {(dynamicData[section.title]||[]).map((row,rIdx) => (
                         <div key={rIdx} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-gray-50 rounded-xl border border-gray-100">
-                          {section.fields.map((f,fIdx) => (
+                          {(section.fields || []).map((f,fIdx) => (
                             <div key={fIdx} className="space-y-1.5">
                               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
                               {f.type === "dropdown" || f.type === "master_status" ? (
@@ -1138,7 +1138,7 @@ export default function ClientDashboard() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {section.fields.map((f,fIdx) => (
+                      {(section.fields || []).map((f,fIdx) => (
                         <div key={fIdx} className="space-y-1.5">
                           <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
                           {f.type === "dropdown" || f.type === "master_status" ? (
@@ -1291,7 +1291,7 @@ export default function ClientDashboard() {
               </div>
 
               <div className="space-y-8">
-                {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => {
+                {(blueprint || []).filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => {
                   return (
                     <div key={sIdx} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
                       <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4 border-b border-gray-100 pb-2">{section.title}</h4>
@@ -1302,7 +1302,7 @@ export default function ClientDashboard() {
                             if (!items || !items.length) return <p className="text-xs text-gray-400 font-medium">No records attached.</p>;
                             return items.map((row, rIdx) => (
                               <div key={rIdx} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                {section.fields.filter(f => f.type !== 'master_status').map((f, fIdx) => {
+                                {(section.fields || []).filter(f => f.type !== 'master_status').map((f, fIdx) => {
                                   const v = extractValue(row, f.name);
                                   return (
                                     <div key={fIdx} className="flex flex-col">
@@ -1319,7 +1319,7 @@ export default function ClientDashboard() {
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-4">
-                          {section.fields.filter(f => f.type !== 'master_status').map((f, fIdx) => {
+                          {(section.fields || []).filter(f => f.type !== 'master_status').map((f, fIdx) => {
                             const v = extractValue(selectedRecord, f.name, section.title);
                             return (
                               <div key={fIdx} className="flex flex-col border-b border-gray-50 pb-2">
@@ -1393,7 +1393,7 @@ export default function ClientDashboard() {
                     onDrop={(e) => { 
                       e.preventDefault(); e.stopPropagation();
                       const files = Array.from(e.dataTransfer.files);
-                      files.forEach(file => {
+                      files?.forEach(file => {
                         const reader = new FileReader();
                         reader.onload = (ev) => {
                           setEmailDraft(prev => ({ 
@@ -1417,7 +1417,7 @@ export default function ClientDashboard() {
                       className="hidden" 
                       onChange={(e) => {
                         const files = Array.from(e.target.files);
-                        files.forEach(file => {
+                        files?.forEach(file => {
                           const reader = new FileReader();
                           reader.onload = (ev) => {
                             setEmailDraft(prev => ({ 
