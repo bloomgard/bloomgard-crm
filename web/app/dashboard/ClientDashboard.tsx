@@ -821,30 +821,38 @@ Command: ${dashCommand}`;
 
   const downloadDirectPDF = async (html, name) => {
     try {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      document.head.appendChild(script);
-
-      script.onload = () => {
-        const printHtml = `
-          <style>
-            body, html { margin: 0 !important; padding: 0 !important; background: #ffffff; }
-          </style>
-          ${html}
-        `;
-
-        const opt = {
-          margin: 0, 
-          filename: `${name}.pdf`,
-          image: { type: 'jpeg', quality: 1.0 },
-          html2canvas: { scale: 2, useCORS: true, windowWidth: 800, scrollY: 0, x: 0, y: 0 },
-          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-        };
-
-        window.html2pdf().set(opt).from(printHtml).save();
-      };
+      const printWindow = window.open('', '_blank', 'width=800,height=900');
+      if (!printWindow) {
+        alert("Please allow pop-ups to print the document.");
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${name}</title>
+            <style>
+              @page { size: A4; margin: 0; }
+              body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
+            </style>
+          </head>
+          <body>
+            ${html}
+            <script>
+              window.onload = () => {
+                setTimeout(() => {
+                  window.print();
+                  setTimeout(() => window.close(), 500);
+                }, 500);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
     } catch (err) {
-      alert('PDF Error: ' + err.message);
+      alert('Print Error: ' + err.message);
     }
   };
 
