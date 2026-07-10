@@ -61,6 +61,7 @@ export default function ClientDashboard() {
   const [viewingDoc, setViewingDoc] = useState(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [customSender, setCustomSender] = useState("");
   const [routingSlug, setRoutingSlug] = useState("");
   const [emailProvider, setEmailProvider] = useState("resend");
@@ -768,13 +769,11 @@ export default function ClientDashboard() {
 
   const handleGenerateDashInsights = async () => {
     if (!dashCommand.trim() || !tenantId) return; setIsBuildingDash(true);
-    const instruction = `CRITICAL: Return ONLY a valid JSON array. Format: [{"type":"metric"|"bar_chart"|"pie_chart"|"line_chart"|"list","title":"Title","value":"Summary","data":[{"name":"x","value":1}]}].
-RULES:
-1. Perform robust aggregations (e.g., sum up 'value' instead of counting rows if appropriate).
-2. For charts, SORT the data (e.g., highest value first for bar charts, chronological for line charts).
-3. Keep 'name' labels concise (MAX 15 chars), truncate with '...' if needed.
-4. Limit to top 7-10 data points per chart to prevent clutter.
-5. Do not return markdown, only the raw JSON array.
+    const instruction = `CRITICAL: Return ONLY a valid JSON object. Do not return arrays or markdown. 
+Format: {"intent": "pie_chart"|"bar_chart"|"line_chart"|"metric", "title": "Chart Title", "metric": "count"|"value", "dimension": "status"|"agent"|"client"|"source"|"date"}.
+Examples: 
+- "Total revenue by agent" -> {"intent":"bar_chart","title":"Revenue by Agent","metric":"value","dimension":"agent"}
+- "Pie chart of quote statuses" -> {"intent":"pie_chart","title":"Quote Status Distribution","metric":"count","dimension":"status"}
 Command: ${dashCommand}`;
 
     const lightweightData = visibleRecords.map(r => {
@@ -790,26 +789,59 @@ Command: ${dashCommand}`;
         source: extractValue(r, 'source_ref', 'Client Information') || "Unknown" 
       };
     });
+    
     try {
       const res = await fetch(getApiUrl('/api/ask-ai'), { 
         method:'POST', 
         headers:{'Content-Type':'application/json'}, 
-        body:JSON.stringify({ query: instruction, data: lightweightData }) 
+        body:JSON.stringify({ query: instruction, data: [] }) // We don't need to send the whole data array anymore, just the prompt
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
-      let raw=result.answer||""; const si=raw.indexOf('['); const ei=raw.lastIndexOf(']'); const oi=raw.indexOf('{'); const oei=raw.lastIndexOf('}');
-      let parsed=[];
-      if(si!==-1&&ei>si) parsed=JSON.parse(raw.substring(si,ei+1));
-      else if(oi!==-1&&oei>oi) parsed=[JSON.parse(raw.substring(oi,oei+1))];
-      else throw new Error("No JSON found in AI response");
-      if(!Array.isArray(parsed)) parsed=[parsed];
-      for(const insight of parsed){
-        let sd=Array.isArray(insight.data)?insight.data.map(d=>({name:String(d.name||d.key||'Unknown'),value:Number(d.value||d.count||0)})):[];
-        if(insight.type?.includes('chart')&&!sd.length) sd=[{name:"No Data",value:1}];
-        const {data:saved}=await supabase.from("ai_insights").insert([{tenant_id:tenantId,title:insight.title||"Insight",value:String(insight.value||""),type:insight.type||"metric",data:sd}]).select().single();
-        if(saved) setDynamicInsights(p=>[saved,...p]);
-      }
+      
+      let raw = result.answer || ""; 
+      const oi = raw.indexOf('{'); const oei = raw.lastIndexOf('}');
+      if (oi !== -1 && oei > oi) raw = raw.substring(oi, oei + 1);
+      
+      const intentData = JSON.parse(raw);
+      const { intent, metric, dimension, title } = intentData;
+
+      // Local Frontend Math Calculation
+      let aggregated = {};
+      
+      lightweightData.forEach(r => {
+        let dimValue = r[dimension] || 'Unknown';
+        if (dimension === 'date' && r.date) {
+          dimValue = r.date.split('T')[0];
+        }
+        if (dimension === 'agent' && dimValue.includes('@')) {
+          dimValue = dimValue.split('@')[0];
+        }
+
+        const amount = metric === 'value' ? (r.value || 0) : 1;
+        
+        if (!aggregated[dimValue]) aggregated[dimValue] = 0;
+        aggregated[dimValue] += amount;
+      });
+
+      let chartData = Object.keys(aggregated).map(k => ({ name: String(k).slice(0, 15), value: Number(aggregated[k]) }));
+      chartData.sort((a, b) => b.value - a.value);
+      chartData = chartData.slice(0, 10);
+      
+      if (chartData.length === 0) chartData = [{ name: 'No Data', value: 1 }];
+
+      const totalVal = chartData.reduce((a, b) => a + b.value, 0);
+      const displayValue = metric === 'value' ? `$${totalVal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` : totalVal.toString();
+
+      const { data: saved } = await supabase.from("ai_insights").insert([{
+        tenant_id: tenantId,
+        title: title || "Insight",
+        value: displayValue,
+        type: intent || "metric",
+        data: chartData
+      }]).select().single();
+      
+      if (saved) setDynamicInsights(p => [saved, ...p]);
       setDashCommand("");
     } catch(e){ console.error(e); alert("AI error: "+e.message); }
     finally{ setIsBuildingDash(false); }
@@ -941,6 +973,7 @@ Command: ${dashCommand}`;
     
     setEmailDraft({
       quoteId: r.id,
+      quoteData: r,
       status: r.status,
       to: "",
       cc: "",
@@ -951,6 +984,36 @@ Command: ${dashCommand}`;
       filename: `${name}.pdf`
     });
     setShowEmailModal(true);
+  };
+
+  const handleGenerateEmailDraft = async () => {
+    setIsGeneratingDraft(true);
+    try {
+      const payload = {
+        question: "Draft a highly professional, concise email to send this quote/document to the client. Do NOT include a subject line. Just the email body.",
+        context: JSON.stringify(emailDraft.quoteData || {}), 
+        tone: aiSettings?.tone || 'Professional',
+        englishLevel: aiSettings?.englishLevel || 'Native',
+        desperation: aiSettings?.desperation || 'Low',
+        companyName: companyName || "Our Company"
+      };
+      const res = await fetch(getApiUrl('/api/ask-ai'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate AI draft");
+      
+      setEmailDraft(prev => ({
+        ...prev,
+        message: data.answer
+      }));
+    } catch (e) {
+      alert("AI Generation Failed: " + e.message);
+    } finally {
+      setIsGeneratingDraft(false);
+    }
   };
 
   const sendDraftedEmail = async () => {
@@ -2708,7 +2771,15 @@ Command: ${dashCommand}`;
                   <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">BCC</label><input type="text" value={emailDraft.bcc || ""} onChange={e=>setEmailDraft({...emailDraft,bcc:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="Optional"/></div>
                 </div>
                 <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Subject</label><input value={emailDraft.subject} onChange={e=>setEmailDraft({...emailDraft,subject:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400"/></div>
-                <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Message</label><textarea rows={5} value={emailDraft.message} onChange={e=>setEmailDraft({...emailDraft,message:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm outline-none focus:border-gray-400 resize-none"/></div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Message</label>
+                    <button onClick={handleGenerateEmailDraft} disabled={isGeneratingDraft} className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 active:scale-95">
+                      {isGeneratingDraft ? <div className="w-3 h-3 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin"></div> : "✨"} Generate Draft
+                    </button>
+                  </div>
+                  <textarea rows={5} value={emailDraft.message} onChange={e=>setEmailDraft({...emailDraft,message:e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm outline-none focus:border-gray-400 resize-none"/>
+                </div>
                 
                 <div className="space-y-1.5 pt-2">
                   <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Attachments</label>
@@ -2787,7 +2858,7 @@ Command: ${dashCommand}`;
               </div>
               <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 items-center">
                 <button onClick={() => setShowEmailModal(false)} className="text-[11px] font-semibold text-gray-500 hover:text-gray-800 px-3 py-2 active:scale-95 transition-transform">Cancel</button>
-                <button onClick={sendDraftedEmail} disabled={isSending} className={`px-5 py-2.5 rounded-lg text-xs font-semibold text-white shadow-sm active:scale-95 transition-transform ${isSending?'bg-gray-400 cursor-not-allowed':'bg-gray-900 hover:bg-gray-800'}`}>{isSending?'Sending...':'Send Email'}</button>
+                <button onClick={sendDraftedEmail} disabled={isSending} className={`px-5 py-2.5 rounded-lg text-xs font-semibold text-white shadow-sm active:scale-95 transition-transform ${isSending?'bg-gray-400 cursor-not-allowed':'bg-gray-900 hover:bg-gray-800'}`}>{isSending?'Sending...':'Approve & Send'}</button>
               </div>
             </div>
           </div>
