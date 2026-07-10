@@ -54,7 +54,7 @@ export default function ClientDashboard() {
   const [isSavingAgent, setIsSavingAgent] = useState(false);
   const [isRunningCoordinator, setIsRunningCoordinator] = useState(false);
   const [records, setRecords] = useState([]);
-  const [currentView, setCurrentView] = useState("alerts"); // Default to Alerts for testing
+  const [currentView, setCurrentView] = useState("dashboard"); // Default to Alerts for testing
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
