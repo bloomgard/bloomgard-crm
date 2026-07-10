@@ -2374,11 +2374,11 @@ Command: ${dashCommand}`;
                                 </div>
                               ) : (
                                 <input 
-                                  type={f.type==="number"?"number":f.type==="date"?"date":"text"} 
+                                  type={f.type==="date"?"date":"text"} 
+                                  inputMode={f.type==="number"?"decimal":undefined}
                                   value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name]||"")} 
                                   readOnly={f.type==="calculated"} 
                                   onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value, rIdx)} 
-                                  onWheel={(e) => e.target.blur()}
                                   className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type==='calculated'?'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold':''}`} 
                                   placeholder="..."
                                 />
@@ -2412,11 +2412,11 @@ Command: ${dashCommand}`;
                             </div>
                           ) : (
                             <input 
-                              type={f.type==="number"?"number":f.type==="date"?"date":"text"} 
+                              type={f.type==="date"?"date":"text"} 
+                              inputMode={f.type==="number"?"decimal":undefined}
                               value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name]||"")} 
                               readOnly={f.type==="calculated"} 
                               onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value)} 
-                              onWheel={(e) => e.target.blur()}
                               className={`w-full border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400 ${f.type==='calculated'?'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed':'bg-gray-50 hover:bg-white focus:bg-white'}`} 
                               placeholder="..."
                             />
