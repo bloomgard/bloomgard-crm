@@ -1088,11 +1088,7 @@ Command: ${dashCommand}`;
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto scrollbar-hide">
           {[
             ['dashboard','📊 Intelligence'],
-            ['alerts','⚡ Action Needed'],
-            ['agents','🤖 Agent Fleet'],
             ['pipeline','🚀 Quotes'],
-            ['leadgen','🎯 Lead Gen'],
-            ['inbox','📥 Inbox Logs'],
             ['docs','📄 Docs'],
             ['settings','⚙️ Settings']
           ].map(([v,label])=>(
@@ -1948,10 +1944,6 @@ Command: ${dashCommand}`;
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-12">
             <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-gray-200 pb-8">
               <div><h2 className="text-4xl font-bold tracking-tight text-gray-900">Intelligence</h2><p className="text-sm font-medium text-gray-500 mt-2"></p></div>
-              <div className="relative w-full lg:w-[26rem]">
-                <input value={dashCommand} onChange={e=>setDashCommand(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleGenerateDashInsights()} placeholder="e.g. 'Pie chart of quote statuses'" className="w-full bg-white border border-gray-300 pl-4 pr-12 py-3.5 rounded-xl text-sm font-medium shadow-sm focus:border-indigo-500 outline-none placeholder:text-gray-400"/>
-                <button onClick={handleGenerateDashInsights} disabled={isBuildingDash || !tenantId} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black text-white w-9 h-9 rounded-lg flex items-center justify-center hover:bg-gray-800 disabled:bg-gray-300 active:scale-95 transition-transform">{isBuildingDash?<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>:"↑"}</button>
-              </div>
             </header>
 
             {dynamicInsights.length > 0 && (
