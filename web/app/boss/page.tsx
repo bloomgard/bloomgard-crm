@@ -54,11 +54,10 @@ export default function BossDashboard() {
   const [tenants, setTenants] = useState<any[]>([]); 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"blueprint" | "users" | "html" | "billing">("blueprint");
+  const [activeTab, setActiveTab] = useState<"blueprint" | "users" | "billing">("blueprint");
   const [currentTenantObj, setCurrentTenantObj] = useState<any>(null);
 
   const [schemaConfig, setSchemaConfig] = useState<any[]>([]);
-  const [htmlTemplate, setHtmlTemplate] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false); 
   
@@ -124,7 +123,7 @@ export default function BossDashboard() {
         billing_formula: tenant.billing_formula || "(quotes * 0.5) + (tokens * 0.001) + (emails * 0.1) + 50"
       });
     }
-    if (schema) { setSchemaConfig(schema.schema_config || []); setHtmlTemplate(schema.html_template || ""); }
+    if (schema) { setSchemaConfig(schema.schema_config || []); }
     const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", tId);
     setTenantUsers(users || []);
   }
@@ -155,7 +154,7 @@ export default function BossDashboard() {
   
   const syncMaster = async () => {
     if (!selectedTenantId) return;
-    const { error: sErr } = await supabase.from("tenant_schemas").update({ schema_config: schemaConfig, html_template: htmlTemplate, company_name: companyName }).eq("tenant_id", selectedTenantId);
+    const { error: sErr } = await supabase.from("tenant_schemas").update({ schema_config: schemaConfig, company_name: companyName }).eq("tenant_id", selectedTenantId);
     
     const tenantUpdatePayload: any = { 
       company_name: companyName, 
@@ -164,9 +163,6 @@ export default function BossDashboard() {
     if (currentTenantObj) {
       tenantUpdatePayload.feature_flags = currentTenantObj.feature_flags;
       tenantUpdatePayload.billing_formula = currentTenantObj.billing_formula;
-      tenantUpdatePayload.quotes_generated = currentTenantObj.quotes_generated;
-      tenantUpdatePayload.ai_tokens_used = currentTenantObj.ai_tokens_used;
-      tenantUpdatePayload.emails_sent = currentTenantObj.emails_sent;
     }
     
     const { error: tErr } = await supabase.from("tenants").update(tenantUpdatePayload).eq("id", selectedTenantId);
@@ -244,7 +240,7 @@ export default function BossDashboard() {
             </header>
 
             <div className="flex gap-2 mb-10 bg-white p-1 rounded-xl border border-gray-100 w-fit shadow-sm overflow-x-auto">
-              {["blueprint", "users", "html", "billing"].map(tab => (
+              {["blueprint", "users", "billing"].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-8 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-black text-white shadow-md' : 'text-gray-400 hover:text-black'}`}>{tab === 'billing' ? 'BILLING & USAGE' : tab.toUpperCase()}</button>
               ))}
             </div>
@@ -333,28 +329,6 @@ export default function BossDashboard() {
                 </div>
               </div>
             )}
-
-            {activeTab === "html" && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-white p-6 border border-gray-200 rounded-3xl shadow-sm">
-                  <div><h3 className="font-bold text-gray-900">Live Document Engine</h3><p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Paste your pure HTML template below.</p></div>
-                  <button onClick={syncMaster} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-colors">Lock & Sync</button>
-                </div>
-                <div className="flex flex-col lg:flex-row gap-6 h-[800px]">
-                  <div className="flex-1 bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-inner">
-                    <div className="bg-gray-950 px-6 py-4 border-b border-gray-800 flex justify-between items-center"><span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Source Code</span><span className="text-[10px] font-black text-indigo-400">{'{{db_key}}'} Supported</span></div>
-                    <textarea className="w-full flex-1 bg-transparent text-gray-300 font-mono text-[11px] p-6 outline-none resize-none leading-relaxed" value={htmlTemplate} onChange={e => setHtmlTemplate(e.target.value)} spellCheck={false} placeholder="" />
-                  </div>
-                  <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
-                    {htmlTemplate ? (
-                      <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate} className="w-full h-full border-none pointer-events-none" title="Live Preview"/></div>
-                    ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
-                  </div>
-                </div>
-              </div>
-            )}
-
             {activeTab === "billing" && currentTenantObj && (
               <div className="space-y-6">
                 <div className="bg-white border border-gray-200 p-8 rounded-3xl shadow-sm">
@@ -367,32 +341,17 @@ export default function BossDashboard() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Quotes Generated</p>
-                      <input 
-                        type="number" 
-                        value={currentTenantObj.quotes_generated || 0} 
-                        onChange={(e) => setCurrentTenantObj({...currentTenantObj, quotes_generated: parseInt(e.target.value)||0})}
-                        className="text-3xl font-black bg-transparent border-b-2 border-transparent focus:border-indigo-400 outline-none w-full transition-colors" 
-                      />
+                      <p className="text-3xl font-black text-gray-900">{currentTenantObj.quotes_generated || 0}</p>
                     </div>
-                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">AI Tokens Used</p>
-                      <input 
-                        type="number" 
-                        value={currentTenantObj.ai_tokens_used || 0} 
-                        onChange={(e) => setCurrentTenantObj({...currentTenantObj, ai_tokens_used: parseInt(e.target.value)||0})}
-                        className="text-3xl font-black bg-transparent border-b-2 border-transparent focus:border-indigo-400 outline-none w-full transition-colors" 
-                      />
+                      <p className="text-3xl font-black text-gray-900">{currentTenantObj.ai_tokens_used || 0}</p>
                     </div>
-                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Emails Sent</p>
-                      <input 
-                        type="number" 
-                        value={currentTenantObj.emails_sent || 0} 
-                        onChange={(e) => setCurrentTenantObj({...currentTenantObj, emails_sent: parseInt(e.target.value)||0})}
-                        className="text-3xl font-black bg-transparent border-b-2 border-transparent focus:border-indigo-400 outline-none w-full transition-colors" 
-                      />
+                      <p className="text-3xl font-black text-gray-900">{currentTenantObj.emails_sent || 0}</p>
                     </div>
                   </div>
 
