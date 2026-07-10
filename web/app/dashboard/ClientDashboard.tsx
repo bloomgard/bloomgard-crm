@@ -184,54 +184,56 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (!blueprint.length) return;
-    let updated = false;
-    const newData = JSON.parse(JSON.stringify(dynamicData));
-    blueprint.forEach(section => {
-      section.fields.forEach(field => {
-        if (field.type === 'logged_in') {
-          if (section.allow_multiple && newData[section.title]) {
-            newData[section.title].forEach((row, rIdx) => {
-              if (row[field.name] !== user?.email) { newData[section.title][rIdx][field.name] = user?.email; updated = true; }
-            });
-          } else if (newData[section.title]) {
-            if (newData[section.title][field.name] !== user?.email) { newData[section.title][field.name] = user?.email; updated = true; }
+    setDynamicData(prev => {
+      let updated = false;
+      const newData = JSON.parse(JSON.stringify(prev));
+      blueprint.forEach(section => {
+        section.fields.forEach(field => {
+          if (field.type === 'logged_in') {
+            if (section.allow_multiple && newData[section.title]) {
+              newData[section.title].forEach((row, rIdx) => {
+                if (row[field.name] !== user?.email) { newData[section.title][rIdx][field.name] = user?.email; updated = true; }
+              });
+            } else if (newData[section.title]) {
+              if (newData[section.title][field.name] !== user?.email) { newData[section.title][field.name] = user?.email; updated = true; }
+            }
           }
-        }
-        if (field.type === 'calculated' && field.options) {
-          const processCross = (f) => {
-            const ms = f.match(/SUM\[(.*?)\.(.*?)\]/g);
-            if (ms) ms.forEach(m => { 
-              const p = m.match(/SUM\[(.*?)\.(.*?)\]/); 
-              if (p) { 
-                const s = (newData[p[1]]||[]).reduce((a,r)=>a+(Number(r[p[2]])||0),0); 
-                f=f.replace(m, String(s.toFixed(2))); 
-              } 
-            });
-            return f;
-          };
-          if (section.allow_multiple && newData[section.title]) {
-            newData[section.title].forEach((row,rIdx)=>{
+          if (field.type === 'calculated' && field.options) {
+            const processCross = (f) => {
+              const ms = f.match(/SUM\[(.*?)\.(.*?)\]/g);
+              if (ms) ms.forEach(m => { 
+                const p = m.match(/SUM\[(.*?)\.(.*?)\]/); 
+                if (p) { 
+                  const s = (newData[p[1]]||[]).reduce((a,r)=>a+(Number(r[p[2]])||0),0); 
+                  f=f.replace(m, String(s.toFixed(2))); 
+                } 
+              });
+              return f;
+            };
+            if (section.allow_multiple && newData[section.title]) {
+              newData[section.title].forEach((row,rIdx)=>{
+                let f=processCross(field.options);
+                section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(row[sf.name])||0);});
+                try{
+                  let r=new Function('return '+f)();
+                  if (typeof r === 'number') r = parseFloat(r.toFixed(2));
+                  if(row[field.name]!==r){newData[section.title][rIdx][field.name]=r;updated=true;}
+                }catch(e){}
+              });
+            } else if (newData[section.title]) {
               let f=processCross(field.options);
-              section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(row[sf.name])||0);});
+              section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(newData[section.title][sf.name])||0);});
               try{
                 let r=new Function('return '+f)();
-                if (typeof r === 'number') r = parseFloat(r.toFixed(2));
-                if(row[field.name]!==r){newData[section.title][rIdx][field.name]=r;updated=true;}
+                if (typeof r === 'number') r = parseFloat(r.toFixed(2)); 
+                if(newData[section.title][field.name]!==r){newData[section.title][field.name]=r;updated=true;}
               }catch(e){}
-            });
-          } else if (newData[section.title]) {
-            let f=processCross(field.options);
-            section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(newData[section.title][sf.name])||0);});
-            try{
-              let r=new Function('return '+f)();
-              if (typeof r === 'number') r = parseFloat(r.toFixed(2)); 
-              if(newData[section.title][field.name]!==r){newData[section.title][field.name]=r;updated=true;}
-            }catch(e){}
+            }
           }
-        }
+        });
       });
+      return updated ? newData : prev;
     });
-    if (updated) setDynamicData(newData);
   }, [dynamicData, blueprint, user]);
 
   async function fetchRecords(tId) {
