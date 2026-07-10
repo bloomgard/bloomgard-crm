@@ -2372,12 +2372,12 @@ Command: ${dashCommand}`;
                                   <input type="file" onChange={e=>{const file=e.target.files[0];if(file){const reader=new FileReader();reader.onload=(ev)=>{updateDynamicDataField(section.title, f.name, ev.target.result, rIdx)};reader.readAsDataURL(file);}}} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
                                   {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
                                 </div>
-                              ) : (
                                 <input 
                                   type={f.type==="number"?"number":f.type==="date"?"date":"text"} 
                                   value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name]||"")} 
                                   readOnly={f.type==="calculated"} 
                                   onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value, rIdx)} 
+                                  onWheel={(e) => e.target.blur()}
                                   className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type==='calculated'?'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold':''}`} 
                                   placeholder="..."
                                 />
@@ -2415,6 +2415,7 @@ Command: ${dashCommand}`;
                               value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name]||"")} 
                               readOnly={f.type==="calculated"} 
                               onChange={e=>updateDynamicDataField(section.title, f.name, e.target.value)} 
+                              onWheel={(e) => e.target.blur()}
                               className={`w-full border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400 ${f.type==='calculated'?'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed':'bg-gray-50 hover:bg-white focus:bg-white'}`} 
                               placeholder="..."
                             />
