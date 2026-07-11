@@ -200,12 +200,16 @@ export default function ClientDashboard() {
             }
           }
           if (field.type === 'calculated' && field.options) {
+            const cleanNumber = (val) => {
+              const cleaned = String(val||"").replace(/[^0-9.-]/g, '');
+              return Number(cleaned) || 0;
+            };
             const processCross = (f) => {
               const ms = f.match(/SUM\[(.*?)\.(.*?)\]/g);
               if (ms) ms.forEach(m => { 
                 const p = m.match(/SUM\[(.*?)\.(.*?)\]/); 
                 if (p) { 
-                  const s = (newData[p[1]]||[]).reduce((a,r)=>a+(Number(r[p[2]])||0),0); 
+                  const s = (newData[p[1]]||[]).reduce((a,r)=>a+cleanNumber(r[p[2]]),0); 
                   f=f.replace(m, String(s.toFixed(2))); 
                 } 
               });
@@ -214,7 +218,7 @@ export default function ClientDashboard() {
             if (section.allow_multiple && newData[section.title]) {
               newData[section.title].forEach((row,rIdx)=>{
                 let f=processCross(field.options);
-                section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(row[sf.name])||0);});
+                section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),cleanNumber(row[sf.name]));});
                 try{
                   let r=new Function('return '+f)();
                   if (typeof r === 'number') r = parseFloat(r.toFixed(2));
@@ -223,7 +227,7 @@ export default function ClientDashboard() {
               });
             } else if (newData[section.title]) {
               let f=processCross(field.options);
-              section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),Number(newData[section.title][sf.name])||0);});
+              section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),cleanNumber(newData[section.title][sf.name]));});
               try{
                 let r=new Function('return '+f)();
                 if (typeof r === 'number') r = parseFloat(r.toFixed(2)); 
