@@ -201,9 +201,12 @@ export default function ClientDashboard() {
           }
           if (field.type === 'calculated' && field.options) {
             const cleanNumber = (val) => {
-              const cleaned = String(val||"").replace(/[^0-9.-]/g, '');
-              return Number(cleaned) || 0;
+              if (val == null || val === '') return 0;
+              const cleaned = String(val).replace(/[^0-9.-]/g, '');
+              const num = Number(cleaned);
+              return isNaN(num) ? 0 : num;
             };
+            const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const processCross = (f) => {
               const ms = f.match(/SUM\[(.*?)\.(.*?)\]/g);
               if (ms) ms.forEach(m => { 
@@ -218,20 +221,24 @@ export default function ClientDashboard() {
             if (section.allow_multiple && newData[section.title]) {
               newData[section.title].forEach((row,rIdx)=>{
                 let f=processCross(field.options);
-                section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),cleanNumber(row[sf.name]));});
+                section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${escapeRegExp(sf.name)}}}`,'g'),cleanNumber(row[sf.name]));});
                 try{
                   let r=new Function('return '+f)();
-                  if (typeof r === 'number') r = parseFloat(r.toFixed(2));
-                  if(row[field.name]!==r){newData[section.title][rIdx][field.name]=r;updated=true;}
+                  if (typeof r === 'number' && !isNaN(r)) {
+                    r = parseFloat(r.toFixed(2));
+                    if(row[field.name]!==r){newData[section.title][rIdx][field.name]=r;updated=true;}
+                  }
                 }catch(e){}
               });
             } else if (newData[section.title]) {
               let f=processCross(field.options);
-              section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${sf.name}}}`,'g'),cleanNumber(newData[section.title][sf.name]));});
+              section.fields.forEach(sf=>{f=f.replace(new RegExp(`{{${escapeRegExp(sf.name)}}}`,'g'),cleanNumber(newData[section.title][sf.name]));});
               try{
                 let r=new Function('return '+f)();
-                if (typeof r === 'number') r = parseFloat(r.toFixed(2)); 
-                if(newData[section.title][field.name]!==r){newData[section.title][field.name]=r;updated=true;}
+                if (typeof r === 'number' && !isNaN(r)) {
+                  r = parseFloat(r.toFixed(2)); 
+                  if(newData[section.title][field.name]!==r){newData[section.title][field.name]=r;updated=true;}
+                }
               }catch(e){}
             }
           }
