@@ -227,8 +227,12 @@ export default function ClientDashboard() {
                   if (typeof r === 'number' && !isNaN(r)) {
                     r = parseFloat(r.toFixed(2));
                     if(row[field.name]!==r){newData[section.title][rIdx][field.name]=r;updated=true;}
+                  } else {
+                    console.log(`[Calc] Failed to evaluate ${field.name} on ${section.title} row ${rIdx}. Formula: ${f}, Result: ${r}`);
                   }
-                }catch(e){}
+                }catch(e){
+                  console.log(`[Calc] Error evaluating ${field.name}: ${f} -> ${e.message}`);
+                }
               });
             } else if (newData[section.title]) {
               let f=processCross(field.options);
@@ -238,8 +242,12 @@ export default function ClientDashboard() {
                 if (typeof r === 'number' && !isNaN(r)) {
                   r = parseFloat(r.toFixed(2)); 
                   if(newData[section.title][field.name]!==r){newData[section.title][field.name]=r;updated=true;}
+                } else {
+                  console.log(`[Calc] Failed to evaluate ${field.name} on ${section.title}. Formula: ${f}, Result: ${r}`);
                 }
-              }catch(e){}
+              }catch(e){
+                console.log(`[Calc] Error evaluating ${field.name}: ${f} -> ${e.message}`);
+              }
             }
           }
         });
