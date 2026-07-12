@@ -54,10 +54,10 @@ export default function BossDashboard() {
   const [tenants, setTenants] = useState<any[]>([]); 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"blueprint" | "users" | "html">("blueprint");
+  const [activeTab, setActiveTab] = useState<"blueprint" | "users" | "billing">("blueprint");
+  const [currentTenantObj, setCurrentTenantObj] = useState<any>(null);
 
   const [schemaConfig, setSchemaConfig] = useState<any[]>([]);
-  const [htmlTemplate, setHtmlTemplate] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false); 
   
@@ -110,8 +110,20 @@ export default function BossDashboard() {
     const { data: tenant } = await supabase.from("tenants").select("*").eq("id", tId).maybeSingle();
     const { data: schema } = await supabase.from("tenant_schemas").select("*").eq("tenant_id", tId).maybeSingle();
     
-    if (tenant) { setCompanyName(tenant.company_name || ""); setAiEnabled(!!tenant.ai_enabled); }
-    if (schema) { setSchemaConfig(schema.schema_config || []); setHtmlTemplate(schema.html_template || ""); }
+    if (tenant) { 
+      setCompanyName(tenant.company_name || ""); 
+      setAiEnabled(!!tenant.ai_enabled); 
+      setCurrentTenantObj({
+        ...tenant,
+        feature_flags: tenant.feature_flags || {
+          ai_email: { enabled: false, billable: false },
+          analytics: { enabled: false, billable: false },
+          custom_branding: { enabled: false, billable: false },
+        },
+        billing_formula: tenant.billing_formula || "(quotes * 0.5) + (tokens * 0.001) + (emails * 0.1) + 50"
+      });
+    }
+    if (schema) { setSchemaConfig(schema.schema_config || []); }
     const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", tId);
     setTenantUsers(users || []);
   }
@@ -142,10 +154,53 @@ export default function BossDashboard() {
   
   const syncMaster = async () => {
     if (!selectedTenantId) return;
-    const { error: sErr } = await supabase.from("tenant_schemas").update({ schema_config: schemaConfig, html_template: htmlTemplate, company_name: companyName }).eq("tenant_id", selectedTenantId);
-    const { error: tErr } = await supabase.from("tenants").update({ company_name: companyName, ai_enabled: aiEnabled }).eq("id", selectedTenantId);
+    const { error: sErr } = await supabase.from("tenant_schemas").update({ schema_config: schemaConfig, company_name: companyName }).eq("tenant_id", selectedTenantId);
+    
+    const tenantUpdatePayload: any = { 
+      company_name: companyName, 
+      ai_enabled: aiEnabled 
+    };
+    if (currentTenantObj) {
+      tenantUpdatePayload.feature_flags = currentTenantObj.feature_flags;
+      tenantUpdatePayload.billing_formula = currentTenantObj.billing_formula;
+    }
+    
+    const { error: tErr } = await supabase.from("tenants").update(tenantUpdatePayload).eq("id", selectedTenantId);
     if (!sErr && !tErr) alert("✅ Master System Synced.");
     await fetchTenants();
+  };
+
+  const updateFeatureFlag = (featureKey: string, flagType: 'enabled' | 'billable', value: boolean) => {
+    if (!currentTenantObj) return;
+    setCurrentTenantObj((prev: any) => ({
+      ...prev,
+      feature_flags: {
+        ...prev.feature_flags,
+        [featureKey]: {
+          ...prev.feature_flags[featureKey],
+          [flagType]: value
+        }
+      }
+    }));
+  };
+
+  const calculateBill = () => {
+    if (!currentTenantObj) return "Err";
+    try {
+      const formula = currentTenantObj.billing_formula || "0";
+      const quotes = currentTenantObj.quotes_generated || 0;
+      const tokens = currentTenantObj.ai_tokens_used || 0;
+      const emails = currentTenantObj.emails_sent || 0;
+      const base_fee = 0;
+
+      const evalFunc = new Function("quotes", "tokens", "emails", "base_fee", `return ${formula};`);
+      const result = evalFunc(quotes, tokens, emails, base_fee);
+      
+      if (isNaN(result)) return "Err";
+      return `$${Number(result).toFixed(2)}`;
+    } catch (e) {
+      return "Err";
+    }
   };
 
   if (loading) return <div className="p-20 text-center font-bold text-gray-400 animate-pulse uppercase tracking-widest">Booting Boss OS...</div>;
@@ -184,9 +239,9 @@ export default function BossDashboard() {
               <button onClick={syncMaster} className="bg-black text-white px-10 py-4 rounded-2xl font-bold shadow-2xl hover:bg-gray-800 transition-all">Sync Master</button>
             </header>
 
-            <div className="flex gap-2 mb-10 bg-white p-1 rounded-xl border border-gray-100 w-fit shadow-sm">
-              {["blueprint", "users", "html"].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-8 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-black text-white shadow-md' : 'text-gray-400 hover:text-black'}`}>{tab.toUpperCase()}</button>
+            <div className="flex gap-2 mb-10 bg-white p-1 rounded-xl border border-gray-100 w-fit shadow-sm overflow-x-auto">
+              {["blueprint", "users", "billing"].map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-8 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-black text-white shadow-md' : 'text-gray-400 hover:text-black'}`}>{tab === 'billing' ? 'BILLING & USAGE' : tab.toUpperCase()}</button>
               ))}
             </div>
 
@@ -274,24 +329,78 @@ export default function BossDashboard() {
                 </div>
               </div>
             )}
-
-            {activeTab === "html" && (
+            {activeTab === "billing" && currentTenantObj && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center bg-white p-6 border border-gray-200 rounded-3xl shadow-sm">
-                  <div><h3 className="font-bold text-gray-900">Live Document Engine</h3><p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Paste your pure HTML template below.</p></div>
-                  <button onClick={syncMaster} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-colors">Lock & Sync</button>
-                </div>
-                <div className="flex flex-col lg:flex-row gap-6 h-[800px]">
-                  <div className="flex-1 bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-inner">
-                    <div className="bg-gray-950 px-6 py-4 border-b border-gray-800 flex justify-between items-center"><span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Source Code</span><span className="text-[10px] font-black text-indigo-400">{'{{db_key}}'} Supported</span></div>
-                    <textarea className="w-full flex-1 bg-transparent text-gray-300 font-mono text-[11px] p-6 outline-none resize-none leading-relaxed" value={htmlTemplate} onChange={e => setHtmlTemplate(e.target.value)} spellCheck={false} placeholder="" />
+                <div className="bg-white border border-gray-200 p-8 rounded-3xl shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-gray-900 text-xl">Usage Metrics</h3>
+                    <div className="text-2xl font-black text-indigo-600 bg-indigo-50 px-6 py-2 rounded-xl border border-indigo-100">
+                      Bill: {calculateBill()}
+                      <span className="text-[10px] text-gray-400 uppercase block text-right mt-1 font-semibold tracking-widest">/ Month</span>
+                    </div>
                   </div>
-                  <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
-                    {htmlTemplate ? (
-                      <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate} className="w-full h-full border-none pointer-events-none" title="Live Preview"/></div>
-                    ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Quotes Generated</p>
+                      <p className="text-3xl font-black text-gray-900">{currentTenantObj.quotes_generated || 0}</p>
+                    </div>
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">AI Tokens Used</p>
+                      <p className="text-3xl font-black text-gray-900">{currentTenantObj.ai_tokens_used || 0}</p>
+                    </div>
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Emails Sent</p>
+                      <p className="text-3xl font-black text-gray-900">{currentTenantObj.emails_sent || 0}</p>
+                    </div>
                   </div>
+
+                  <div className="mb-10">
+                    <h3 className="font-bold text-gray-900 text-lg mb-4">Feature Toggles</h3>
+                    <div className="space-y-3">
+                      {Object.keys(currentTenantObj.feature_flags || {}).map((featKey) => (
+                        <div key={featKey} className="flex items-center gap-6 bg-gray-50 p-4 rounded-xl border border-gray-100 w-fit">
+                          <span className="w-32 uppercase font-bold text-xs tracking-wider">{featKey.replace("_", " ")}</span>
+                          
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="accent-black w-4 h-4 cursor-pointer"
+                              checked={currentTenantObj.feature_flags[featKey]?.enabled || false}
+                              onChange={(e) => updateFeatureFlag(featKey, "enabled", e.target.checked)}
+                            />
+                            <span className="text-xs font-semibold text-gray-500 uppercase">Enable</span>
+                          </label>
+                          
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="accent-indigo-600 w-4 h-4 cursor-pointer"
+                              checked={currentTenantObj.feature_flags[featKey]?.billable || false}
+                              onChange={(e) => updateFeatureFlag(featKey, "billable", e.target.checked)}
+                            />
+                            <span className="text-xs font-semibold text-gray-500 uppercase">Billable</span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg mb-4">Dynamic Billing Formula</h3>
+                    <div className="bg-gray-900 p-6 rounded-2xl shadow-inner">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-2">Math Expression String</p>
+                      <input
+                        type="text"
+                        className="w-full bg-transparent border-b border-gray-700 pb-2 text-sm font-mono text-indigo-400 outline-none focus:border-indigo-400 transition-colors"
+                        value={currentTenantObj.billing_formula || ""}
+                        onChange={(e) => setCurrentTenantObj({...currentTenantObj, billing_formula: e.target.value})}
+                        placeholder="(quotes * 0.5) + (tokens * 0.001) + base_fee"
+                      />
+                      <p className="text-[10px] text-gray-500 font-mono mt-3">Available Variables: quotes, tokens, emails, base_fee</p>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             )}
