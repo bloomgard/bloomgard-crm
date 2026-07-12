@@ -1445,20 +1445,7 @@ Command: ${dashCommand}`;
                   </p>
                 </div>
 
-                <div className="space-y-1.5 mt-4">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Provider</label>
-                  <select 
-                    value={emailProvider} 
-                    onChange={e => setEmailProvider(e.target.value)} 
-                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors cursor-pointer"
-                  >
-                    <option value="resend">Resend (Default)</option>
-                    <option value="postal">Postal (Self-Hosted)</option>
-                  </select>
-                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
-                    Temporary toggle for testing Postal architecture.
-                  </p>
-                </div>
+
                 <button 
                   onClick={async () => {
                     if (!tenantId) return;
