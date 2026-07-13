@@ -131,18 +131,20 @@ export default function BossDashboard() {
   const handleAuth = async () => {
     if (!onboardEmail || !onboardPassword) return alert("Credentials required.");
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({ email: onboardEmail, password: onboardPassword });
-      if (authError && authError.message !== "User already registered") throw authError;
-      
-      const userId = authData?.user?.id;
-      if (!userId) throw new Error("Could not retrieve User ID.");
-
-      const { error: pErr } = await supabase
-        .from("profiles")
-        .update({ email: onboardEmail, tenant_id: selectedTenantId, role: onboardRole })
-        .eq("id", userId);
-      
-      if (pErr) throw pErr;
+      const res = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: onboardEmail,
+          password: onboardPassword,
+          role: onboardRole,
+          tenantId: selectedTenantId
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create user");
+      }
       
       setPasswordCache(prev => ({ ...prev, [onboardEmail]: onboardPassword }));
       alert(`✅ Success!\nEmail: ${onboardEmail}`);
