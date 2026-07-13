@@ -24,17 +24,25 @@ export async function POST(request: Request) {
     if (!toAddress) {
       return NextResponse.json({ error: 'Missing to address' }, { status: 400 });
     }
-    let routingId = toAddress.split('@')[0];
-    const match = toAddress.match(/([a-zA-Z0-9._-]+)@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    if (match) {
-      routingId = match[1];
+    
+    let routingId = toAddress;
+    const emailMatch = toAddress.match(/<([^>]+)>/);
+    if (emailMatch) {
+      routingId = emailMatch[1]; // extracts email@domain.com
     }
+    
+    routingId = routingId.split('@')[0]; // extracts email
+    routingId = routingId.split('+')[0]; // removes any +tag aliases
+    routingId = routingId.trim();
+    
+    console.log("INBOUND WEBHOOK: toAddress =", toAddress);
+    console.log("INBOUND WEBHOOK: Parsed Routing ID =", routingId);
 
-    // 3. Tenant Lookup
+    // 3. Tenant Lookup (Case-Insensitive)
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .select('id, company_name, ai_enabled')
-      .eq('inbound_routing_id', routingId)
+      .ilike('inbound_routing_id', routingId)
       .single();
 
     if (tenantError || !tenant) {
