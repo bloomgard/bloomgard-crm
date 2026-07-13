@@ -1171,6 +1171,8 @@ Command: ${dashCommand}`;
           {[
             ['dashboard','📊 Intelligence'],
             ['pipeline','🚀 Quotes'],
+            ['inbox','📬 Inbox'],
+            ['alerts','🚨 Action Need'],
             ['docs','📄 Docs'],
             ['settings','⚙️ Settings']
           ].map(([v,label])=>(
