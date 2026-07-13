@@ -1176,6 +1176,9 @@ Command: ${dashCommand}`;
           ].map(([v,label])=>(
             <div key={v} onClick={()=>{setCurrentView(v);setIsMobileMenuOpen(false);}} className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm ${currentView===v?'bg-gray-900 text-white shadow-md':'text-gray-800 hover:bg-gray-100/50'}`}>
               <span>{label}</span>
+              {v === 'alerts' && pendingAlerts.length > 0 && (
+                <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
+              )}
             </div>
           ))}
           <div onClick={()=>{setCurrentView('copilot');setIsMobileMenuOpen(false);}} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm mt-2 ${currentView==='copilot'?'bg-indigo-600 text-white shadow-md':'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
@@ -2012,6 +2015,72 @@ Command: ${dashCommand}`;
               <div><h2 className="text-4xl font-bold tracking-tight text-gray-900">Intelligence</h2><p className="text-sm font-medium text-gray-500 mt-2"></p></div>
             </header>
 
+            {dynamicInsights.length > 0 && (
+              <div className="bg-indigo-50/50 border border-indigo-100 rounded-3xl p-4 md:p-8 mb-12">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🧠</span>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-900">AI Generated Insights</h3>
+                  </div>
+                  <button onClick={()=>setDynamicInsights([])} className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 hover:text-red-500">Clear All</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {dynamicInsights.map((insight,idx)=>{
+                    let cd=[]; try{ let r=insight.data; if(typeof r==='string') r=JSON.parse(r); if(Array.isArray(r)) cd=r; else if(typeof r==='object'&&r) cd=Object.entries(r).map(([k,v])=>({name:k,value:v})); }catch(e){} cd=cd.map(d=>({name:String(d.name||d.key||'Unknown'),value:Number(d.value||d.count||0)}));
+                    return (
+                      <div key={insight.id||idx} className={`relative bg-white border border-gray-200 p-6 rounded-2xl shadow-sm group hover:shadow-md transition-all ${insight.type?.includes('chart')?'lg:col-span-2':''}`}>
+                        <button onClick={()=>removeInsightCard(insight.id)} className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-white font-bold text-xs z-10 active:scale-95 transition-transform">✕</button>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 pr-6">{insight.title}</p>
+                        {insight.type==='metric'&&<p className="text-5xl font-bold tracking-tighter text-gray-900">{insight.value}</p>}
+                        {insight.type?.includes('chart')&&cd.length>0&&(
+                          <div className="h-64 w-full pt-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                              {insight.type==='pie_chart' ? (
+                                <PieChart>
+                                  <Pie data={cd} nameKey="name" dataKey="value" innerRadius={60} outerRadius={85} paddingAngle={5} stroke="none">
+                                    {cd.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}
+                                  </Pie>
+                                  <Tooltip contentStyle={{borderRadius:'12px',border:'none',boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)',fontWeight:600}}/>
+                                </PieChart>
+                              ) : insight.type==='line_chart' ? (
+                                <AreaChart data={cd} margin={{top:10,right:10,left:-20,bottom:20}}>
+                                  <defs>
+                                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3}/>
+                                      <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                                    </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                  <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} dy={10} angle={-35} textAnchor="end" height={50} />
+                                  <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val)=>val>=1000?`${(val/1000).toFixed(1)}k`:val} />
+                                  <Tooltip cursor={{fill:'#F3F4F6'}} contentStyle={{borderRadius:'12px',border:'none',boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)'}}/>
+                                  <Area type="monotone" dataKey="value" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+                                </AreaChart>
+                              ) : (
+                                <BarChart data={cd} margin={{top:10,right:10,left:-20,bottom:20}}>
+                                  <defs>
+                                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor="#111827" stopOpacity={1}/>
+                                      <stop offset="100%" stopColor="#374151" stopOpacity={0.8}/>
+                                    </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                  <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} dy={10} angle={-35} textAnchor="end" height={50} />
+                                  <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val)=>val>=1000?`${(val/1000).toFixed(1)}k`:val} />
+                                  <Tooltip cursor={{fill:'#F3F4F6'}} contentStyle={{borderRadius:'12px',border:'none',boxShadow:'0 10px 15px -3px rgba(0, 0, 0, 0.1)'}}/>
+                                  <Bar dataKey="value" fill="url(#barGradient)" radius={[6,6,0,0]} barSize={32} />
+                                </BarChart>
+                              )}
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                        {insight.type==='list'&&<div className="space-y-3">{cd.map((d,i)=><div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"><span className="text-xs font-bold text-gray-700 truncate pr-4">{d.name}</span><span className="text-xs font-black bg-gray-100 px-2.5 py-1 rounded-md shrink-0">{d.value}</span></div>)}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
               <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
