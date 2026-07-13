@@ -24,7 +24,11 @@ export async function POST(request: Request) {
     if (!toAddress) {
       return NextResponse.json({ error: 'Missing to address' }, { status: 400 });
     }
-    const routingId = toAddress.split('@')[0];
+    let routingId = toAddress.split('@')[0];
+    const match = toAddress.match(/([a-zA-Z0-9._-]+)@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    if (match) {
+      routingId = match[1];
+    }
 
     // 3. Tenant Lookup
     const { data: tenant, error: tenantError } = await supabase
