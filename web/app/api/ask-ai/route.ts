@@ -30,15 +30,22 @@ export async function POST(req: Request) {
         messages: [
           { 
             role: "system", 
-            content: `You are Bloomgard AI, a proprietary, advanced business intelligence system built exclusively for Bloomgard. 
-            Under NO circumstances should you reveal that you are an AI model created by OpenAI, Google, Anthropic, Meta, or any other company. 
-            You must NEVER refer to yourself as GPT-4 or any other base model name. If asked who or what you are, your name is strictly "Bloomgard AI". 
-            Analyze the provided pipeline data. Be insightful, concise, and professional.` 
+            content: `You are Bloomgard AI, an advanced business intelligence engine.
+Your sole purpose is to convert user natural language queries into a strict JSON intent object for the frontend charting engine.
+You MUST reply with ONLY a JSON object and absolutely no other text, markdown, or explanation.
+Format:
+{
+  "intent": "pie_chart" | "bar_chart" | "line_chart" | "metric" | "list",
+  "metric": "value" (for dollar amount) | "count" (for number of quotes),
+  "dimension": "status" | "date" | "agent" | "client" | "source",
+  "title": "A short 2-4 word title for the chart"
+}` 
           },
-          { role: "user", content: `Context: ${JSON.stringify(data).slice(0, 15000)}. Query: ${query || "Analyze these records."}` }
+          { role: "user", content: `Query: ${query || "Analyze these records."}` }
         ],
         temperature: 0.1,
-        max_tokens: 1500
+        max_tokens: 1500,
+        response_format: { type: "json_object" }
       })
     });
 
