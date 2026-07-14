@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       .single();
 
     if (tenantError || !tenant) {
-      console.error(`Tenant not found for routing ID: ${routingId}`, tenantError);
+      console.error(`Tenant not found for routing ID: ${parsedTenantId}`, tenantError);
       return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
     }
 
