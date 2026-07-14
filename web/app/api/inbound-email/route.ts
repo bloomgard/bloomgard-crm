@@ -154,7 +154,7 @@ RULES:
 
         // Send Email via Resend
         const { error: sendError } = await resend.emails.send({
-          from: `${tenant.company_name} <${routingId}@bloomgard.co>`,
+          from: `${tenant.company_name} <${parsedTenantId}@bloomgard.co>`,
           to: clientEmail,
           subject: `Re: ${payload.data.subject || 'Your Inquiry'}`,
           text: agentReply
