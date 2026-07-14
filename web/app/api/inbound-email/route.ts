@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .select('id, company_name, ai_enabled')
-      .eq('inbound_routing_id', parsedTenantId)
+      .ilike('inbound_routing_id', parsedTenantId)
       .single();
 
     if (tenantError || !tenant) {
