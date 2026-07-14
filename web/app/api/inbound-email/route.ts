@@ -109,9 +109,15 @@ export async function POST(request: Request) {
       }
 
       let quoteContext = "No specific quote found.";
+      let conversationHistory = "";
       if (quote) {
         const itemsSummary = quote.quotation_items?.map((i: any) => `${i.quantity}x ${i.item_name}`).join(', ') || '';
         quoteContext = `Quote Number: ${quote.qn_number}\nItems Quoted: ${itemsSummary}\nStatus: ${quote.status}`;
+        
+        const pastConvos = quote.custom_metadata?.agent_conversations || [];
+        if (pastConvos.length > 0) {
+          conversationHistory = "\nPAST CONVERSATION HISTORY:\n" + pastConvos.map((msg: any) => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
+        }
       }
 
       const systemPrompt = `You are an automated sales assistant named Bloomgard AI, working on behalf of ${tenant.company_name}. 
@@ -125,6 +131,7 @@ Personality & Style:
 CONTEXT:
 Client Email: ${clientEmail}
 ${quoteContext}
+${conversationHistory}
 
 RULES:
 - Write a polite, professional, and concise reply to the client's message.
@@ -154,7 +161,7 @@ RULES:
 
         // Send Email via Resend
         const { error: sendError } = await resend.emails.send({
-          from: `${tenant.company_name} <${parsedTenantId}@bloomgard.co>`,
+          from: `${tenant.company_name} <${parsedTenantId}@inbound.bloomgard.co>`,
           to: clientEmail,
           subject: `Re: ${payload.data.subject || 'Your Inquiry'}`,
           text: agentReply
