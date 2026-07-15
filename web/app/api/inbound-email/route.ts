@@ -80,6 +80,35 @@ export async function POST(request: Request) {
       console.error('Error inserting inbound email:', insertError);
     }
 
+    // --- SYNCHRONOUS LOGGING TO QUOTE ---
+    // Find the most recent quote to attach this email to its conversation log
+    const { data: quote } = await supabase
+      .from('quotations')
+      .select('*')
+      .eq('tenant_id', tenant.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (quote) {
+      let customMetadata = quote.custom_metadata || {};
+      let conversations = customMetadata.agent_conversations || [];
+      conversations.push({ role: 'client', content: clientMessage, timestamp: new Date().toISOString() });
+      customMetadata.agent_conversations = conversations;
+
+      await supabase.from('quotations').update({ 
+         custom_metadata: customMetadata, 
+         last_contact_date: new Date().toISOString() 
+      }).eq('id', quote.id);
+      
+      await supabase.from('status_logs').insert([{ 
+         quotation_id: quote.id, 
+         old_status: quote.status, 
+         new_status: quote.status, 
+         comments: `Client replied via Email. Logged to conversation history.` 
+      }]);
+    }
+
     // Return 200 on total success, ensuring Resend doesn't retry
     return NextResponse.json({ success: true }, { status: 200 });
 
