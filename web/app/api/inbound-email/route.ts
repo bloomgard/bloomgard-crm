@@ -137,6 +137,22 @@ export async function POST(request: Request) {
          new_status: quote.status, 
          comments: `Client replied via Email. Logged to conversation history.` 
       }]);
+      
+      // TRIGGER ASYNCHRONOUS AI PROCESSING
+      if (tenant.ai_enabled) {
+        const baseUrl = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://bloomgard.vercel.app';
+        fetch(`${baseUrl}/api/ai/process-reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: tenant.id,
+            quoteId: quote.id,
+            clientEmail: clientEmail,
+            clientMessage: clientMessage,
+            parsedTenantId: parsedTenantId
+          })
+        }).catch(err => console.error("Async AI trigger failed:", err));
+      }
     }
 
     // Return 200 on total success, ensuring Resend doesn't retry
