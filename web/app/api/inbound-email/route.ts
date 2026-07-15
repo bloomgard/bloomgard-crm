@@ -105,14 +105,20 @@ export async function POST(request: Request) {
     }
 
     // --- SYNCHRONOUS LOGGING TO QUOTE ---
-    // Find the most recent quote to attach this email to its conversation log
-    const { data: quote } = await supabase
-      .from('quotations')
-      .select('*')
-      .eq('tenant_id', tenant.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const subjectLine = payload.data.subject || '';
+    const qnMatch = subjectLine.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);
+
+    let quoteQuery = supabase.from('quotations').select('*').eq('tenant_id', tenant.id);
+    
+    if (qnMatch) {
+      // If we find a specific quote number in the subject, log it to that exact quote
+      quoteQuery = quoteQuery.eq('qn_number', qnMatch[0]);
+    } else {
+      // Fallback to the most recent quote if no QN is found
+      quoteQuery = quoteQuery.order('created_at', { ascending: false });
+    }
+
+    const { data: quote } = await quoteQuery.limit(1).single();
 
     if (quote) {
       let customMetadata = quote.custom_metadata || {};
