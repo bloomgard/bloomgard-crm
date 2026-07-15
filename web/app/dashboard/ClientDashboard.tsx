@@ -1047,6 +1047,7 @@ Command: ${dashCommand}`;
         message: emailDraft.message,
         attachments: emailDraft.attachments || [],
         agentEmail: user?.email,
+        tenantId: tenantId,
         companyName: companyName || "",
         customSender: customSender || "",
         provider: emailProvider || "resend"

@@ -16,7 +16,7 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { to, cc, bcc, subject, message, attachments, agentEmail, companyName, customSender, provider } = body;
+    const { to, cc, bcc, subject, message, attachments, agentEmail, tenantId, companyName, customSender, provider } = body;
 
     if (!to || !subject || !message) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400, headers: corsHeaders });
@@ -34,10 +34,12 @@ export async function POST(req: Request) {
       };
     }) || [];
 
+    const replyToAddress = tenantId ? `${tenantId}@inbound.bloomgard.co` : agentEmail;
+
     const emailPayload: any = {
       from: fromString,
       to: to.split(',').map((s: string)=>s.trim()),
-      replyTo: agentEmail,
+      replyTo: replyToAddress,
       subject: subject,
       text: message, 
       attachments: formattedAttachments,
