@@ -48,17 +48,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
     }
 
-    // 4. Fetch Full Email Body
+    // 4. Fetch Full Email Body & Extract Threading Headers
     const emailId = payload.data?.email_id;
     let bodyText = payload.data?.text || '';
     let bodyHtml = payload.data?.html || '';
+    let fullEmailObj: any = null;
 
     if (emailId) {
       const { data: fullEmail, error: fetchError } = await resend.emails.receiving.get(emailId);
       if (!fetchError && fullEmail) {
+        fullEmailObj = fullEmail;
         bodyText = fullEmail.text || bodyText;
         bodyHtml = fullEmail.html || bodyHtml;
       }
+    }
+
+    // Extract thread ID
+    let threadId = payload.data?.message_id || payload.data?.id || `msg_${Date.now()}`;
+    
+    if (fullEmailObj) {
+      if (fullEmailObj.in_reply_to) {
+        threadId = fullEmailObj.in_reply_to;
+      } else if (fullEmailObj.headers) {
+        if (Array.isArray(fullEmailObj.headers)) {
+          const inReplyToHeader = fullEmailObj.headers.find((h: any) => h.name?.toLowerCase() === 'in-reply-to');
+          if (inReplyToHeader) threadId = inReplyToHeader.value;
+        } else if (typeof fullEmailObj.headers === 'object') {
+          threadId = fullEmailObj.headers['In-Reply-To'] || fullEmailObj.headers['in-reply-to'] || threadId;
+        }
+      }
+    }
+
+    // Clean brackets from Message-IDs if present
+    if (typeof threadId === 'string' && threadId.startsWith('<') && threadId.endsWith('>')) {
+      threadId = threadId.slice(1, -1);
     }
 
     const clientEmail = payload.data.from;
@@ -73,7 +96,8 @@ export async function POST(request: Request) {
         subject: payload.data.subject,
         body_text: bodyText,
         body_html: bodyHtml,
-        message_id: payload.data.message_id || ''
+        message_id: payload.data.message_id || '',
+        thread_id: threadId
       });
 
     if (insertError) {
