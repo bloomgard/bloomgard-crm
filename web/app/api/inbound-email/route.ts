@@ -10,13 +10,15 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const AI_MODEL = 'openai/gpt-4o-mini';
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-
-    // 1. Event Filtering
-    if (payload.type !== 'email.received') {
-      return NextResponse.json({ message: 'Ignoring event' }, { status: 200 });
+    // 2. Safely Extract fromAddress
+    const fromAddress = payload.data?.from || '';
+    if (!fromAddress) {
+      return NextResponse.json({ message: 'No from address' }, { status: 200 });
     }
 
     // 2. Extract Routing ID
@@ -140,7 +142,11 @@ export async function POST(request: Request) {
       
       // TRIGGER ASYNCHRONOUS AI PROCESSING
       if (tenant.ai_enabled) {
-        const baseUrl = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://bloomgard.vercel.app';
+        let baseUrl = 'https://bloomgard.vercel.app';
+        try {
+           baseUrl = new URL(request.url).origin;
+        } catch(e) {}
+        
         after(() => {
           fetch(`${baseUrl}/api/ai/process-reply`, {
             method: 'POST',
