@@ -103,6 +103,41 @@ export default function ClientDashboard() {
   const [inboxReplyText, setInboxReplyText] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
 
+  const [quoteReplyTexts, setQuoteReplyTexts] = useState({});
+  const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
+
+  const handleQuoteReply = async (quote: any) => {
+    const text = quoteReplyTexts[quote.id as keyof typeof quoteReplyTexts] as string;
+    if (!text || !text.trim()) return;
+    setIsSendingQuoteReply(quote.id);
+    try {
+      const res = await fetch(getApiUrl('/api/inbox/reply'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: user?.tenant_id || tenantId,
+          emailId: null,
+          to: quote.client_email || quote.custom_metadata?.client_email || 'client@example.com',
+          subject: `Re: Following up on Quote ${quote.qn_number}`,
+          htmlBody: text.replace(/\n/g, '<br/>'),
+          parsedTenantId: user?.tenant_id || tenantId
+        })
+      });
+      if (res.ok) {
+        setQuoteReplyTexts(prev => ({ ...prev, [quote.id]: '' }));
+        alert("Reply sent successfully!");
+        fetchData();
+      } else {
+        alert("Failed to send reply");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error sending reply");
+    } finally {
+      setIsSendingQuoteReply(false);
+    }
+  };
+
   const handleInboxAction = async (emailId, action, value) => {
     try {
       const updates = { [action]: value };
@@ -1401,6 +1436,23 @@ Command: ${dashCommand}`;
                                     ))}
                                   </div>
                                 )}
+                                <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                  <textarea 
+                                    value={quoteReplyTexts[r.id] || ''}
+                                    onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                    placeholder="Type a manual reply to the client..."
+                                    className="w-full p-4 text-sm focus:outline-none resize-y min-h-[80px] bg-transparent"
+                                  />
+                                  <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
+                                    <button 
+                                      onClick={() => handleQuoteReply(r)}
+                                      disabled={isSendingQuoteReply === r.id || !(quoteReplyTexts[r.id] || '').trim()}
+                                      className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
+                                    >
+                                      {isSendingQuoteReply === r.id ? 'Sending...' : 'Send Reply'}
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -2027,6 +2079,23 @@ Command: ${dashCommand}`;
                                   <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
                                 </div>
                               )}
+                              <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                <textarea 
+                                  value={quoteReplyTexts[r.id] || ''}
+                                  onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                  placeholder="Type a manual reply to the client..."
+                                  className="w-full p-4 text-sm focus:outline-none resize-y min-h-[80px] bg-transparent"
+                                />
+                                <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
+                                  <button 
+                                    onClick={() => handleQuoteReply(r)}
+                                    disabled={isSendingQuoteReply === r.id || !(quoteReplyTexts[r.id] || '').trim()}
+                                    className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
+                                  >
+                                    {isSendingQuoteReply === r.id ? 'Sending...' : 'Send Reply'}
+                                  </button>
+                                </div>
+                              </div>
                             </>
                           )}
                         </div>
@@ -2252,7 +2321,10 @@ Command: ${dashCommand}`;
               <header className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-3">
                 <div className="flex justify-between items-center">
                   <h3 className="font-black text-lg text-gray-900 dark:text-white uppercase tracking-wider">Inbox</h3>
-                  <button onClick={() => fetchInboxLogs()} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider shadow-sm">Refresh</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setEmailDraft({ to: '', subject: '', message: '', attachmentBase64: '', filename: '' }); setShowEmailModal(true); }} className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-sm">Compose</button>
+                    <button onClick={() => fetchInboxLogs()} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider shadow-sm">Refresh</button>
+                  </div>
                 </div>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>

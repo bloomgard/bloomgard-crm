@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
@@ -141,17 +141,19 @@ export async function POST(request: Request) {
       // TRIGGER ASYNCHRONOUS AI PROCESSING
       if (tenant.ai_enabled) {
         const baseUrl = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://bloomgard.vercel.app';
-        fetch(`${baseUrl}/api/ai/process-reply`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: tenant.id,
-            quoteId: quote.id,
-            clientEmail: clientEmail,
-            clientMessage: clientMessage,
-            parsedTenantId: parsedTenantId
-          })
-        }).catch(err => console.error("Async AI trigger failed:", err));
+        after(() => {
+          fetch(`${baseUrl}/api/ai/process-reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: tenant.id,
+              quoteId: quote.id,
+              clientEmail: clientEmail,
+              clientMessage: clientMessage,
+              parsedTenantId: parsedTenantId
+            })
+          }).catch(err => console.error("Async AI trigger failed:", err));
+        });
       }
     }
 
