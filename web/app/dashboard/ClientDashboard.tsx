@@ -392,16 +392,28 @@ export default function ClientDashboard() {
     // Don't flag quotes that are already Approved or Lost
     if (r.status === 'Approved' || r.status === 'Lost') return false;
 
+    const parseSafeDate = (dString: any) => {
+      if (!dString) return new Date();
+      if (typeof dString === 'number') return new Date(dString);
+      const str = String(dString);
+      if (str.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{4}/)) {
+        const parts = str.split(/[\/\-]/);
+        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+      }
+      const parsed = new Date(str);
+      return isNaN(parsed.getTime()) ? new Date() : parsed;
+    };
+
     const dueDate = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
     if (!dueDate) {
       // Prioritize the manual 'date' field over the unchangeable 'created_at' so manual database edits actually take effect
-      const createdDate = new Date(r.date || r.created_at || Date.now());
+      const createdDate = parseSafeDate(r.date || r.created_at || Date.now());
       const daysOld = (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
       return daysOld >= 3;
     }
 
     // Check if the due date is today or in the past
-    return new Date(dueDate) <= new Date();
+    return parseSafeDate(dueDate) <= new Date();
   });
 
   const historyAlerts = visibleRecords.filter(r => {
@@ -796,6 +808,14 @@ export default function ClientDashboard() {
       }));
       await supabase.from("quotation_items").insert(parsedItems);
     }
+    
+    // Save both the root status and the synchronized metadata back to the database
+    const { error: metaError } = await supabase.from("quotations").update({ 
+      status: newStatus,
+      custom_metadata: updatedMetadata 
+    }).eq("id", id);
+    if (metaError) console.error("Metadata Sync Error:", metaError);
+
     setSelectedRecord(p => p ? ({
       ...p,
       status: newStatus,
