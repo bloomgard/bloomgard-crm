@@ -110,6 +110,14 @@ export default function ClientDashboard() {
     const text = quoteReplyTexts[quote.id as keyof typeof quoteReplyTexts] as string;
     if (!text || !text.trim()) return;
     setIsSendingQuoteReply(quote.id);
+    const targetEmail = quote.client_email || quote.clients?.email || quote.custom_metadata?.client_email || quote.custom_metadata?.['Client Information']?.email;
+    
+    if (!targetEmail) {
+      alert("No client email address found for this quote. Please add an email to the client profile first.");
+      setIsSendingQuoteReply(false);
+      return;
+    }
+
     try {
       const res = await fetch(getApiUrl('/api/inbox/reply'), {
         method: 'POST',
@@ -117,7 +125,7 @@ export default function ClientDashboard() {
         body: JSON.stringify({
           tenantId: user?.tenant_id || tenantId,
           emailId: null,
-          to: quote.client_email || quote.custom_metadata?.client_email || 'client@example.com',
+          to: targetEmail,
           subject: `Re: Following up on Quote ${quote.qn_number}`,
           htmlBody: text.replace(/\n/g, '<br/>'),
           parsedTenantId: user?.tenant_id || tenantId
