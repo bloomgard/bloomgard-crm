@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       
     const { data: tenantData } = await supabase
       .from('tenants')
-      .select('company_name, custom_email_sender, email_provider')
+      .select('*')
       .eq('id', tenantId)
       .single();
     
