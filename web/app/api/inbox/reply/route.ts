@@ -20,16 +20,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
+    let headers = undefined;
+    if (emailId) {
+      const { data: originalEmail } = await supabase.from('inbound_emails').select('message_id').eq('id', emailId).single();
+      if (originalEmail?.message_id) {
+        headers = [
+          { name: 'In-Reply-To', value: originalEmail.message_id },
+          { name: 'References', value: originalEmail.message_id }
+        ];
+      }
+    }
+
     const { getDynamicSender, sendEmail } = require('@/lib/postal');
-    const fromEmail = parsedTenantId ? `${parsedTenantId}@inbound.bloomgard.co` : tenant.custom_email_sender || 'support@bloomgard.co';
+    const fromEmail = tenant.custom_email_sender || 'support@bloomgard.co';
     const fromName = tenant.company_name || 'Bloomgard';
     
     // Uses the centralized postal module so it inherits the fallback testing logic
     await sendEmail({
       from: `${fromName} <${fromEmail}>`,
       to,
+      replyTo: parsedTenantId ? `${parsedTenantId}@inbound.bloomgard.co` : undefined,
       subject,
       html: htmlBody,
+      headers
     });
 
     // Attempt to log it if it belongs to a known quote (by searching subject for QN)

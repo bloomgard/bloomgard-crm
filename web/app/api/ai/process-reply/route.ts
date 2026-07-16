@@ -15,7 +15,7 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
-    const { tenantId, quoteId, clientEmail, clientMessage, parsedTenantId } = await request.json();
+    const { tenantId, quoteId, clientEmail, clientMessage, parsedTenantId, messageId } = await request.json();
 
     if (!tenantId || !quoteId || !clientEmail || !clientMessage) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -103,11 +103,24 @@ RULES:
 
       // Send Email via Centralized Postal Module
       const { sendEmail } = require('@/lib/postal');
+      const fromEmail = tenant.custom_email_sender || 'support@bloomgard.co';
+      const fromName = tenant.company_name || 'Bloomgard';
+      
+      let headers = undefined;
+      if (messageId) {
+        headers = [
+          { name: 'In-Reply-To', value: messageId },
+          { name: 'References', value: messageId }
+        ];
+      }
+
       await sendEmail({
-        from: `${tenant.company_name} <${parsedTenantId}@inbound.bloomgard.co>`,
+        from: `${fromName} <${fromEmail}>`,
         to: clientEmail,
+        replyTo: parsedTenantId ? `${parsedTenantId}@inbound.bloomgard.co` : undefined,
         subject: `Re: Following up on Quote ${quote.qn_number}`,
-        text: agentReply
+        text: agentReply,
+        headers
       });
 
       // Log the AI response to agent_conversations and status_logs

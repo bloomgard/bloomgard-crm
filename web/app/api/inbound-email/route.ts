@@ -155,7 +155,8 @@ export async function POST(request: Request) {
               quoteId: quote.id,
               clientEmail: clientEmail,
               clientMessage: clientMessage,
-              parsedTenantId: parsedTenantId
+              parsedTenantId: parsedTenantId,
+              messageId: payload.data.message_id || ''
             })
           }).catch(err => console.error("Async AI trigger failed:", err));
         }

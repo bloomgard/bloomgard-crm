@@ -28,6 +28,7 @@ export const sendEmail = async (mailOptions: {
   attachments?: any[];
   cc?: string | string[];
   bcc?: string | string[];
+  headers?: any;
 }) => {
   try {
     const response = await resend.emails.send({
@@ -39,7 +40,8 @@ export const sendEmail = async (mailOptions: {
       html: mailOptions.html,
       cc: mailOptions.cc,
       bcc: mailOptions.bcc,
-      attachments: mailOptions.attachments
+      attachments: mailOptions.attachments,
+      headers: mailOptions.headers
     });
 
     if (response.error) {
@@ -86,7 +88,8 @@ export const sendEmail = async (mailOptions: {
         subject: fallbackOptions.subject,
         text: fallbackOptions.text,
         html: fallbackOptions.html,
-        attachments: fallbackOptions.attachments
+        attachments: fallbackOptions.attachments,
+        headers: fallbackOptions.headers
       });
 
       if (response.error) throw new Error(`Fallback Resend Error: ${response.error.message}`);
