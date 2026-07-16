@@ -110,8 +110,22 @@ export default function ClientDashboard() {
     const text = quoteReplyTexts[quote.id as keyof typeof quoteReplyTexts] as string;
     if (!text || !text.trim()) return;
     setIsSendingQuoteReply(quote.id);
-    const targetEmail = quote.client_email || quote.clients?.email || quote.custom_metadata?.client_email || quote.custom_metadata?.['Client Information']?.email;
+    let targetEmail = quote.client_email || quote.clients?.email || quote.custom_metadata?.client_email || quote.custom_metadata?.['Client Information']?.email;
     
+    if (!targetEmail) {
+      // Fallback: Check if we have received any inbound emails for this quote
+      const { data: inboundEmails } = await supabase
+        .from('inbound_emails')
+        .select('from_email')
+        .ilike('subject', `%${quote.qn_number}%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (inboundEmails && inboundEmails.length > 0) {
+        targetEmail = inboundEmails[0].from_email;
+      }
+    }
+
     if (!targetEmail) {
       alert("No client email address found for this quote. Please add an email to the client profile first.");
       setIsSendingQuoteReply(false);
