@@ -34,7 +34,7 @@ export const sendEmail = async (mailOptions: {
     const response = await resend.emails.send({
       from: mailOptions.from,
       to: typeof mailOptions.to === 'string' ? [mailOptions.to] : mailOptions.to,
-      reply_to: mailOptions.replyTo,
+      replyTo: mailOptions.replyTo,
       subject: mailOptions.subject,
       text: mailOptions.text,
       html: mailOptions.html,
@@ -84,7 +84,7 @@ export const sendEmail = async (mailOptions: {
       const response = await resend.emails.send({
         from: fallbackOptions.from,
         to: fallbackOptions.to,
-        reply_to: fallbackOptions.replyTo,
+        replyTo: fallbackOptions.replyTo,
         subject: fallbackOptions.subject,
         text: fallbackOptions.text,
         html: fallbackOptions.html,

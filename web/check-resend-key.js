@@ -7,7 +7,7 @@ async function check() {
     const { data, error } = await resend.domains.list();
     if (error) console.error("API Key Error:", error);
     else console.log("API Key has Full Access! Domains:", data);
-  } catch(e) {
+  } catch (e) {
     console.error("Crash:", e);
   }
 }
