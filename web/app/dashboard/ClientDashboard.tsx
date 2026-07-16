@@ -126,7 +126,17 @@ export default function ClientDashboard() {
       if (res.ok) {
         setQuoteReplyTexts(prev => ({ ...prev, [quote.id]: '' }));
         alert("Reply sent successfully!");
-        fetchData();
+        
+        // Update local selected record state so the UI instantly reflects the new message without requiring a full reload
+        if (selectedRecord && selectedRecord.id === quote.id) {
+            const newMsg = { role: 'agent', content: text, timestamp: new Date().toISOString() };
+            const updatedMeta = { ...(selectedRecord.custom_metadata || {}) };
+            const conversations = [...(updatedMeta.agent_conversations || [])];
+            conversations.push(newMsg);
+            updatedMeta.agent_conversations = conversations;
+            setSelectedRecord({ ...selectedRecord, custom_metadata: updatedMeta });
+        }
+        fetchRecords(user?.tenant_id || tenantId);
       } else {
         const errorData = await res.json().catch(() => ({}));
         alert(`Failed to send reply: ${errorData.error || res.statusText}`);
