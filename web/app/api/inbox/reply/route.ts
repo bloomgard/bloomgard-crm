@@ -32,12 +32,15 @@ export async function POST(request: Request) {
 
     if (sendError) {
       // Fallback for unverified domains
-      await resend.emails.send({
+      const { error: fallbackError } = await resend.emails.send({
         from: `${fromName} via Bloomgard <onboarding@resend.dev>`,
         to,
         subject,
         html: htmlBody,
       });
+      if (fallbackError) {
+         return NextResponse.json({ error: fallbackError.message }, { status: 400 });
+      }
     }
 
     // Attempt to log it if it belongs to a known quote (by searching subject for QN)

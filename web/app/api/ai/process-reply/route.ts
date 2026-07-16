@@ -111,12 +111,15 @@ RULES:
 
       // Fallback for unverified domains
       if (sendError) {
-         await resend.emails.send({
+         const { error: fallbackError } = await resend.emails.send({
            from: `Bloomgard AI <onboarding@resend.dev>`,
            to: clientEmail,
            subject: `Re: Following up on Quote ${quote.qn_number}`,
            text: agentReply
          });
+         if (fallbackError) {
+             return NextResponse.json({ error: fallbackError.message }, { status: 400 });
+         }
       }
 
       // Log the AI response to agent_conversations and status_logs
