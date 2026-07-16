@@ -29,12 +29,25 @@ export async function POST(request: Request) {
     }
 
     const clientName = quote.clients?.company_name || quote.custom_metadata?.client_name || 'Client';
-    const clientEmail = quote.clients?.email_id || quote.custom_metadata?.email_id;
+    let clientEmail = quote.client_email || quote.clients?.email || quote.clients?.email_id || quote.custom_metadata?.client_email || quote.custom_metadata?.email_id || quote.custom_metadata?.['Client Information']?.email;
     
     if (!clientEmail) {
-        throw new Error('No email address found for this client.');
-    }
+      // Fallback: Check if we have received any inbound emails for this quote
+      const { data: inboundEmails } = await supabase
+        .from('inbound_emails')
+        .select('from_email')
+        .ilike('subject', `%${quote.qn_number}%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
+      if (inboundEmails && inboundEmails.length > 0) {
+        clientEmail = inboundEmails[0].from_email;
+      }
+    }
+    
+    if (!clientEmail) {
+        throw new Error('No email address found for this client. Cannot dispatch agent.');
+    }
     const itemsSummary = quote.quotation_items?.map((item: any) => `${item.quantity}x ${item.item_name}`).join(', ') || 'the requested items';
     
     const { data: schema } = await supabase

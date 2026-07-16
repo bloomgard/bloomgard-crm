@@ -107,47 +107,46 @@ export async function POST(request: Request) {
     }
 
     // --- SYNCHRONOUS LOGGING TO QUOTE ---
-    const subjectLine = payload.data.subject || '';
-    const qnMatch = subjectLine.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);
-
-    let quoteQuery = supabase.from('quotations').select('*').eq('tenant_id', tenant.id);
-    
-    if (qnMatch) {
-      // If we find a specific quote number in the subject, log it to that exact quote
-      quoteQuery = quoteQuery.eq('qn_number', qnMatch[0]);
-    } else {
-      // Fallback to the most recent quote if no QN is found
-      quoteQuery = quoteQuery.order('created_at', { ascending: false });
-    }
-
-    const { data: quote } = await quoteQuery.limit(1).single();
-
-    if (quote) {
-      let customMetadata = quote.custom_metadata || {};
-      let conversations = customMetadata.agent_conversations || [];
-      conversations.push({ role: 'client', content: clientMessage, timestamp: new Date().toISOString() });
-      customMetadata.agent_conversations = conversations;
-
-      await supabase.from('quotations').update({ 
-         custom_metadata: customMetadata, 
-         last_contact_date: new Date().toISOString() 
-      }).eq('id', quote.id);
+    // Moved to 'after()' so the webhook instantly returns 200 OK to Resend and avoids timeouts!
+    after(async () => {
+      const subjectLine = payload.data.subject || '';
+      const qnMatch = subjectLine.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);
+  
+      let quoteQuery = supabase.from('quotations').select('*').eq('tenant_id', tenant.id);
       
-      await supabase.from('status_logs').insert([{ 
-         quotation_id: quote.id, 
-         old_status: quote.status, 
-         new_status: quote.status, 
-         comments: `Client replied via Email. Logged to conversation history.` 
-      }]);
-      
-      // TRIGGER ASYNCHRONOUS AI PROCESSING
-      if (tenant.ai_enabled) {
-        let baseUrl = 'https://bloomgard.vercel.app';
-        try {
-           baseUrl = new URL(request.url).origin;
-        } catch(e) {}
+      if (qnMatch) {
+        quoteQuery = quoteQuery.eq('qn_number', qnMatch[0]);
+      } else {
+        quoteQuery = quoteQuery.order('created_at', { ascending: false });
+      }
+  
+      const { data: quote } = await quoteQuery.limit(1).single();
+  
+      if (quote) {
+        let customMetadata = quote.custom_metadata || {};
+        let conversations = customMetadata.agent_conversations || [];
+        conversations.push({ role: 'client', content: clientMessage, timestamp: new Date().toISOString() });
+        customMetadata.agent_conversations = conversations;
+  
+        await supabase.from('quotations').update({ 
+           custom_metadata: customMetadata, 
+           last_contact_date: new Date().toISOString() 
+        }).eq('id', quote.id);
         
-        after(() => {
+        await supabase.from('status_logs').insert([{ 
+           quotation_id: quote.id, 
+           old_status: quote.status, 
+           new_status: quote.status, 
+           comments: `Client replied via Email. Logged to conversation history.` 
+        }]);
+        
+        // TRIGGER ASYNCHRONOUS AI PROCESSING
+        if (tenant.ai_enabled) {
+          let baseUrl = 'https://bloomgard.vercel.app';
+          try {
+             baseUrl = new URL(request.url).origin;
+          } catch(e) {}
+          
           fetch(`${baseUrl}/api/ai/process-reply`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -159,11 +158,11 @@ export async function POST(request: Request) {
               parsedTenantId: parsedTenantId
             })
           }).catch(err => console.error("Async AI trigger failed:", err));
-        });
+        }
       }
-    }
+    });
 
-    // Return 200 on total success, ensuring Resend doesn't retry
+    // Return 200 immediately on success, ensuring Resend doesn't retry
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (error: any) {

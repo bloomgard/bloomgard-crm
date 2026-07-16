@@ -200,7 +200,7 @@ export default function ClientDashboard() {
         body: JSON.stringify({
           tenantId: user?.tenant_id || tenantId,
           emailId: selectedInboxEmail.id,
-          to: selectedInboxEmail.sender_email,
+          to: selectedInboxEmail.from_email,
           subject: selectedInboxEmail.subject.startsWith('Re:') ? selectedInboxEmail.subject : `Re: ${selectedInboxEmail.subject}`,
           htmlBody: inboxReplyText.replace(/\n/g, '<br/>'),
           parsedTenantId: user?.tenant_id || tenantId
