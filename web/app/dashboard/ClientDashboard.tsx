@@ -394,8 +394,9 @@ export default function ClientDashboard() {
 
     const dueDate = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
     if (!dueDate) {
-      const createdDate = new Date(r.created_at || r.date || Date.now());
-      const daysOld = (new Date() - createdDate) / (1000 * 60 * 60 * 24);
+      // Prioritize the manual 'date' field over the unchangeable 'created_at' so manual database edits actually take effect
+      const createdDate = new Date(r.date || r.created_at || Date.now());
+      const daysOld = (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
       return daysOld >= 3;
     }
 
@@ -1082,9 +1083,23 @@ Command: ${dashCommand}`;
   const handleOpenEmailComposer = async (r: any) => {
     const name = `${r.qn_number} - ${getManifestTitle(r)}`;
     
-    // Auto-attach the document as an HTML file
+    // Auto-attach the document as a real PDF
     const html = await getRenderedHTML(r);
-    const encodedHtml = btoa(unescape(encodeURIComponent(html)));
+    
+    // Dynamically import html2pdf to prevent SSR errors
+    const html2pdf = (await import('html2pdf.js')).default;
+    
+    // Configure html2pdf to output a data URI string
+    const opt = {
+      margin: 0.5,
+      filename: `${name}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    
+    // Generate the PDF
+    const pdfBase64 = await html2pdf().set(opt).from(html).output('datauristring');
 
     setEmailDraft({
       quoteId: r.id,
@@ -1095,8 +1110,8 @@ Command: ${dashCommand}`;
       bcc: "",
       subject: `Document: ${name}`,
       message: `Hello,\n\nPlease find the attached official document.\n\nBest regards,\n${user?.email}`,
-      attachments: [{ filename: `${name}.html`, base64: encodedHtml }],
-      filename: `${name}.html`
+      attachments: [{ filename: `${name}.pdf`, base64: pdfBase64 }],
+      filename: `${name}.pdf`
     } as any);
     setShowEmailModal(true);
   };
@@ -2928,11 +2943,22 @@ Command: ${dashCommand}`;
                           const quote = docsRecords.find(r => String(r.id) === String(id));
                           if (quote) {
                             const html = await getRenderedHTML(quote);
-                            const encodedHtml = btoa(unescape(encodeURIComponent(html)));
-                            const filename = `${quote.qn_number} - ${getManifestTitle(quote)}.html`;
+                            
+                            const html2pdf = (await import('html2pdf.js')).default;
+                            const opt = {
+                              margin: 0.5,
+                              filename: `${quote.qn_number} - ${getManifestTitle(quote)}.pdf`,
+                              image: { type: 'jpeg', quality: 0.98 },
+                              html2canvas: { scale: 2 },
+                              jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+                            };
+                            
+                            const pdfBase64 = await html2pdf().set(opt).from(html).output('datauristring');
+                            const filename = `${quote.qn_number} - ${getManifestTitle(quote)}.pdf`;
+                            
                             setEmailDraft(prev => ({
                               ...prev,
-                              attachments: [...(prev.attachments || []), { filename, base64: encodedHtml }]
+                              attachments: [...(prev.attachments || []), { filename, base64: pdfBase64 }]
                             }));
                           }
                           e.target.value = ""; // reset
