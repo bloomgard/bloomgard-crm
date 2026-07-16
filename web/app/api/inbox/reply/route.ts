@@ -20,28 +20,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
+    const { getDynamicSender, sendEmail } = require('@/lib/postal');
     const fromEmail = parsedTenantId ? `${parsedTenantId}@inbound.bloomgard.co` : tenant.custom_email_sender || 'support@bloomgard.co';
     const fromName = tenant.company_name || 'Bloomgard';
-
-    const { error: sendError } = await resend.emails.send({
+    
+    // Uses the centralized postal module so it inherits the fallback testing logic
+    await sendEmail({
       from: `${fromName} <${fromEmail}>`,
       to,
       subject,
       html: htmlBody,
     });
-
-    if (sendError) {
-      // Fallback for unverified domains
-      const { error: fallbackError } = await resend.emails.send({
-        from: `${fromName} via Bloomgard <onboarding@resend.dev>`,
-        to,
-        subject,
-        html: htmlBody,
-      });
-      if (fallbackError) {
-         return NextResponse.json({ error: fallbackError.message }, { status: 400 });
-      }
-    }
 
     // Attempt to log it if it belongs to a known quote (by searching subject for QN)
     const qnMatch = subject.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);

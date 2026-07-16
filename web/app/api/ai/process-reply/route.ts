@@ -101,26 +101,14 @@ RULES:
       const aiData = await aiResponse.json();
       const agentReply = aiData.choices[0].message.content.trim();
 
-      // Send Email via Resend
-      const { error: sendError } = await resend.emails.send({
+      // Send Email via Centralized Postal Module
+      const { sendEmail } = require('@/lib/postal');
+      await sendEmail({
         from: `${tenant.company_name} <${parsedTenantId}@inbound.bloomgard.co>`,
         to: clientEmail,
         subject: `Re: Following up on Quote ${quote.qn_number}`,
         text: agentReply
       });
-
-      // Fallback for unverified domains
-      if (sendError) {
-         const { error: fallbackError } = await resend.emails.send({
-           from: `Bloomgard AI <onboarding@resend.dev>`,
-           to: clientEmail,
-           subject: `Re: Following up on Quote ${quote.qn_number}`,
-           text: agentReply
-         });
-         if (fallbackError) {
-             return NextResponse.json({ error: fallbackError.message }, { status: 400 });
-         }
-      }
 
       // Log the AI response to agent_conversations and status_logs
       let customMetadata = quote.custom_metadata || {};
