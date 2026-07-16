@@ -35,13 +35,13 @@ export async function POST(request: Request) {
       // Fallback: Check if we have received any inbound emails for this quote
       const { data: inboundEmails } = await supabase
         .from('inbound_emails')
-        .select('from_email')
+        .select('sender_email')
         .ilike('subject', `%${quote.qn_number}%`)
         .order('created_at', { ascending: false })
         .limit(1);
 
       if (inboundEmails && inboundEmails.length > 0) {
-        clientEmail = inboundEmails[0].from_email;
+        clientEmail = inboundEmails[0].sender_email;
       }
     }
     

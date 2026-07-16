@@ -116,13 +116,13 @@ export default function ClientDashboard() {
       // Fallback: Check if we have received any inbound emails for this quote
       const { data: inboundEmails } = await supabase
         .from('inbound_emails')
-        .select('from_email')
+        .select('sender_email')
         .ilike('subject', `%${quote.qn_number}%`)
         .order('created_at', { ascending: false })
         .limit(1);
 
       if (inboundEmails && inboundEmails.length > 0) {
-        targetEmail = inboundEmails[0].from_email;
+        targetEmail = inboundEmails[0].sender_email;
       }
     }
 
@@ -200,7 +200,7 @@ export default function ClientDashboard() {
         body: JSON.stringify({
           tenantId: user?.tenant_id || tenantId,
           emailId: selectedInboxEmail.id,
-          to: selectedInboxEmail.from_email,
+          to: selectedInboxEmail.sender_email,
           subject: selectedInboxEmail.subject.startsWith('Re:') ? selectedInboxEmail.subject : `Re: ${selectedInboxEmail.subject}`,
           htmlBody: inboxReplyText.replace(/\n/g, '<br/>'),
           parsedTenantId: user?.tenant_id || tenantId
