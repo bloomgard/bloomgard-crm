@@ -422,7 +422,9 @@ export default function ClientDashboard() {
   // DERIVED STATE: AI Alerts Triage
   const pendingAlerts = visibleRecords.filter(r => {
     // 1. Status Filter Check
-    if (triageStatusFilters.length > 0 && r.status && !triageStatusFilters.includes(r.status)) return false;
+    if (triageStatusFilters.length > 0) {
+      if (!r.status || !triageStatusFilters.includes(r.status)) return false;
+    }
 
     // Flag quotes that haven't been dispatched yet
     if (r.follow_up_status === 'Agent Dispatched' || r.custom_metadata?.follow_up_status === 'Agent Dispatched') return false;
@@ -1443,6 +1445,7 @@ Command: ${dashCommand}`;
                           onChange={(e) => setTriageDaysFilter(Number(e.target.value))}
                           className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 outline-none focus:border-indigo-500"
                         >
+                          <option value={0}>0 Days (Immediate)</option>
                           <option value={1}>1 Day</option>
                           <option value={2}>2 Days</option>
                           <option value={3}>3 Days</option>
