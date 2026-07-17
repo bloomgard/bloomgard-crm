@@ -117,7 +117,7 @@ RULES:
       await sendEmail({
         from: `${fromName} <${fromEmail}>`,
         to: clientEmail,
-        replyTo: parsedTenantId ? `${parsedTenantId}@inbound.bloomgard.co` : undefined,
+        replyTo: tenant.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : undefined,
         subject: `Re: Following up on Quote ${quote.qn_number}`,
         text: agentReply,
         headers

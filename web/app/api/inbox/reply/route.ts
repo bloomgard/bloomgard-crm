@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     await sendEmail({
       from: `${fromName} <${fromEmail}>`,
       to,
-      replyTo: parsedTenantId ? `${parsedTenantId}@inbound.bloomgard.co` : undefined,
+      replyTo: tenant.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : undefined,
       subject,
       html: htmlBody,
       headers
