@@ -105,8 +105,6 @@ export default function ClientDashboard() {
 
   const [quoteReplyTexts, setQuoteReplyTexts] = useState({});
   const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
-  const [autoPilotStates, setAutoPilotStates] = useState({});
-  const [isTogglingAutoPilot, setIsTogglingAutoPilot] = useState(false);
 
   const handleQuoteReply = async (quote: any) => {
     const text = quoteReplyTexts[quote.id as keyof typeof quoteReplyTexts] as string;
@@ -220,34 +218,6 @@ export default function ClientDashboard() {
       alert("Error sending reply");
     } finally {
       setIsSendingReply(false);
-    }
-  };
-
-  const handleToggleAutoPilot = async (threadId: string) => {
-    if (!threadId) return;
-    const currentState = autoPilotStates[threadId] || false;
-    const newState = !currentState;
-    
-    setAutoPilotStates(prev => ({ ...prev, [threadId]: newState }));
-    setIsTogglingAutoPilot(true);
-    
-    try {
-      const res = await fetch(getApiUrl('/api/inbox/auto-pilot'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: user?.tenant_id || tenantId,
-          threadId: threadId,
-          isAutoPilot: newState
-        })
-      });
-      if (!res.ok) throw new Error("Failed to toggle auto-pilot");
-    } catch (e) {
-      console.error(e);
-      setAutoPilotStates(prev => ({ ...prev, [threadId]: currentState }));
-      alert("Error toggling AI Auto-Pilot");
-    } finally {
-      setIsTogglingAutoPilot(false);
     }
   };
 
@@ -436,16 +406,6 @@ export default function ClientDashboard() {
       if (!res.ok) throw new Error("API Auth Error");
       const { data } = await res.json();
       if (data) setInboxLogs(data);
-
-      // Fetch Thread States for auto-pilot if possible
-      if (tenantId) {
-        const { data: states } = await supabase.from('thread_states').select('*').eq('tenant_id', tenantId);
-        if (states) {
-          const statesMap = {};
-          states.forEach(s => { statesMap[s.thread_id] = s.is_auto_pilot; });
-          setAutoPilotStates(statesMap);
-        }
-      }
     } catch (err) { console.error("Inbox Fetch Error:", err); }
   }
 
@@ -1446,11 +1406,50 @@ Command: ${dashCommand}`;
 
                 {triageTab === 'due' && (
                   <>
+                    <div className="flex flex-wrap gap-4 mb-6 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <div className="flex-1 min-w-[200px]">
+                        <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Status Filters</label>
+                        <div className="flex flex-wrap gap-2">
+                          {allStatuses.map(status => (
+                            <button
+                              key={status as string}
+                              onClick={() => {
+                                setTriageStatusFilters(prev => 
+                                  prev.includes(status as string) 
+                                    ? prev.filter(s => s !== status) 
+                                    : [...prev, status as string]
+                                );
+                              }}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${triageStatusFilters.includes(status as string) ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-indigo-100 border border-gray-200'}`}
+                            >
+                              {status as string}
+                            </button>
+                          ))}
+                          {allStatuses.length === 0 && <span className="text-sm text-gray-500">No statuses found</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Days Dormant</label>
+                        <select 
+                          value={triageDaysFilter} 
+                          onChange={(e) => setTriageDaysFilter(Number(e.target.value))}
+                          className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 outline-none focus:border-indigo-500"
+                        >
+                          <option value={1}>1 Day</option>
+                          <option value={2}>2 Days</option>
+                          <option value={3}>3 Days</option>
+                          <option value={5}>5 Days</option>
+                          <option value={7}>7 Days</option>
+                          <option value={14}>14+ Days</option>
+                        </select>
+                      </div>
+                    </div>
+
                     {pendingAlerts.length === 0 ? (
                       <div className="text-center py-16">
                         <span className="text-4xl mb-4 block opacity-50">✨</span>
                         <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
-                        <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here 3 days after creation.</p>
+                        <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here {triageDaysFilter} days after creation.</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -2493,21 +2492,6 @@ Command: ${dashCommand}`;
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {selectedInboxEmail.thread_id && (
-                        <button 
-                          onClick={() => handleToggleAutoPilot(selectedInboxEmail.thread_id)} 
-                          disabled={isTogglingAutoPilot}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider shadow-sm flex items-center gap-1 ${
-                            autoPilotStates[selectedInboxEmail.thread_id] 
-                              ? 'bg-green-100 text-green-700 border border-green-200 hover:bg-green-200' 
-                              : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
-                          }`}
-                          title="Let AI automatically reply to future messages in this thread"
-                        >
-                          <span className={autoPilotStates[selectedInboxEmail.thread_id] ? "animate-pulse" : ""}>🤖</span> 
-                          {autoPilotStates[selectedInboxEmail.thread_id] ? 'Auto-Pilot ON' : 'Auto-Pilot OFF'}
-                        </button>
-                      )}
                       <button onClick={() => handleInboxAction(selectedInboxEmail.id, 'is_starred', !selectedInboxEmail.is_starred)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-lg" title="Star">
                          {selectedInboxEmail.is_starred ? '⭐' : '☆'}
                       </button>

@@ -109,27 +109,6 @@ export async function POST(request: Request) {
     // --- SYNCHRONOUS LOGGING TO QUOTE ---
     // Moved to 'after()' so the webhook instantly returns 200 OK to Resend and avoids timeouts!
     after(async () => {
-      // Check if thread is on Auto-Pilot
-      const { data: threadState } = await supabase
-        .from('thread_states')
-        .select('is_auto_pilot')
-        .eq('thread_id', threadId)
-        .single();
-
-      if (threadState?.is_auto_pilot) {
-        let baseUrl = 'https://bloomgard.vercel.app';
-        try { baseUrl = new URL(request.url).origin; } catch(e) {}
-        
-        // Trigger Auto-Pilot Engine
-        fetch(`${baseUrl}/api/ai-auto-reply`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ threadId, tenantId: tenant.id })
-        }).catch(err => console.error("Async AI Auto-Pilot trigger failed:", err));
-        
-        // Skip the legacy process-reply if on auto-pilot to prevent duplicate replies
-        return;
-      }
 
       const subjectLine = payload.data.subject || '';
       const qnMatch = subjectLine.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);
@@ -163,24 +142,19 @@ export async function POST(request: Request) {
         }]);
         
         // TRIGGER ASYNCHRONOUS AI PROCESSING
-        if (tenant.ai_enabled) {
+        const isAgentDispatched = quote.follow_up_status === 'Agent Dispatched' || quote.custom_metadata?.follow_up_status === 'Agent Dispatched';
+        
+        if (tenant.ai_enabled && isAgentDispatched) {
           let baseUrl = 'https://bloomgard.vercel.app';
           try {
              baseUrl = new URL(request.url).origin;
           } catch(e) {}
           
-          fetch(`${baseUrl}/api/ai/process-reply`, {
+          fetch(`${baseUrl}/api/ai-auto-reply`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tenantId: tenant.id,
-              quoteId: quote.id,
-              clientEmail: clientEmail,
-              clientMessage: clientMessage,
-              parsedTenantId: parsedTenantId,
-              messageId: payload.data.message_id || ''
-            })
-          }).catch(err => console.error("Async AI trigger failed:", err));
+            body: JSON.stringify({ threadId, tenantId: tenant.id })
+          }).catch(err => console.error("Async AI Auto-Pilot trigger failed:", err));
         }
       }
     });
