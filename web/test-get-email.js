@@ -1,5 +1,5 @@
 const { Resend } = require('resend');
-const resend = new Resend('re_j3naomwp_Mhqjhk58nXYVtqAc1J1Kfc7K');
+const resend = new Resend('re_65rYPQU4_5UBsHcTJuacqhgK2AyQZHr2r');
 
 async function check() {
   console.log("Fetching email...");

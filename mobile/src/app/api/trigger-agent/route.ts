@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getDynamicSender, sendEmail } from '@/lib/postal';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const AI_MODEL = 'openai/gpt-3.5-turbo';
+const AI_MODEL = 'openai/gpt-3.5-turbo'; 
 
 export async function POST(request: Request) {
   try {
@@ -29,39 +29,26 @@ export async function POST(request: Request) {
     }
 
     const clientName = quote.clients?.company_name || quote.custom_metadata?.client_name || 'Client';
-    let clientEmail = quote.client_email || quote.clients?.email || quote.clients?.email_id || quote.custom_metadata?.client_email || quote.custom_metadata?.email_id || quote.custom_metadata?.['Client Information']?.email;
-
+    const clientEmail = quote.clients?.email_id || quote.custom_metadata?.email_id;
+    
     if (!clientEmail) {
-      // Fallback: Check if we have received any inbound emails for this quote
-      const { data: inboundEmails } = await supabase
-        .from('inbound_emails')
-        .select('sender_email')
-        .ilike('subject', `%${quote.qn_number}%`)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (inboundEmails && inboundEmails.length > 0) {
-        clientEmail = inboundEmails[0].sender_email;
-      }
+        throw new Error('No email address found for this client.');
     }
 
-    if (!clientEmail) {
-      throw new Error('No email address found for this client. Cannot dispatch agent.');
-    }
     const itemsSummary = quote.quotation_items?.map((item: any) => `${item.quantity}x ${item.item_name}`).join(', ') || 'the requested items';
-
+    
     const { data: schema } = await supabase
       .from('tenant_schemas')
       .select('schema_config')
       .eq('tenant_id', tenantId)
       .single();
-
+      
     const { data: tenantData } = await supabase
       .from('tenants')
-      .select('*')
+      .select('company_name, custom_email_sender, email_provider')
       .eq('id', tenantId)
       .single();
-
+    
     let tone = 'Professional', englishLevel = 'Native', desperation = 'Low';
     if (schema?.schema_config) {
       const aiSettingsConfig = schema.schema_config.find((s: any) => s.is_ai_settings);
@@ -99,7 +86,7 @@ export async function POST(request: Request) {
       headers: {
         "Authorization": `Bearer ${AI_API_KEY}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://bloomgard.vercel.app",
+        "HTTP-Referer": "https://bloomgard.vercel.app", 
       },
       body: JSON.stringify({
         model: AI_MODEL,
@@ -113,31 +100,31 @@ export async function POST(request: Request) {
 
     // Transporter removed in favor of native Resend
 
-    const tenantDomain = tenantData?.website ? new URL(tenantData.website).hostname.replace('www.', '') : undefined;
+    // @ts-ignore
+    const tenantDomain = tenantData?.website ? new URL(tenantData.website).hostname.replace(/^www\./, '') : undefined;
     const fromString = getDynamicSender(tenantData?.company_name, tenantData?.custom_email_sender, tenantDomain);
 
     const mailOptions = {
-      from: fromString,
+      from: fromString, 
       to: clientEmail,
-      replyTo: `${tenantId}@inbound.bloomgard.co`,
       subject: `Following up on Quote ${quote.qn_number}`,
       text: emailBody
     };
 
     await sendEmail(mailOptions);
     const now = new Date().toISOString();
-
+    
     let meta = quote.custom_metadata;
-    if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
+    if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) { meta = {}; } }
     if (!meta) meta = {};
     if (!meta.agent_conversations) meta.agent_conversations = [];
-
+    
     meta.agent_conversations.push({
       role: 'agent',
       content: emailBody,
       timestamp: now
     });
-
+    
     if (!meta.agent_summary) {
       meta.agent_summary = "Initial Follow-up Email Sent.";
     }
