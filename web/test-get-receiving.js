@@ -1,5 +1,6 @@
 const { Resend } = require('resend');
-const resend = new Resend('re_8CEMCQLa_LVTkZoCwpUV2asZVaY6UwTVn');
+require('dotenv').config({ path: '.env.local' });
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function check() {
   console.log("Fetching receiving email...");
