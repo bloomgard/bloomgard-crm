@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getDynamicSender, sendEmail } from '@/lib/postal';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Define headers that allow Android WebView to communicate with the server
 const corsHeaders = {
@@ -34,7 +39,15 @@ export async function POST(req: Request) {
       };
     }) || [];
 
-    const replyToAddress = tenantId ? `${tenantId}@inbound.bloomgard.co` : agentEmail;
+    let replyToAddress = agentEmail;
+    if (tenantId) {
+      const { data: tenant } = await supabase.from('tenants').select('inbound_routing_id').eq('id', tenantId).single();
+      if (tenant?.inbound_routing_id) {
+        replyToAddress = `${tenant.inbound_routing_id}@inbound.bloomgard.co`;
+      } else {
+        replyToAddress = `${tenantId}@inbound.bloomgard.co`;
+      }
+    }
 
     const emailPayload: any = {
       from: fromString,

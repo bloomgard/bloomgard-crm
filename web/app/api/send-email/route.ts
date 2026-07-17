@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { createClient } from '@supabase/supabase-js';
 
-// Environment Variables Only: Ensure the Resend client is initialized using process.env.RESEND_API_KEY
+// Environment Variables Only
 const resend = new Resend(process.env.RESEND_API_KEY);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Define headers that allow Android WebView/cross-origin to communicate with the server
 const corsHeaders = {
@@ -43,8 +47,18 @@ export async function POST(req: Request) {
     const fromEmail = customSender || 'support@bloomgard.co';
     const fromString = `${fromName} <${fromEmail}>`;
 
-    // 2. Add 'Reply-To': dynamic inbound routing address
-    const replyToAddress = tenantId ? `${tenantId}@inbound.bloomgard.co` : undefined;
+    // 2. Add 'Reply-To': dynamic inbound routing address (from settings/slug)
+    let replyToAddress = undefined;
+    if (body.routingSlug) {
+      replyToAddress = `${body.routingSlug}@inbound.bloomgard.co`;
+    } else if (tenantId) {
+      const { data: tenant } = await supabase.from('tenants').select('inbound_routing_id').eq('id', tenantId).single();
+      if (tenant?.inbound_routing_id) {
+        replyToAddress = `${tenant.inbound_routing_id}@inbound.bloomgard.co`;
+      } else {
+        replyToAddress = `${tenantId}@inbound.bloomgard.co`; // Fallback
+      }
+    }
 
     // 3. Maintain Threading: Ensure the headers object containing In-Reply-To and References is preserved
     let headers: any = {};

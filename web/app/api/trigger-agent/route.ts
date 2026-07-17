@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     const mailOptions = {
       from: fromString,
       to: clientEmail,
-      replyTo: `${tenantId}@inbound.bloomgard.co`,
+      replyTo: tenantData?.inbound_routing_id ? `${tenantData.inbound_routing_id}@inbound.bloomgard.co` : `${tenantId}@inbound.bloomgard.co`,
       subject: `Following up on Quote ${quote.qn_number}`,
       text: emailBody
     };
