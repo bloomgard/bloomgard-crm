@@ -1,7 +1,9 @@
 import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
-const resend = new Resend('re_YTHzTr5S_5yo7hedSKXA9cBXAgH2ACWPo');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function testResend() {
   console.log('Testing Resend...');
