@@ -446,9 +446,10 @@ export default function ClientDashboard() {
       return isNaN(parsed.getTime()) ? new Date() : parsed;
     };
 
+    if (triageDaysFilter === 0) return true;
+    
     const dueDate = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
     if (!dueDate) {
-      if (triageDaysFilter === 0) return true;
       // Prioritize the manual 'date' field over the unchangeable 'created_at' so manual database edits actually take effect
       const createdDate = parseSafeDate(r.date || r.created_at || Date.now());
       const daysOld = (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
