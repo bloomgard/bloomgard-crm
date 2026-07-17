@@ -105,6 +105,8 @@ export default function ClientDashboard() {
 
   const [quoteReplyTexts, setQuoteReplyTexts] = useState({});
   const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
+  const [autoPilotStates, setAutoPilotStates] = useState({});
+  const [isTogglingAutoPilot, setIsTogglingAutoPilot] = useState(false);
 
   const handleQuoteReply = async (quote: any) => {
     const text = quoteReplyTexts[quote.id as keyof typeof quoteReplyTexts] as string;
@@ -218,6 +220,34 @@ export default function ClientDashboard() {
       alert("Error sending reply");
     } finally {
       setIsSendingReply(false);
+    }
+  };
+
+  const handleToggleAutoPilot = async (threadId: string) => {
+    if (!threadId) return;
+    const currentState = autoPilotStates[threadId] || false;
+    const newState = !currentState;
+    
+    setAutoPilotStates(prev => ({ ...prev, [threadId]: newState }));
+    setIsTogglingAutoPilot(true);
+    
+    try {
+      const res = await fetch(getApiUrl('/api/inbox/auto-pilot'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: user?.tenant_id || tenantId,
+          threadId: threadId,
+          isAutoPilot: newState
+        })
+      });
+      if (!res.ok) throw new Error("Failed to toggle auto-pilot");
+    } catch (e) {
+      console.error(e);
+      setAutoPilotStates(prev => ({ ...prev, [threadId]: currentState }));
+      alert("Error toggling AI Auto-Pilot");
+    } finally {
+      setIsTogglingAutoPilot(false);
     }
   };
 
@@ -406,6 +436,16 @@ export default function ClientDashboard() {
       if (!res.ok) throw new Error("API Auth Error");
       const { data } = await res.json();
       if (data) setInboxLogs(data);
+
+      // Fetch Thread States for auto-pilot if possible
+      if (tenantId) {
+        const { data: states } = await supabase.from('thread_states').select('*').eq('tenant_id', tenantId);
+        if (states) {
+          const statesMap = {};
+          states.forEach(s => { statesMap[s.thread_id] = s.is_auto_pilot; });
+          setAutoPilotStates(statesMap);
+        }
+      }
     } catch (err) { console.error("Inbox Fetch Error:", err); }
   }
 
@@ -2453,6 +2493,21 @@ Command: ${dashCommand}`;
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {selectedInboxEmail.thread_id && (
+                        <button 
+                          onClick={() => handleToggleAutoPilot(selectedInboxEmail.thread_id)} 
+                          disabled={isTogglingAutoPilot}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider shadow-sm flex items-center gap-1 ${
+                            autoPilotStates[selectedInboxEmail.thread_id] 
+                              ? 'bg-green-100 text-green-700 border border-green-200 hover:bg-green-200' 
+                              : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                          }`}
+                          title="Let AI automatically reply to future messages in this thread"
+                        >
+                          <span className={autoPilotStates[selectedInboxEmail.thread_id] ? "animate-pulse" : ""}>🤖</span> 
+                          {autoPilotStates[selectedInboxEmail.thread_id] ? 'Auto-Pilot ON' : 'Auto-Pilot OFF'}
+                        </button>
+                      )}
                       <button onClick={() => handleInboxAction(selectedInboxEmail.id, 'is_starred', !selectedInboxEmail.is_starred)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-lg" title="Star">
                          {selectedInboxEmail.is_starred ? '⭐' : '☆'}
                       </button>
