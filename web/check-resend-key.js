@@ -1,5 +1,5 @@
 const { Resend } = require('resend');
-const resend = new Resend('re_65rYPQU4_5UBsHcTJuacqhgK2AyQZHr2r');
+const resend = new Resend('re_8CEMCQLa_LVTkZoCwpUV2asZVaY6UwTVn');
 
 async function check() {
   console.log("Checking API key...");
