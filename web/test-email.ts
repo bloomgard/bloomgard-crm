@@ -27,8 +27,8 @@ async function testPostal() {
       host: 'mail.bloomgard.co',
       port: 2525,
       auth: { 
-        user: 'postal', 
-        pass: '8a6RLrLoDKmF5oa5dBPHRQaI' 
+        user: process.env.POSTAL_USER || 'postal', 
+        pass: process.env.POSTAL_PASS 
       }
     });
     const result = await transporter.sendMail({
