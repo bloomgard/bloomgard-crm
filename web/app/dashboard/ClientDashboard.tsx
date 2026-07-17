@@ -105,6 +105,8 @@ export default function ClientDashboard() {
 
   const [quoteReplyTexts, setQuoteReplyTexts] = useState({});
   const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
+  const [triageStatusFilters, setTriageStatusFilters] = useState<string[]>([]);
+  const [triageDaysFilter, setTriageDaysFilter] = useState(3);
 
   const handleQuoteReply = async (quote: any) => {
     const text = quoteReplyTexts[quote.id as keyof typeof quoteReplyTexts] as string;
@@ -419,10 +421,16 @@ export default function ClientDashboard() {
 
   // DERIVED STATE: AI Alerts Triage
   const pendingAlerts = visibleRecords.filter(r => {
+    // 1. Status Filter Check
+    if (triageStatusFilters.length > 0 && r.status && !triageStatusFilters.includes(r.status)) return false;
+
     // Flag quotes that haven't been dispatched yet
     if (r.follow_up_status === 'Agent Dispatched' || r.custom_metadata?.follow_up_status === 'Agent Dispatched') return false;
-    // Don't flag quotes that are already Approved or Lost
-    if (r.status === 'Approved' || r.status === 'Lost') return false;
+    
+    // Don't flag quotes that are already Approved or Lost unless specified in filters
+    if (triageStatusFilters.length === 0) {
+      if (r.status === 'Approved' || r.status === 'Lost') return false;
+    }
 
     const parseSafeDate = (dString: any) => {
       if (!dString) return new Date();
@@ -441,7 +449,7 @@ export default function ClientDashboard() {
       // Prioritize the manual 'date' field over the unchangeable 'created_at' so manual database edits actually take effect
       const createdDate = parseSafeDate(r.date || r.created_at || Date.now());
       const daysOld = (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
-      return daysOld >= 3;
+      return daysOld >= triageDaysFilter;
     }
 
     // Check if the due date is today or in the past
