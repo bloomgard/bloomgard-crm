@@ -448,10 +448,12 @@ export default function ClientDashboard() {
 
     const dueDate = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
     if (!dueDate) {
+      if (triageDaysFilter === 0) return true;
       // Prioritize the manual 'date' field over the unchangeable 'created_at' so manual database edits actually take effect
       const createdDate = parseSafeDate(r.date || r.created_at || Date.now());
       const daysOld = (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
-      return daysOld >= triageDaysFilter;
+      // Add a small buffer for clock skew if testing immediate quotes, though triageDaysFilter === 0 handles most cases
+      return daysOld >= (triageDaysFilter - 0.05);
     }
 
     // Check if the due date is today or in the past
