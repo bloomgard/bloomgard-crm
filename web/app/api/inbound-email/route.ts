@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { processAiAutoReply } from '@/lib/ai-agent';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -145,16 +146,8 @@ export async function POST(request: Request) {
         const isAgentDispatched = quote.follow_up_status === 'Agent Dispatched' || quote.custom_metadata?.follow_up_status === 'Agent Dispatched';
         
         if (tenant.ai_enabled && isAgentDispatched) {
-          let baseUrl = 'https://bloomgard.vercel.app';
-          try {
-             baseUrl = new URL(request.url).origin;
-          } catch(e) {}
-          
-          fetch(`${baseUrl}/api/ai-auto-reply`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ threadId, tenantId: tenant.id })
-          }).catch(err => console.error("Async AI Auto-Pilot trigger failed:", err));
+          console.log("Triggering AI Auto-Pilot for thread:", threadId);
+          processAiAutoReply(threadId, tenant.id).catch(err => console.error("Async AI Auto-Pilot trigger failed:", err));
         }
       }
     });
