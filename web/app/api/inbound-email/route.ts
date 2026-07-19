@@ -146,9 +146,12 @@ export async function POST(request: Request) {
         
         if (tenant.ai_enabled && isAgentDispatched) {
           const { processAiAutoReply } = require('@/lib/ai-reply');
-          processAiAutoReply(threadId, tenant.id)
-            .then(res => console.log('Async AI Auto-Pilot finished:', res))
-            .catch(err => console.error("Async AI Auto-Pilot trigger failed:", err));
+          try {
+            const res = await processAiAutoReply(threadId, tenant.id);
+            console.log('Async AI Auto-Pilot finished:', res);
+          } catch (err) {
+            console.error("Async AI Auto-Pilot trigger failed:", err);
+          }
         }
       }
     });
