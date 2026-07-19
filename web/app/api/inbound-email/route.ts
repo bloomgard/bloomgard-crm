@@ -145,16 +145,10 @@ export async function POST(request: Request) {
         const isAgentDispatched = quote.follow_up_status === 'Agent Dispatched' || quote.custom_metadata?.follow_up_status === 'Agent Dispatched';
         
         if (tenant.ai_enabled && isAgentDispatched) {
-          let baseUrl = 'https://bloomgard.vercel.app';
-          try {
-             baseUrl = new URL(request.url).origin;
-          } catch(e) {}
-          
-          fetch(`${baseUrl}/api/ai-auto-reply`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ threadId, tenantId: tenant.id })
-          }).catch(err => console.error("Async AI Auto-Pilot trigger failed:", err));
+          const { processAiAutoReply } = require('@/lib/ai-reply');
+          processAiAutoReply(threadId, tenant.id)
+            .then(res => console.log('Async AI Auto-Pilot finished:', res))
+            .catch(err => console.error("Async AI Auto-Pilot trigger failed:", err));
         }
       }
     });
