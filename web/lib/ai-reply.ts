@@ -22,20 +22,35 @@ export async function processAiAutoReply(threadId: string, tenantId: string) {
       return { success: false, message: 'AI disabled or missing API key' };
     }
 
-    // 2. Fetch Conversation History
-    const { data: emails } = await supabase
+    // 2. Fetch target email
+    const { data: targetEmails } = await supabase
       .from('inbound_emails')
       .select('*')
       .eq('thread_id', threadId)
       .order('created_at', { ascending: true });
 
-    if (!emails || emails.length === 0) {
+    if (!targetEmails || targetEmails.length === 0) {
       console.error('processAiAutoReply: No emails found in thread');
       return { success: false, error: 'No emails found in thread' };
     }
 
     // The most recent inbound email to reply to
-    const lastEmail = emails[emails.length - 1];
+    const lastEmail = targetEmails[targetEmails.length - 1];
+    
+    // 3. Fetch Full Conversation History by Quote Number
+    let emails = targetEmails;
+    const qnMatch = lastEmail.subject.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);
+    if (qnMatch) {
+       const { data: quoteEmails } = await supabase.from('inbound_emails')
+          .select('*')
+          .eq('tenant_id', tenant.id)
+          .ilike('subject', `%${qnMatch[0]}%`)
+          .order('created_at', { ascending: true });
+          
+       if (quoteEmails && quoteEmails.length > 0) {
+          emails = quoteEmails;
+       }
+    }
     
     // We don't want to reply to ourselves
     if (lastEmail.sender_email === tenant.custom_email_sender || lastEmail.sender_email.includes('@inbound.bloomgard.co')) {
@@ -142,7 +157,6 @@ RULES:
     });
 
     // 7. Log to Quote conversation history
-    const qnMatch = lastEmail.subject.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);
     if (qnMatch) {
        const { data: quote } = await supabase.from('quotations').select('*').eq('tenant_id', tenant.id).eq('qn_number', qnMatch[0]).single();
        if (quote) {
