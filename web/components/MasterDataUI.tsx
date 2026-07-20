@@ -98,12 +98,22 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
     refreshTree();
   };
 
+  const MAX_LEVELS = 10;
+  const TOTAL_COLS = MAX_LEVELS * 3;
+
   const renderGridNodes = (nodes: MasterDataEntry[], depth = 0) => {
+    // If depth exceeds our max supported, cap it so it doesn't break table
+    const safeDepth = Math.min(depth, MAX_LEVELS - 1);
+    const leftSpacers = safeDepth * 3;
+    const rightSpacers = TOTAL_COLS - leftSpacers - 3;
+    
     return nodes.map(node => (
       <React.Fragment key={node.id}>
         {/* The Action row ABOVE the value */}
         <tr className="bg-white">
-          <td className="border-r border-black p-0 h-10 relative" style={{ paddingLeft: `${depth * 30}px` }}>
+          {Array.from({ length: leftSpacers }).map((_, i) => <td key={`left-${node.id}-1-${i}`} className="border border-black bg-gray-50/30"></td>)}
+          
+          <td className="border-r border-black p-0 h-10 relative">
             <div className="flex h-full items-end justify-end w-full pr-0 pb-0">
                {/* Red delete button on top of key cell */}
                <button 
@@ -138,12 +148,14 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
             </div>
           </td>
           <td className="border-r border-black h-10"></td>
-          <td className="border-r border-black h-10"></td>
+          {Array.from({ length: rightSpacers }).map((_, i) => <td key={`right-${node.id}-1-${i}`} className="border border-black bg-gray-50/30"></td>)}
         </tr>
 
         {/* The Key / Value row */}
         <tr className="bg-white">
-          <td className="border-r border-t border-b border-black p-4 flex items-center min-h-[50px] w-full" style={{ paddingLeft: `${depth * 30 + 16}px` }}>
+          {Array.from({ length: leftSpacers }).map((_, i) => <td key={`left-${node.id}-2-${i}`} className="border border-black bg-gray-50/30"></td>)}
+          
+          <td className="border-r border-t border-b border-black p-4 flex items-center min-h-[50px] w-full">
             <span className="text-[#3b82f6] text-lg font-semibold mr-2 whitespace-nowrap">Key : </span>
             <span className="text-gray-900 text-lg font-medium truncate">{node.key_name}</span>
           </td>
@@ -177,11 +189,13 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                 +
               </button>
           </td>
-          <td className="border-r border-t border-b border-black p-0 w-auto"></td>
+          {Array.from({ length: rightSpacers }).map((_, i) => <td key={`right-${node.id}-2-${i}`} className="border border-black bg-gray-50/30"></td>)}
         </tr>
 
         {/* The Span Row to add Sibling */}
         <tr className="bg-white">
+          {Array.from({ length: leftSpacers }).map((_, i) => <td key={`left-${node.id}-3-${i}`} className="border border-black bg-gray-50/30"></td>)}
+          
           <td colSpan={2} className="border-r border-b border-black p-0 h-8">
              <button 
                 onClick={() => openCreateKeyModal(node.parent_id)}
@@ -192,11 +206,11 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
               </button>
           </td>
           <td className="border-r border-b border-black p-0"></td>
-          <td className="border-r border-b border-black p-0"></td>
+          {Array.from({ length: rightSpacers }).map((_, i) => <td key={`right-${node.id}-3-${i}`} className="border border-black bg-gray-50/30"></td>)}
         </tr>
         
         {/* Recursive Children */}
-        {node.children && node.children.length > 0 && renderGridNodes(node.children, depth + 1)}
+        {node.children && node.children.length > 0 && renderGridNodes(node.children, safeDepth + 1)}
       </React.Fragment>
     ));
   };
@@ -227,12 +241,15 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
           <div className="text-gray-400 text-center mt-20 font-medium">Loading Excel Grid...</div>
         ) : (
           <div className="inline-block relative">
-             <table className="border-collapse border-2 border-black table-fixed bg-white w-full" style={{ minWidth: '900px' }}>
+             <table className="border-collapse border-2 border-black table-fixed bg-white">
                <colgroup>
-                 <col style={{ width: '300px' }} />
-                 <col style={{ width: '400px' }} />
-                 <col style={{ width: '50px' }} />
-                 <col style={{ width: 'auto' }} />
+                 {Array.from({ length: 10 }).map((_, i) => (
+                   <React.Fragment key={`col-group-${i}`}>
+                     <col style={{ width: '250px' }} />
+                     <col style={{ width: '350px' }} />
+                     <col style={{ width: '50px' }} />
+                   </React.Fragment>
+                 ))}
                </colgroup>
                <tbody>
                   {masterTree.length === 0 ? (
@@ -246,7 +263,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                           </button>
                       </td>
                       <td className="border border-black"></td>
-                      <td className="border border-black"></td>
+                      {Array.from({ length: 27 }).map((_, i) => <td key={`empty-root-${i}`} className="border border-black bg-gray-50/30"></td>)}
                     </tr>
                   ) : (
                     renderGridNodes(masterTree)
@@ -254,10 +271,9 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                   {/* Empty rows at the bottom for infinite grid aesthetic */}
                   {Array.from({ length: 50 }).map((_, i) => (
                     <tr key={`empty-${i}`}>
-                      <td className="border border-black h-12"></td>
-                      <td className="border border-black"></td>
-                      <td className="border border-black"></td>
-                      <td className="border border-black"></td>
+                      {Array.from({ length: 30 }).map((_, colIndex) => (
+                         <td key={`empty-${i}-${colIndex}`} className="border border-black h-12 bg-gray-50/30"></td>
+                      ))}
                     </tr>
                   ))}
                </tbody>
