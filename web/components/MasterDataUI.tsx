@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { MasterDataEntry, MasterDataValue, useMasterDataFields } from "@/hooks/useMasterDataFields";
-import { Wand2, X, Save } from "lucide-react";
+import { Wand2, X, Save, Trash2 } from "lucide-react";
 
 type MasterDataUIProps = {
   tenantId: string;
@@ -82,19 +82,41 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
     refreshTree();
   };
 
+  const handleDeleteKey = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this key and all its data?")) return;
+    await fetch('/api/master-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deleteMasterKey',
+        payload: { id }
+      })
+    });
+    refreshTree();
+  };
+
   const renderGridNodes = (nodes: MasterDataEntry[], depth = 0) => {
     return nodes.map(node => (
       <React.Fragment key={node.id}>
         {/* The Action row ABOVE the value */}
         <tr className="bg-white">
-          <td className="border-r-2 border-black p-0" style={{ minWidth: `${depth * 40 + 150}px` }}>
-            {/* Empty space above Key */}
+          <td className="border-r-2 border-black p-0 h-10 relative" style={{ paddingLeft: `${depth * 30}px` }}>
+            <div className="flex h-full items-end justify-end w-full pr-0 pb-0">
+               {/* Red delete button on top of key cell */}
+               <button 
+                 onClick={() => handleDeleteKey(node.id)}
+                 className="bg-red-500 text-white w-8 h-8 flex items-center justify-center hover:bg-red-600 transition-colors"
+                 title="Delete Key"
+               >
+                 <Trash2 size={16} />
+               </button>
+            </div>
           </td>
-          <td className="p-0 border-r-2 border-black">
-            <div className="flex items-end">
+          <td className="p-0 border-r-2 border-black h-10 align-bottom">
+            <div className="flex items-end h-full">
               <button 
                 onClick={() => handleAddValue(node.id)}
-                className="bg-[#436bf9] text-white w-24 h-10 flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
+                className="bg-[#436bf9] text-white w-16 h-8 flex items-center justify-center font-bold text-xl hover:bg-blue-600 transition-colors"
                 title="Add Value Option"
               >
                 +
@@ -105,54 +127,53 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                   setAiDescription(node.ai_description || "");
                   setAiDrawerOpen(true);
                 }}
-                className="bg-[#f042d7] text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-3xl hover:scale-105 transition-transform ml-2 mb-1 shadow-sm"
+                className="bg-[#f042d7] text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-xl hover:scale-105 transition-transform ml-2 shadow-sm"
                 title="AI Settings"
               >
                 +
               </button>
             </div>
           </td>
-          <td className="border-r-2 border-black"></td>
-          <td className="border-r-2 border-black"></td>
+          <td className="border-r-2 border-black h-10"></td>
+          <td className="border-r-2 border-black h-10"></td>
         </tr>
 
         {/* The Key / Value row */}
         <tr className="bg-white">
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 flex items-center h-full min-h-[64px]" style={{ paddingLeft: `${depth * 40 + 16}px` }}>
-            <span className="text-[#3b82f6] text-2xl font-semibold mr-2">Key : </span>
-            <span className="text-gray-900 text-2xl font-medium">{node.key_name}</span>
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 flex items-center min-h-[50px] w-full" style={{ paddingLeft: `${depth * 30 + 16}px` }}>
+            <span className="text-[#3b82f6] text-lg font-semibold mr-2 whitespace-nowrap">Key : </span>
+            <span className="text-gray-900 text-lg font-medium truncate">{node.key_name}</span>
           </td>
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 relative min-h-[64px]">
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 relative min-h-[50px]">
             <div className="flex flex-col">
-              <span className="text-[#4a4a4a] text-2xl font-medium mb-3">Value</span>
+              <span className="text-[#4a4a4a] text-lg font-medium mb-2">Value</span>
               <div className="flex flex-wrap gap-2">
                 {node.values?.map(val => (
-                  <span key={val.id} className="bg-gray-200 text-gray-800 px-3 py-1.5 text-sm font-medium rounded border border-gray-300">
+                  <span key={val.id} className="bg-gray-200 text-gray-800 px-2 py-1 text-xs font-medium rounded border border-gray-300">
                     {val.value_text}
                   </span>
                 ))}
               </div>
             </div>
           </td>
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-0">
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-0 h-full w-[50px]">
              <button 
                 onClick={() => openCreateKeyModal(node.id)}
-                className="bg-[#436bf9] text-white w-12 h-[calc(100%+4px)] min-h-[64px] flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
+                className="bg-[#436bf9] text-white w-full h-full min-h-[50px] flex items-center justify-center font-bold text-2xl hover:bg-blue-600 transition-colors"
                 title="Add Nested Child Key"
-                style={{ marginTop: "-2px", marginBottom: "-2px" }}
               >
                 +
               </button>
           </td>
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-0 min-w-[200px]"></td>
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-0 w-auto"></td>
         </tr>
 
         {/* The Span Row to add Sibling */}
         <tr className="bg-white">
-          <td colSpan={2} className="border-r-2 border-b-2 border-black p-0 h-10">
+          <td colSpan={2} className="border-r-2 border-b-2 border-black p-0 h-8">
              <button 
                 onClick={() => openCreateKeyModal(node.parent_id)}
-                className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
+                className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-2xl hover:bg-blue-600 transition-colors"
                 title="Add Sibling Key"
               >
                 +
@@ -194,28 +215,34 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
           <div className="text-gray-400 text-center mt-20 font-medium">Loading Excel Grid...</div>
         ) : (
           <div className="inline-block relative">
-             <table className="border-collapse border-4 border-black min-w-[800px] table-fixed bg-white">
+             <table className="border-collapse border-[3px] border-black table-fixed bg-white w-full" style={{ minWidth: '900px' }}>
+               <colgroup>
+                 <col style={{ width: '300px' }} />
+                 <col style={{ width: '400px' }} />
+                 <col style={{ width: '50px' }} />
+                 <col style={{ width: 'auto' }} />
+               </colgroup>
                <tbody>
                   {masterTree.length === 0 ? (
                     <tr>
-                      <td colSpan={2} className="border-2 border-black p-0 h-12">
+                      <td colSpan={2} className="border-2 border-black p-0 h-10">
                          <button 
                             onClick={() => openCreateKeyModal(null)}
-                            className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
+                            className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-2xl hover:bg-blue-600 transition-colors"
                           >
                             +
                           </button>
                       </td>
-                      <td className="border-2 border-black w-16"></td>
-                      <td className="border-2 border-black min-w-[200px]"></td>
+                      <td className="border-2 border-black"></td>
+                      <td className="border-2 border-black"></td>
                     </tr>
                   ) : (
                     renderGridNodes(masterTree)
                   )}
                   {/* Empty rows at the bottom for strict grid aesthetic */}
-                  <tr><td className="border-2 border-black h-16 w-64"></td><td className="border-2 border-black min-w-[300px]"></td><td className="border-2 border-black w-16"></td><td className="border-2 border-black min-w-[200px]"></td></tr>
-                  <tr><td className="border-2 border-black h-16"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
-                  <tr><td className="border-2 border-black h-16"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
+                  <tr><td className="border-2 border-black h-12"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
+                  <tr><td className="border-2 border-black h-12"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
+                  <tr><td className="border-2 border-black h-12"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
                </tbody>
              </table>
           </div>

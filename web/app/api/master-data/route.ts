@@ -104,6 +104,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data }, { status: 200 });
     }
 
+    if (action === 'deleteMasterKey') {
+      const { data, error } = await supabase.from('master_data_entries').delete().eq('id', payload.id);
+      if (error) throw error;
+      return NextResponse.json({ success: true, data }, { status: 200 });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (err: any) {
     console.error('Master Data POST Error:', err);
