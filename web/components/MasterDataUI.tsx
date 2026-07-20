@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { MasterDataEntry, MasterDataValue, useMasterDataFields } from "@/hooks/useMasterDataFields";
-import { Plus, Wand2, X, Save } from "lucide-react";
+import { Wand2, X, Save } from "lucide-react";
 
 type MasterDataUIProps = {
   tenantId: string;
+  schemaFields: string[];
 };
 
-export default function MasterDataUI({ tenantId }: MasterDataUIProps) {
+export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIProps) {
   const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
   const { masterTree, isLoading, refreshTree } = useMasterDataFields(tenantId, activeTab);
 
@@ -16,9 +17,12 @@ export default function MasterDataUI({ tenantId }: MasterDataUIProps) {
   const [selectedEntryForAi, setSelectedEntryForAi] = useState<MasterDataEntry | null>(null);
   const [aiDescription, setAiDescription] = useState("");
 
-  const handleCreateKey = async (parentId: string | null) => {
-    const keyName = prompt("Enter new key name:");
-    if (!keyName) return;
+  const [createKeyModalOpen, setCreateKeyModalOpen] = useState(false);
+  const [createKeyParentId, setCreateKeyParentId] = useState<string | null>(null);
+  const [newKeyName, setNewKeyName] = useState("");
+
+  const handleCreateKey = async () => {
+    if (!newKeyName) return;
     
     await fetch('/api/master-data', {
       method: 'POST',
@@ -28,12 +32,20 @@ export default function MasterDataUI({ tenantId }: MasterDataUIProps) {
         payload: {
           tenant_id: tenantId,
           tab_type: activeTab,
-          key_name: keyName,
-          parent_id: parentId
+          key_name: newKeyName,
+          parent_id: createKeyParentId
         }
       })
     });
+    setCreateKeyModalOpen(false);
+    setNewKeyName("");
     refreshTree();
+  };
+
+  const openCreateKeyModal = (parentId: string | null) => {
+    setCreateKeyParentId(parentId);
+    setNewKeyName(schemaFields.length > 0 ? schemaFields[0] : "");
+    setCreateKeyModalOpen(true);
   };
 
   const handleAddValue = async (entryId: string) => {
@@ -74,13 +86,16 @@ export default function MasterDataUI({ tenantId }: MasterDataUIProps) {
     return nodes.map(node => (
       <React.Fragment key={node.id}>
         {/* The Action row ABOVE the value */}
-        <tr>
-          <td className="border-r border-black p-0" style={{ paddingLeft: `${depth * 20}px` }}></td>
-          <td className="p-0 border-r border-black">
-            <div className="flex">
+        <tr className="bg-white">
+          <td className="border-r-2 border-black p-0" style={{ minWidth: `${depth * 40 + 150}px` }}>
+            {/* Empty space above Key */}
+          </td>
+          <td className="p-0 border-r-2 border-black">
+            <div className="flex items-end">
               <button 
                 onClick={() => handleAddValue(node.id)}
-                className="bg-[#436bf9] text-white w-24 h-8 flex items-center justify-center font-bold text-xl hover:bg-blue-600 transition-colors"
+                className="bg-[#436bf9] text-white w-24 h-10 flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
+                title="Add Value Option"
               >
                 +
               </button>
@@ -90,55 +105,61 @@ export default function MasterDataUI({ tenantId }: MasterDataUIProps) {
                   setAiDescription(node.ai_description || "");
                   setAiDrawerOpen(true);
                 }}
-                className="bg-[#f042d7] text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-xl hover:scale-105 transition-transform ml-2 shadow-sm"
+                className="bg-[#f042d7] text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-3xl hover:scale-105 transition-transform ml-2 mb-1 shadow-sm"
+                title="AI Settings"
               >
                 +
               </button>
             </div>
           </td>
-          <td className="border-r border-black"></td>
-          <td className="border-r border-black"></td>
+          <td className="border-r-2 border-black"></td>
+          <td className="border-r-2 border-black"></td>
         </tr>
 
         {/* The Key / Value row */}
-        <tr>
-          <td className="border-r border-t border-b border-black p-3" style={{ paddingLeft: `${depth * 20 + 12}px` }}>
-            <span className="text-[#3b82f6] text-2xl font-semibold">Key : </span>
-            <span className="text-gray-800 text-xl font-medium">{node.key_name}</span>
+        <tr className="bg-white">
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 flex items-center h-full min-h-[64px]" style={{ paddingLeft: `${depth * 40 + 16}px` }}>
+            <span className="text-[#3b82f6] text-2xl font-semibold mr-2">Key : </span>
+            <span className="text-gray-900 text-2xl font-medium">{node.key_name}</span>
           </td>
-          <td className="border-r border-t border-b border-black p-3 relative bg-[#fcfcfc]">
-            <span className="text-[#4a4a4a] text-2xl font-semibold">Value</span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {node.values?.map(val => (
-                <span key={val.id} className="bg-gray-200 text-gray-800 px-2 py-1 text-xs rounded border border-gray-300">
-                  {val.value_text}
-                </span>
-              ))}
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 relative min-h-[64px]">
+            <div className="flex flex-col">
+              <span className="text-[#4a4a4a] text-2xl font-medium mb-3">Value</span>
+              <div className="flex flex-wrap gap-2">
+                {node.values?.map(val => (
+                  <span key={val.id} className="bg-gray-200 text-gray-800 px-3 py-1.5 text-sm font-medium rounded border border-gray-300">
+                    {val.value_text}
+                  </span>
+                ))}
+              </div>
             </div>
           </td>
-          <td className="border-r border-t border-b border-black p-0">
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-0">
              <button 
-                onClick={() => handleCreateKey(node.id)}
-                className="bg-[#436bf9] text-white w-12 h-full min-h-[60px] flex items-center justify-center font-bold text-xl hover:bg-blue-600 transition-colors"
+                onClick={() => openCreateKeyModal(node.id)}
+                className="bg-[#436bf9] text-white w-12 h-[calc(100%+4px)] min-h-[64px] flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
+                title="Add Nested Child Key"
+                style={{ marginTop: "-2px", marginBottom: "-2px" }}
               >
                 +
               </button>
           </td>
-          <td className="border-r border-t border-b border-black p-0"></td>
+          <td className="border-r-2 border-t-2 border-b-2 border-black p-0 min-w-[200px]"></td>
         </tr>
 
         {/* The Span Row to add Sibling */}
-        <tr>
-          <td colSpan={2} className="border-r border-b border-black p-0">
+        <tr className="bg-white">
+          <td colSpan={2} className="border-r-2 border-b-2 border-black p-0 h-10">
              <button 
-                onClick={() => handleCreateKey(node.parent_id)}
-                className="bg-[#436bf9] text-white w-full h-8 flex items-center justify-center font-bold text-xl hover:bg-blue-600 transition-colors"
+                onClick={() => openCreateKeyModal(node.parent_id)}
+                className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
+                title="Add Sibling Key"
               >
                 +
               </button>
           </td>
-          <td className="border-r border-b border-black p-0"></td>
-          <td className="border-r border-b border-black p-0"></td>
+          <td className="border-r-2 border-b-2 border-black p-0"></td>
+          <td className="border-r-2 border-b-2 border-black p-0"></td>
         </tr>
         
         {/* Recursive Children */}
@@ -170,37 +191,86 @@ export default function MasterDataUI({ tenantId }: MasterDataUIProps) {
       <div className="p-8 flex-1 overflow-auto bg-white">
         
         {isLoading ? (
-          <div className="text-gray-400 text-center mt-20">Loading Grid...</div>
+          <div className="text-gray-400 text-center mt-20 font-medium">Loading Excel Grid...</div>
         ) : (
           <div className="inline-block relative">
-             <table className="border-collapse border-2 border-black min-w-[800px] table-fixed">
+             <table className="border-collapse border-4 border-black min-w-[800px] table-fixed bg-white">
                <tbody>
                   {masterTree.length === 0 ? (
                     <tr>
-                      <td colSpan={2} className="border border-black p-0">
+                      <td colSpan={2} className="border-2 border-black p-0 h-12">
                          <button 
-                            onClick={() => handleCreateKey(null)}
-                            className="bg-[#436bf9] text-white w-full h-8 flex items-center justify-center font-bold text-xl hover:bg-blue-600 transition-colors"
+                            onClick={() => openCreateKeyModal(null)}
+                            className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-3xl hover:bg-blue-600 transition-colors"
                           >
                             +
                           </button>
                       </td>
-                      <td className="border border-black w-32"></td>
-                      <td className="border border-black w-64"></td>
+                      <td className="border-2 border-black w-16"></td>
+                      <td className="border-2 border-black min-w-[200px]"></td>
                     </tr>
                   ) : (
                     renderGridNodes(masterTree)
                   )}
-                  {/* Empty rows at the bottom for grid aesthetic */}
-                  <tr><td className="border border-black h-12"></td><td className="border border-black"></td><td className="border border-black w-32"></td><td className="border border-black w-64"></td></tr>
-                  <tr><td className="border border-black h-12"></td><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td></tr>
-                  <tr><td className="border border-black h-12"></td><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td></tr>
+                  {/* Empty rows at the bottom for strict grid aesthetic */}
+                  <tr><td className="border-2 border-black h-16 w-64"></td><td className="border-2 border-black min-w-[300px]"></td><td className="border-2 border-black w-16"></td><td className="border-2 border-black min-w-[200px]"></td></tr>
+                  <tr><td className="border-2 border-black h-16"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
+                  <tr><td className="border-2 border-black h-16"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
                </tbody>
              </table>
           </div>
         )}
 
       </div>
+
+      {/* Create Key Modal (Schema Dropdown) */}
+      {createKeyModalOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-xl text-gray-900">Add New Key</h3>
+              <button onClick={() => setCreateKeyModalOpen(false)} className="text-gray-400 hover:text-gray-900 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Select Schema Field</label>
+              {schemaFields.length === 0 ? (
+                <div className="p-4 bg-orange-50 text-orange-700 text-sm rounded-xl border border-orange-200 mb-4">
+                  No schema fields found. Please configure your Quote blueprint first to populate available fields.
+                </div>
+              ) : (
+                <select 
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-[#436bf9] cursor-pointer mb-6"
+                >
+                  <option value="" disabled>Select a field...</option>
+                  {schemaFields.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              )}
+              
+              <div className="flex justify-end gap-3 mt-4">
+                <button 
+                  onClick={() => setCreateKeyModalOpen(false)}
+                  className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleCreateKey}
+                  disabled={!newKeyName}
+                  className="bg-[#436bf9] text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-sm hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Key
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Drawer */}
       {aiDrawerOpen && selectedEntryForAi && (

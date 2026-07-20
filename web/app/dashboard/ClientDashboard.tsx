@@ -1620,7 +1620,7 @@ Command: ${dashCommand}`;
             )}
 
             {settingsSubView === 'master-data' && tenantId && (
-              <MasterDataUI tenantId={tenantId} />
+              <MasterDataUI tenantId={tenantId} schemaFields={blueprint.flatMap(section => section.fields.map(f => f.name))} />
             )}
 
             {settingsSubView === 'menu' && (
