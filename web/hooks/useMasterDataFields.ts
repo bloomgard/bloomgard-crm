@@ -59,11 +59,26 @@ export function useMasterDataFields(tenantId: string | undefined, tabType: 'manu
     return null;
   };
 
+  const findEntryById = (
+    id: string,
+    nodes: MasterDataEntry[] = masterTree
+  ): MasterDataEntry | null => {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children && node.children.length > 0) {
+        const childMatch = findEntryById(id, node.children);
+        if (childMatch) return childMatch;
+      }
+    }
+    return null;
+  };
+
   return {
     masterTree,
     isLoading,
     error,
     refreshTree: fetchTree,
-    findEntryByKey
+    findEntryByKey,
+    findEntryById
   };
 }

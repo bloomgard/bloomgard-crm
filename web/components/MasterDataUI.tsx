@@ -22,6 +22,8 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
   const [newKeyName, setNewKeyName] = useState("");
   
   const [newValues, setNewValues] = useState<Record<string, string>>({});
+  const [editingValueId, setEditingValueId] = useState<string | null>(null);
+  const [editingValueText, setEditingValueText] = useState("");
 
   const handleCreateKey = async () => {
     if (!newKeyName) return;
@@ -65,6 +67,20 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
       })
     });
     setNewValues(prev => ({ ...prev, [entryId]: "" }));
+    refreshTree();
+  };
+
+  const handleEditValue = async (valueId: string) => {
+    if (!editingValueText.trim()) return;
+    await fetch('/api/master-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'editValueOption',
+        payload: { id: valueId, value_text: editingValueText }
+      })
+    });
+    setEditingValueId(null);
     refreshTree();
   };
 
@@ -153,9 +169,26 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                    />
                    <div className="flex flex-wrap gap-2">
                      {node.values?.map(val => (
-                       <span key={val.id} className="bg-white text-gray-700 px-3 py-1.5 text-xs font-semibold rounded-md border border-gray-200 shadow-sm flex items-center gap-1">
-                         {val.value_text}
-                       </span>
+                       editingValueId === val.id ? (
+                         <input 
+                           key={val.id}
+                           autoFocus
+                           className="bg-white text-gray-900 px-2 py-1 text-xs font-semibold rounded-md border border-[#436bf9] shadow-sm outline-none w-24"
+                           value={editingValueText}
+                           onChange={e => setEditingValueText(e.target.value)}
+                           onBlur={() => handleEditValue(val.id)}
+                           onKeyDown={e => { if (e.key === 'Enter') handleEditValue(val.id); if (e.key === 'Escape') setEditingValueId(null); }}
+                         />
+                       ) : (
+                         <span 
+                           key={val.id} 
+                           onClick={() => { setEditingValueId(val.id); setEditingValueText(val.value_text); }}
+                           className="bg-white text-gray-700 px-3 py-1.5 text-xs font-semibold rounded-md border border-gray-200 shadow-sm flex items-center gap-1 cursor-pointer hover:border-gray-400 transition-colors"
+                           title="Click to edit"
+                         >
+                           {val.value_text}
+                         </span>
+                       )
                      ))}
                    </div>
                 </div>

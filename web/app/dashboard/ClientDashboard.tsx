@@ -58,7 +58,7 @@ export default function ClientDashboard() {
   const [records, setRecords] = useState([]);
   const [currentView, setCurrentView] = useState("dashboard"); // Default to Alerts for testing
   const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data'>('menu');
-  const { masterTree, findEntryByKey } = useMasterDataFields(tenantId || undefined, 'manual');
+  const { masterTree, findEntryByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -2694,18 +2694,27 @@ Command: ${dashCommand}`;
                           {section.fields.map((f, fIdx) => {
                             const masterEntry = findEntryByKey(f.name);
                             const hasMasterValues = masterEntry && masterEntry.values && masterEntry.values.length > 0;
-                            const isSingleMasterValue = hasMasterValues && masterEntry.values.length === 1;
+                            const isSingleMasterValue = hasMasterValues && masterEntry.values?.length === 1;
                             
-                            // Auto-fill logic for single value (if not already set)
-                            if (isSingleMasterValue && (!row[f.name] || row[f.name] === "")) {
-                              // We use a timeout to avoid react render cycle warnings during auto-fill
+                            // Check for conditional auto-fill (if parent is chosen)
+                            let shouldAutoFill = isSingleMasterValue;
+                            if (isSingleMasterValue && masterEntry?.parent_id) {
+                               const parentEntry = findEntryById(masterEntry.parent_id);
+                               if (parentEntry) {
+                                  const parentValueInForm = row[parentEntry.key_name];
+                                  if (!parentValueInForm) shouldAutoFill = false; // Wait until parent is chosen
+                               }
+                            }
+                            
+                            // Auto-fill logic
+                            if (shouldAutoFill && (!row[f.name] || row[f.name] === "")) {
                               setTimeout(() => updateDynamicDataField(section.title, f.name, masterEntry.values[0].value_text, rIdx), 0);
                             }
 
                             return (
                             <div key={fIdx} className="space-y-1.5">
                               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
-                              {hasMasterValues && !isSingleMasterValue ? (
+                              {hasMasterValues && !shouldAutoFill ? (
                                 <select
                                   value={row[f.name] || ""}
                                   onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
@@ -2735,9 +2744,9 @@ Command: ${dashCommand}`;
                                   type={f.type === "date" ? "date" : "text"}
                                   inputMode={f.type === "number" ? "decimal" : undefined}
                                   value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
-                                  readOnly={f.type === "calculated" || isSingleMasterValue}
+                                  readOnly={f.type === "calculated" || shouldAutoFill}
                                   onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
-                                  className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${isSingleMasterValue ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''}`}
+                                  className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${shouldAutoFill ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''}`}
                                   placeholder="..."
                                 />
                               )}
@@ -2750,10 +2759,39 @@ Command: ${dashCommand}`;
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {section.fields.map((f, fIdx) => (
+                      {section.fields.map((f, fIdx) => {
+                        const masterEntry = findEntryByKey(f.name);
+                        const hasMasterValues = masterEntry && masterEntry.values && masterEntry.values.length > 0;
+                        const isSingleMasterValue = hasMasterValues && masterEntry.values?.length === 1;
+                        
+                        // Check for conditional auto-fill
+                        let shouldAutoFill = isSingleMasterValue;
+                        if (isSingleMasterValue && masterEntry?.parent_id) {
+                           const parentEntry = findEntryById(masterEntry.parent_id);
+                           if (parentEntry) {
+                              const parentValueInForm = dynamicData[section.title]?.[parentEntry.key_name];
+                              if (!parentValueInForm) shouldAutoFill = false;
+                           }
+                        }
+                        
+                        // Auto-fill logic
+                        if (shouldAutoFill && (!dynamicData[section.title]?.[f.name] || dynamicData[section.title][f.name] === "")) {
+                          setTimeout(() => updateDynamicDataField(section.title, f.name, masterEntry.values[0].value_text), 0);
+                        }
+
+                        return (
                         <div key={fIdx} className="space-y-1.5">
                           <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
-                          {f.type === "dropdown" || f.type === "master_status" ? (
+                          {hasMasterValues && !shouldAutoFill ? (
+                            <select
+                              value={dynamicData[section.title]?.[f.name] || ""}
+                              onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
+                              className="w-full bg-white hover:bg-white focus:bg-white border border-indigo-200 shadow-sm px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
+                            >
+                              <option value="">Select Master Data...</option>
+                              {masterEntry.values.map((val) => <option key={val.id} value={val.value_text}>{val.value_text}</option>)}
+                            </select>
+                          ) : f.type === "dropdown" || f.type === "master_status" ? (
                             <select
                               value={dynamicData[section.title]?.[f.name] || ""}
                               onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
@@ -2774,14 +2812,14 @@ Command: ${dashCommand}`;
                               type={f.type === "date" ? "date" : "text"}
                               inputMode={f.type === "number" ? "decimal" : undefined}
                               value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name] || "")}
-                              readOnly={f.type === "calculated"}
+                              readOnly={f.type === "calculated" || shouldAutoFill}
                               onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
-                              className={`w-full border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400 ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed' : 'bg-gray-50 hover:bg-white focus:bg-white'}`}
+                              className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : shouldAutoFill ? 'bg-indigo-50 text-indigo-700 border-indigo-200 cursor-not-allowed' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
                               placeholder="..."
                             />
                           )}
                         </div>
-                      ))}
+                      );})}
                     </div>
                   )}
                 </div>
