@@ -20,6 +20,8 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
   const [createKeyModalOpen, setCreateKeyModalOpen] = useState(false);
   const [createKeyParentId, setCreateKeyParentId] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState("");
+  
+  const [newValues, setNewValues] = useState<Record<string, string>>({});
 
   const handleCreateKey = async () => {
     if (!newKeyName) return;
@@ -49,7 +51,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
   };
 
   const handleAddValue = async (entryId: string) => {
-    const value = prompt("Enter new value option:");
+    const value = newValues[entryId];
     if (!value || !value.trim()) return;
     await fetch('/api/master-data', {
       method: 'POST',
@@ -62,6 +64,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
         }
       })
     });
+    setNewValues(prev => ({ ...prev, [entryId]: "" }));
     refreshTree();
   };
 
@@ -100,7 +103,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
       <React.Fragment key={node.id}>
         {/* The Action row ABOVE the value */}
         <tr className="bg-white">
-          <td className="border-r-2 border-black p-0 h-10 relative" style={{ paddingLeft: `${depth * 30}px` }}>
+          <td className="border-r border-black p-0 h-10 relative" style={{ paddingLeft: `${depth * 30}px` }}>
             <div className="flex h-full items-end justify-end w-full pr-0 pb-0">
                {/* Red delete button on top of key cell */}
                <button 
@@ -112,7 +115,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                </button>
             </div>
           </td>
-          <td className="p-0 border-r-2 border-black h-10 align-bottom">
+          <td className="p-0 border-r border-black h-10 align-bottom">
             <div className="flex items-end h-full">
               <button 
                 onClick={() => handleAddValue(node.id)}
@@ -134,19 +137,28 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
               </button>
             </div>
           </td>
-          <td className="border-r-2 border-black h-10"></td>
-          <td className="border-r-2 border-black h-10"></td>
+          <td className="border-r border-black h-10"></td>
+          <td className="border-r border-black h-10"></td>
         </tr>
 
         {/* The Key / Value row */}
         <tr className="bg-white">
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 flex items-center min-h-[50px] w-full" style={{ paddingLeft: `${depth * 30 + 16}px` }}>
+          <td className="border-r border-t border-b border-black p-4 flex items-center min-h-[50px] w-full" style={{ paddingLeft: `${depth * 30 + 16}px` }}>
             <span className="text-[#3b82f6] text-lg font-semibold mr-2 whitespace-nowrap">Key : </span>
             <span className="text-gray-900 text-lg font-medium truncate">{node.key_name}</span>
           </td>
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-4 relative min-h-[50px]">
+          <td className="border-r border-t border-b border-black p-4 relative min-h-[50px]">
             <div className="flex flex-col">
-              <span className="text-[#4a4a4a] text-lg font-medium mb-2">Value</span>
+              <input 
+                type="text" 
+                placeholder="Value" 
+                value={newValues[node.id] || ""}
+                onChange={(e) => setNewValues(prev => ({ ...prev, [node.id]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddValue(node.id);
+                }}
+                className="text-[#4a4a4a] text-lg font-medium mb-2 bg-transparent border-none outline-none placeholder-gray-400 focus:ring-0 p-0" 
+              />
               <div className="flex flex-wrap gap-2">
                 {node.values?.map(val => (
                   <span key={val.id} className="bg-gray-200 text-gray-800 px-2 py-1 text-xs font-medium rounded border border-gray-300">
@@ -156,7 +168,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
               </div>
             </div>
           </td>
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-0 h-full w-[50px]">
+          <td className="border-r border-t border-b border-black p-0 h-full w-[50px]">
              <button 
                 onClick={() => openCreateKeyModal(node.id)}
                 className="bg-[#436bf9] text-white w-full h-full min-h-[50px] flex items-center justify-center font-bold text-2xl hover:bg-blue-600 transition-colors"
@@ -165,12 +177,12 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                 +
               </button>
           </td>
-          <td className="border-r-2 border-t-2 border-b-2 border-black p-0 w-auto"></td>
+          <td className="border-r border-t border-b border-black p-0 w-auto"></td>
         </tr>
 
         {/* The Span Row to add Sibling */}
         <tr className="bg-white">
-          <td colSpan={2} className="border-r-2 border-b-2 border-black p-0 h-8">
+          <td colSpan={2} className="border-r border-b border-black p-0 h-8">
              <button 
                 onClick={() => openCreateKeyModal(node.parent_id)}
                 className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-2xl hover:bg-blue-600 transition-colors"
@@ -179,8 +191,8 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                 +
               </button>
           </td>
-          <td className="border-r-2 border-b-2 border-black p-0"></td>
-          <td className="border-r-2 border-b-2 border-black p-0"></td>
+          <td className="border-r border-b border-black p-0"></td>
+          <td className="border-r border-b border-black p-0"></td>
         </tr>
         
         {/* Recursive Children */}
@@ -215,7 +227,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
           <div className="text-gray-400 text-center mt-20 font-medium">Loading Excel Grid...</div>
         ) : (
           <div className="inline-block relative">
-             <table className="border-collapse border-[3px] border-black table-fixed bg-white w-full" style={{ minWidth: '900px' }}>
+             <table className="border-collapse border-2 border-black table-fixed bg-white w-full" style={{ minWidth: '900px' }}>
                <colgroup>
                  <col style={{ width: '300px' }} />
                  <col style={{ width: '400px' }} />
@@ -225,7 +237,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                <tbody>
                   {masterTree.length === 0 ? (
                     <tr>
-                      <td colSpan={2} className="border-2 border-black p-0 h-10">
+                      <td colSpan={2} className="border border-black p-0 h-10">
                          <button 
                             onClick={() => openCreateKeyModal(null)}
                             className="bg-[#436bf9] text-white w-full h-full flex items-center justify-center font-bold text-2xl hover:bg-blue-600 transition-colors"
@@ -233,16 +245,21 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                             +
                           </button>
                       </td>
-                      <td className="border-2 border-black"></td>
-                      <td className="border-2 border-black"></td>
+                      <td className="border border-black"></td>
+                      <td className="border border-black"></td>
                     </tr>
                   ) : (
                     renderGridNodes(masterTree)
                   )}
-                  {/* Empty rows at the bottom for strict grid aesthetic */}
-                  <tr><td className="border-2 border-black h-12"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
-                  <tr><td className="border-2 border-black h-12"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
-                  <tr><td className="border-2 border-black h-12"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td><td className="border-2 border-black"></td></tr>
+                  {/* Empty rows at the bottom for infinite grid aesthetic */}
+                  {Array.from({ length: 50 }).map((_, i) => (
+                    <tr key={`empty-${i}`}>
+                      <td className="border border-black h-12"></td>
+                      <td className="border border-black"></td>
+                      <td className="border border-black"></td>
+                      <td className="border border-black"></td>
+                    </tr>
+                  ))}
                </tbody>
              </table>
           </div>
