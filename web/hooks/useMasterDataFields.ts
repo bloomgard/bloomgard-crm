@@ -59,6 +59,22 @@ export function useMasterDataFields(tenantId: string | undefined, tabType: 'manu
     return null;
   };
 
+  const findAllEntriesByKey = (
+    keyName: string,
+    nodes: MasterDataEntry[] = masterTree
+  ): MasterDataEntry[] => {
+    let results: MasterDataEntry[] = [];
+    for (const node of nodes) {
+      if (node.key_name.toLowerCase() === keyName.toLowerCase()) {
+        results.push(node);
+      }
+      if (node.children && node.children.length > 0) {
+        results = results.concat(findAllEntriesByKey(keyName, node.children));
+      }
+    }
+    return results;
+  };
+
   const findEntryById = (
     id: string,
     nodes: MasterDataEntry[] = masterTree
@@ -79,6 +95,7 @@ export function useMasterDataFields(tenantId: string | undefined, tabType: 'manu
     error,
     refreshTree: fetchTree,
     findEntryByKey,
+    findAllEntriesByKey,
     findEntryById
   };
 }
