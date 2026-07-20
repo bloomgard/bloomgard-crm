@@ -2,7 +2,9 @@
 // @ts-nocheck
 "use client";
 import { useState, useEffect, useRef } from "react";
+import MasterDataUI from "@/components/MasterDataUI";
 import { supabase } from "@/utils/supabaseClient";
+import { useMasterDataFields, MasterDataEntry } from "@/hooks/useMasterDataFields";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line, AreaChart, Area, CartesianGrid } from "recharts";
 import Handlebars from "handlebars";
 
@@ -55,6 +57,8 @@ export default function ClientDashboard() {
   const [isRunningCoordinator, setIsRunningCoordinator] = useState(false);
   const [records, setRecords] = useState([]);
   const [currentView, setCurrentView] = useState("dashboard"); // Default to Alerts for testing
+  const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data'>('menu');
+  const { masterTree, findEntryByKey } = useMasterDataFields(tenantId || undefined, 'manual');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -1593,11 +1597,33 @@ Command: ${dashCommand}`;
         )}
 
         {currentView === "settings" && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto space-y-8">
-            <header className="mb-8">
-              <h2 className="text-3xl font-bold text-gray-900">Workspace Settings</h2>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-8">
+            <header className="mb-8 flex items-center gap-4">
+              {settingsSubView !== 'menu' && (
+                <button onClick={() => setSettingsSubView('menu')} className="text-gray-500 hover:text-gray-900 text-sm font-semibold">
+                  ← Back to Menu
+                </button>
+              )}
+              <h2 className="text-3xl font-bold text-gray-900 pl-2">Workspace Settings</h2>
             </header>
 
+            {settingsSubView === 'menu' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                 <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                    <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                      <span className="text-xl">🗄️</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
+                    <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
+                 </button>
+              </div>
+            )}
+
+            {settingsSubView === 'master-data' && tenantId && (
+              <MasterDataUI tenantId={tenantId} />
+            )}
+
+            {settingsSubView === 'menu' && (
             <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
 
               <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
@@ -1868,6 +1894,7 @@ Command: ${dashCommand}`;
               )}
 
             </div>
+            )}
           </div>
         )}
 
@@ -2664,10 +2691,30 @@ Command: ${dashCommand}`;
                     <div className="space-y-4">
                       {(dynamicData[section.title] || []).map((row, rIdx) => (
                         <div key={rIdx} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-gray-50 rounded-xl border border-gray-100">
-                          {section.fields.map((f, fIdx) => (
+                          {section.fields.map((f, fIdx) => {
+                            const masterEntry = findEntryByKey(f.name);
+                            const hasMasterValues = masterEntry && masterEntry.values && masterEntry.values.length > 0;
+                            const isSingleMasterValue = hasMasterValues && masterEntry.values.length === 1;
+                            
+                            // Auto-fill logic for single value (if not already set)
+                            if (isSingleMasterValue && (!row[f.name] || row[f.name] === "")) {
+                              // We use a timeout to avoid react render cycle warnings during auto-fill
+                              setTimeout(() => updateDynamicDataField(section.title, f.name, masterEntry.values[0].value_text, rIdx), 0);
+                            }
+
+                            return (
                             <div key={fIdx} className="space-y-1.5">
                               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
-                              {f.type === "dropdown" || f.type === "master_status" ? (
+                              {hasMasterValues && !isSingleMasterValue ? (
+                                <select
+                                  value={row[f.name] || ""}
+                                  onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
+                                  className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm border-indigo-200"
+                                >
+                                  <option value="">Select Master Data...</option>
+                                  {masterEntry.values.map((val) => <option key={val.id} value={val.value_text}>{val.value_text}</option>)}
+                                </select>
+                              ) : f.type === "dropdown" || f.type === "master_status" ? (
                                 <select
                                   value={row[f.name] || ""}
                                   onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
@@ -2688,14 +2735,15 @@ Command: ${dashCommand}`;
                                   type={f.type === "date" ? "date" : "text"}
                                   inputMode={f.type === "number" ? "decimal" : undefined}
                                   value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
-                                  readOnly={f.type === "calculated"}
+                                  readOnly={f.type === "calculated" || isSingleMasterValue}
                                   onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
-                                  className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''}`}
+                                  className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${isSingleMasterValue ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''}`}
                                   placeholder="..."
                                 />
                               )}
                             </div>
-                          ))}
+                            );
+                          })}
                           <button onClick={() => { const nd = { ...dynamicData }; nd[section.title].splice(rIdx, 1); setDynamicData(nd); }} className="absolute -top-3 -right-3 bg-white text-red-500 hover:text-white hover:bg-red-500 w-7 h-7 rounded-full border border-gray-200 shadow-sm flex items-center justify-center text-xs transition-colors active:scale-95">✕</button>
                         </div>
                       ))}
