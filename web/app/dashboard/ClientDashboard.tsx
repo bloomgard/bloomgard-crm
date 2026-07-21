@@ -418,7 +418,7 @@ export default function ClientDashboard() {
   }
 
   useEffect(() => {
-    if (currentView === 'inbox') fetchInboxLogs();
+    if (currentView === 'inbox' || currentView === 'copilot') fetchInboxLogs();
   }, [currentView]);
 
   const isManager = user?.role?.toLowerCase() === 'manager' || user?.role?.toLowerCase() === 'admin';
@@ -934,7 +934,9 @@ export default function ClientDashboard() {
     if (!msg.trim() || !tenantId) return;
     setCurrentInput("");
     setChatHistory(p => [...p, { role: 'user', content: msg }]); setIsThinking(true);
-    const lightweightData = visibleRecords.map(r => {
+    
+    // 1. Comprehensive Quotes & Client Follow-up Trajectory
+    const quotesData = visibleRecords.map(r => {
       const rawItems = extractArray(r, 'Quotation Items') || extractArray(r, 'Products') || [];
       const cleanProducts = rawItems.map(item => ({
         name: item.item_name || item.name || "Unknown Item",
@@ -945,22 +947,68 @@ export default function ClientDashboard() {
         gst: item.gst || "Unknown",
         application: item.application || "Unknown"
       }));
+
+      const statusHistory = (r.status_logs || []).slice(0, 5).map((log: any) => ({
+        from: log.old_status,
+        to: log.new_status,
+        comments: log.comments,
+        date: log.created_at ? new Date(log.created_at).toISOString().split('T')[0] : ""
+      }));
+
       return {
-        id: r.qn_number || r.qn,
+        quote_ref: r.qn_number || r.qn || r.id,
         date: r.date,
         status: r.status,
-        client: extractValue(r, 'client_name', 'Client Information') || "Unknown",
+        follow_up_status: r.follow_up_status || r.custom_metadata?.follow_up_status || "No Follow-up Yet",
+        last_contact_date: r.last_contact_date || r.updated_at || r.date,
+        client_name: extractValue(r, 'client_name', 'Client Information') || r.client_name || "Unknown Client",
+        client_email: extractValue(r, 'email', 'Client Information') || r.email || "",
+        amount: getFieldValue(r, { name: 'subtotal' }) !== '-' ? getFieldValue(r, { name: 'subtotal' }) : getFieldValue(r, { name: 'total' }),
         source: extractValue(r, 'source_ref', 'Client Information') || "Unknown",
         agent: r.created_by_email,
-        products: cleanProducts
+        products: cleanProducts,
+        status_history: statusHistory
       };
     });
+
+    // 2. Inbound Inbox Emails
+    const inboxData = (inboxLogs || []).filter((e: any) => !e.is_deleted).slice(0, 25).map((e: any) => ({
+      id: e.id,
+      from: e.from_email || e.sender,
+      subject: e.subject,
+      date: e.received_at || e.date,
+      snippet: (e.body_text || e.preview || "").slice(0, 200),
+      ai_sentiment: e.ai_sentiment,
+      extracted_intent: e.extracted_intent,
+      urgency: e.urgency_score,
+      assigned_to: e.assigned_to_email
+    }));
+
+    // 3. Master Data Settings
+    const masterDataSummary = {
+      manual_keys: (masterTree || []).map(m => ({
+        key: m.key_name,
+        configured_values: m.values?.map(v => v.value_text) || [],
+        nested_children: m.children?.map(c => c.key_name) || []
+      })),
+      auto_captured_keys: (autoMasterTree || []).map(m => ({
+        key: m.key_name,
+        ai_description: m.ai_description || "Auto-extracted from inbound emails"
+      }))
+    };
 
     try {
       const res = await fetch(getApiUrl('/api/ask-ai'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: msg, data: lightweightData })
+        body: JSON.stringify({
+          query: msg,
+          context: {
+            quotes: quotesData,
+            inbox: inboxData,
+            masterData: masterDataSummary
+          }
+        })
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
@@ -2930,9 +2978,10 @@ Command: ${dashCommand}`;
               <div className="p-4 md:p-6 bg-white border-t border-gray-100">
                 <div className="relative max-w-4xl mx-auto flex flex-col gap-3">
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => handleSendChatAI("What are my most sold products?")} className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-[10px] font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-colors active:scale-95">What are my most sold products?</button>
-                    <button onClick={() => handleSendChatAI("What is my most referred lead source?")} className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-[10px] font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-colors active:scale-95">What is my most referred source?</button>
-                    <button onClick={() => handleSendChatAI("What is the most used application?")} className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-[10px] font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-colors active:scale-95">What is the most used application?</button>
+                    <button onClick={() => handleSendChatAI("Where has each client/quote reached in follow-ups?")} className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-[10px] font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-colors active:scale-95">Where are clients in follow-ups?</button>
+                    <button onClick={() => handleSendChatAI("Summarize recent emails from the inbox")} className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-[10px] font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-colors active:scale-95">Summarize inbox emails</button>
+                    <button onClick={() => handleSendChatAI("What master data fields are configured?")} className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-[10px] font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-colors active:scale-95">What master data is set up?</button>
+                    <button onClick={() => handleSendChatAI("What are my most sold products?")} className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-[10px] font-semibold hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-colors active:scale-95">Most sold products</button>
                   </div>
                   <div className="relative">
                     <input value={currentInput} onChange={e => setCurrentInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendChatAI()} placeholder="Ask a question about your pipeline data..." className="w-full bg-gray-50 border border-gray-200 pl-4 md:pl-6 pr-14 py-4 rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-indigo-400 shadow-inner" />
