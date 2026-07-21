@@ -62,6 +62,7 @@ export default function ClientDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [focusedField, setFocusedField] = useState<{section: string, field: string, rowIdx: number | 'single'} | null>(null);
   const [viewingDoc, setViewingDoc] = useState(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -2739,15 +2740,32 @@ Command: ${dashCommand}`;
                                     inputMode={f.type === "number" ? "decimal" : undefined}
                                     value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
                                     readOnly={f.type === "calculated"}
+                                    onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: rIdx })}
+                                    onBlur={() => setTimeout(() => setFocusedField(null), 200)}
                                     onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
                                     className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${hasMasterValues ? 'border-indigo-200 text-indigo-700' : ''}`}
                                     placeholder={hasMasterValues ? "Select or type..." : "..."}
-                                    list={hasMasterValues ? listId : undefined}
+                                    autoComplete="off"
                                   />
-                                  {hasMasterValues && (
-                                    <datalist id={listId}>
-                                      {activeValues.map((val) => <option key={val.id} value={val.value_text} />)}
-                                    </datalist>
+                                  {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === rIdx && (
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                      {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).map((val) => (
+                                        <div 
+                                          key={val.id} 
+                                          className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            updateDynamicDataField(section.title, f.name, val.value_text, rIdx);
+                                            setFocusedField(null);
+                                          }}
+                                        >
+                                          {val.value_text}
+                                        </div>
+                                      ))}
+                                      {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).length === 0 && (
+                                        <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
+                                      )}
+                                    </div>
                                   )}
                                 </>
                               )}
@@ -2808,15 +2826,32 @@ Command: ${dashCommand}`;
                                 inputMode={f.type === "number" ? "decimal" : undefined}
                                 value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name] || "")}
                                 readOnly={f.type === "calculated"}
+                                onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: 'single' })}
+                                onBlur={() => setTimeout(() => setFocusedField(null), 200)}
                                 onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
                                 className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : hasMasterValues ? 'bg-indigo-50 hover:bg-white focus:bg-white text-indigo-700 border-indigo-200 focus:border-indigo-400' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
                                 placeholder={hasMasterValues ? "Select or type..." : "..."}
-                                list={hasMasterValues ? listId : undefined}
+                                autoComplete="off"
                               />
-                              {hasMasterValues && (
-                                <datalist id={listId}>
-                                  {activeValues.map((val) => <option key={val.id} value={val.value_text} />)}
-                                </datalist>
+                              {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === 'single' && (
+                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                  {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).map((val) => (
+                                    <div 
+                                      key={val.id} 
+                                      className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        updateDynamicDataField(section.title, f.name, val.value_text);
+                                        setFocusedField(null);
+                                      }}
+                                    >
+                                      {val.value_text}
+                                    </div>
+                                  ))}
+                                  {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).length === 0 && (
+                                    <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
+                                  )}
+                                </div>
                               )}
                             </>
                           )}
