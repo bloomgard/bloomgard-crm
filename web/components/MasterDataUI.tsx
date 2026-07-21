@@ -22,6 +22,8 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
   const [newKeyName, setNewKeyName] = useState("");
   
   const [newValues, setNewValues] = useState<Record<string, string>>({});
+  const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
+  const [editingKeyName, setEditingKeyName] = useState("");
   const [editingValueId, setEditingValueId] = useState<string | null>(null);
   const [editingValueText, setEditingValueText] = useState("");
 
@@ -70,18 +72,36 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
     refreshTree();
   };
 
-  const handleEditValue = async (valueId: string) => {
-    if (!editingValueText.trim()) return;
-    await fetch('/api/master-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'editValueOption',
-        payload: { id: valueId, value_text: editingValueText }
-      })
-    });
+  const handleEditValue = async (id: string) => {
+    if (!editingValueText.trim()) {
+      setEditingValueId(null);
+      return;
+    }
+    try {
+      const res = await fetch('/api/master-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'editValueOption', payload: { id, value_text: editingValueText } })
+      });
+      if (res.ok) refreshTree();
+    } catch (err) {}
     setEditingValueId(null);
-    refreshTree();
+  };
+
+  const handleEditKeyName = async (id: string) => {
+    if (!editingKeyName.trim()) {
+      setEditingKeyId(null);
+      return;
+    }
+    try {
+      const res = await fetch('/api/master-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'editMasterKeyName', payload: { id, key_name: editingKeyName } })
+      });
+      if (res.ok) refreshTree();
+    } catch (err) {}
+    setEditingKeyId(null);
   };
 
   const handleSaveAiDescription = async () => {
@@ -154,10 +174,28 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
   
              {/* The Data Card */}
              <div className="w-[280px] border border-gray-200 bg-white rounded-xl shadow-sm flex flex-col pt-5 overflow-visible relative z-0">
-                <div className="px-5 pb-3 border-b border-gray-100 flex items-center bg-white rounded-t-xl">
-                   <span className="text-[#436bf9] font-bold text-sm mr-2 uppercase tracking-wide">Key:</span>
-                   <span className="text-gray-900 font-semibold text-sm truncate">{node.key_name}</span>
-                </div>
+              <div className={`px-5 pb-3 flex items-center bg-white ${activeTab === 'manual' ? 'border-b border-gray-100 rounded-t-xl' : 'rounded-xl'}`}>
+                 <span className="text-[#436bf9] font-bold text-sm mr-2 uppercase tracking-wide">Key:</span>
+                 {editingKeyId === node.id ? (
+                   <input 
+                     autoFocus
+                     className="bg-white text-gray-900 px-2 py-1 -ml-2 text-sm font-semibold rounded-md border border-[#436bf9] shadow-sm outline-none w-40"
+                     value={editingKeyName}
+                     onChange={e => setEditingKeyName(e.target.value)}
+                     onBlur={() => handleEditKeyName(node.id)}
+                     onKeyDown={e => { if (e.key === 'Enter') handleEditKeyName(node.id); if (e.key === 'Escape') setEditingKeyId(null); }}
+                   />
+                 ) : (
+                   <span 
+                     onClick={() => { setEditingKeyId(node.id); setEditingKeyName(node.key_name); }}
+                     className="text-gray-900 font-semibold text-sm truncate cursor-pointer hover:text-[#436bf9] transition-colors"
+                     title="Click to edit key"
+                   >
+                     {node.key_name}
+                   </span>
+                 )}
+              </div>
+              {activeTab === 'manual' && (
                 <div className="p-5 bg-gray-50/50 flex flex-col min-h-[100px] rounded-b-xl">
                    <input 
                      type="text" 
@@ -192,6 +230,7 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
                      ))}
                    </div>
                 </div>
+              )}
              </div>
   
              {/* Bottom Action (Sibling) */}

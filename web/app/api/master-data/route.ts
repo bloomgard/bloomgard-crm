@@ -93,6 +93,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data }, { status: 200 });
     }
 
+    if (action === 'editMasterKeyName') {
+      const { data, error } = await supabase
+        .from('master_data_entries')
+        .update({ key_name: payload.key_name })
+        .eq('id', payload.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return NextResponse.json({ success: true, data }, { status: 200 });
+    }
+
     if (action === 'updateAIDescription') {
       const { data, error } = await supabase
         .from('master_data_entries')
