@@ -59,6 +59,7 @@ export default function ClientDashboard() {
   const [currentView, setCurrentView] = useState("dashboard"); // Default to Alerts for testing
   const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data'>('menu');
   const { masterTree, findAllEntriesByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
+  const { masterTree: autoMasterTree, findAllEntriesByKey: findAllAutoEntriesByKey } = useMasterDataFields(tenantId || undefined, 'auto');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -560,7 +561,27 @@ export default function ClientDashboard() {
     return "CLIENT MANIFEST";
   };
 
-  const safeUUID = () => (typeof window !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString() + Math.random();
+  const getAutoCapturedDbValues = (fieldName: string, sectionTitle?: string) => {
+    const uniqueVals = new Set<string>();
+    records.forEach(r => {
+      const val = extractValue(r, fieldName, sectionTitle);
+      if (val && typeof val !== 'object' && val !== '-') {
+        uniqueVals.add(String(val).trim());
+      }
+      if (sectionTitle) {
+        const arr = extractArray(r, sectionTitle);
+        if (Array.isArray(arr)) {
+          arr.forEach(item => {
+            const itemVal = extractValue(item, fieldName, sectionTitle);
+            if (itemVal && typeof itemVal !== 'object' && itemVal !== '-') {
+              uniqueVals.add(String(itemVal).trim());
+            }
+          });
+        }
+      }
+    });
+    return Array.from(uniqueVals).filter(Boolean);
+  };
 
   const updateDynamicDataField = (sectionTitle, fieldName, value, rowIndex = null) => {
     setDynamicData(prev => {
@@ -2703,13 +2724,27 @@ Command: ${dashCommand}`;
                               return parentEntry.values?.some(v => v.value_text === parentValueInForm);
                             });
                             
-                            const activeValues = activeEntries.flatMap(e => e.values || []);
+                            const manualValues = activeEntries.flatMap(e => e.values || []);
+                            const activeValues = [...manualValues];
+
+                            // Check for Auto-Captured keys from DB
+                            const autoEntries = findAllAutoEntriesByKey(f.name);
+                            if (autoEntries.length > 0) {
+                              const dbVals = getAutoCapturedDbValues(f.name, section.title);
+                              const existingTexts = new Set(activeValues.map(v => v.value_text.toLowerCase()));
+                              dbVals.forEach(vStr => {
+                                if (!existingTexts.has(vStr.toLowerCase())) {
+                                  activeValues.push({ id: `auto-${vStr}`, value_text: vStr, is_default: false });
+                                }
+                              });
+                            }
+
                             const hasMasterValues = activeValues.length > 0;
-                            const isSingleMasterValue = hasMasterValues && activeValues.length === 1;
+                            const isSingleMasterValue = manualValues.length === 1;
                             
-                            // Auto-fill logic
+                            // Auto-fill logic (for manual single values)
                             if (isSingleMasterValue && (!row[f.name] || row[f.name] === "")) {
-                              setTimeout(() => updateDynamicDataField(section.title, f.name, activeValues[0].value_text, rIdx), 0);
+                              setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text, rIdx), 0);
                             }
 
                             const listId = `datalist-${section.title}-${f.name}-${fIdx}-${rIdx}`;
@@ -2789,13 +2824,27 @@ Command: ${dashCommand}`;
                           return parentEntry.values?.some(v => v.value_text === parentValueInForm);
                         });
                         
-                        const activeValues = activeEntries.flatMap(e => e.values || []);
+                        const manualValues = activeEntries.flatMap(e => e.values || []);
+                        const activeValues = [...manualValues];
+
+                        // Check for Auto-Captured keys from DB
+                        const autoEntries = findAllAutoEntriesByKey(f.name);
+                        if (autoEntries.length > 0) {
+                          const dbVals = getAutoCapturedDbValues(f.name, section.title);
+                          const existingTexts = new Set(activeValues.map(v => v.value_text.toLowerCase()));
+                          dbVals.forEach(vStr => {
+                            if (!existingTexts.has(vStr.toLowerCase())) {
+                              activeValues.push({ id: `auto-${vStr}`, value_text: vStr, is_default: false });
+                            }
+                          });
+                        }
+
                         const hasMasterValues = activeValues.length > 0;
-                        const isSingleMasterValue = hasMasterValues && activeValues.length === 1;
+                        const isSingleMasterValue = manualValues.length === 1;
                         
                         // Auto-fill logic
                         if (isSingleMasterValue && (!dynamicData[section.title]?.[f.name] || dynamicData[section.title][f.name] === "")) {
-                          setTimeout(() => updateDynamicDataField(section.title, f.name, activeValues[0].value_text), 0);
+                          setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text), 0);
                         }
 
                         const listId = `datalist-${section.title}-${f.name}-${fIdx}-single`;
