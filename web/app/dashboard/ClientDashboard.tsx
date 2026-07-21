@@ -2711,19 +2711,12 @@ Command: ${dashCommand}`;
                               setTimeout(() => updateDynamicDataField(section.title, f.name, activeValues[0].value_text, rIdx), 0);
                             }
 
+                            const listId = `datalist-${section.title}-${f.name}-${fIdx}-${rIdx}`;
+
                             return (
-                            <div key={fIdx} className="space-y-1.5">
+                            <div key={fIdx} className="space-y-1.5 relative">
                               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
-                              {hasMasterValues && !isSingleMasterValue ? (
-                                <select
-                                  value={row[f.name] || ""}
-                                  onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
-                                  className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm border-indigo-200"
-                                >
-                                  <option value="">Select Master Data...</option>
-                                  {activeValues.map((val) => <option key={val.id} value={val.value_text}>{val.value_text}</option>)}
-                                </select>
-                              ) : f.type === "dropdown" || f.type === "master_status" ? (
+                              {f.type === "dropdown" || f.type === "master_status" ? (
                                 <select
                                   value={row[f.name] || ""}
                                   onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
@@ -2740,15 +2733,23 @@ Command: ${dashCommand}`;
                                   {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
                                 </div>
                               ) : (
-                                <input
-                                  type={f.type === "date" ? "date" : "text"}
-                                  inputMode={f.type === "number" ? "decimal" : undefined}
-                                  value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
-                                  readOnly={f.type === "calculated" || isSingleMasterValue}
-                                  onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
-                                  className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${isSingleMasterValue ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''}`}
-                                  placeholder="..."
-                                />
+                                <>
+                                  <input
+                                    type={f.type === "date" ? "date" : "text"}
+                                    inputMode={f.type === "number" ? "decimal" : undefined}
+                                    value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
+                                    readOnly={f.type === "calculated"}
+                                    onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
+                                    className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${hasMasterValues ? 'border-indigo-200 text-indigo-700' : ''}`}
+                                    placeholder={hasMasterValues ? "Select or type..." : "..."}
+                                    list={hasMasterValues ? listId : undefined}
+                                  />
+                                  {hasMasterValues && (
+                                    <datalist id={listId}>
+                                      {activeValues.map((val) => <option key={val.id} value={val.value_text} />)}
+                                    </datalist>
+                                  )}
+                                </>
                               )}
                             </div>
                             );
@@ -2779,19 +2780,12 @@ Command: ${dashCommand}`;
                           setTimeout(() => updateDynamicDataField(section.title, f.name, activeValues[0].value_text), 0);
                         }
 
+                        const listId = `datalist-${section.title}-${f.name}-${fIdx}-single`;
+
                         return (
-                        <div key={fIdx} className="space-y-1.5">
+                        <div key={fIdx} className="space-y-1.5 relative">
                           <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
-                          {hasMasterValues && !isSingleMasterValue ? (
-                            <select
-                              value={dynamicData[section.title]?.[f.name] || ""}
-                              onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
-                              className="w-full bg-white hover:bg-white focus:bg-white border border-indigo-200 shadow-sm px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
-                            >
-                              <option value="">Select Master Data...</option>
-                              {activeValues.map((val) => <option key={val.id} value={val.value_text}>{val.value_text}</option>)}
-                            </select>
-                          ) : f.type === "dropdown" || f.type === "master_status" ? (
+                          {f.type === "dropdown" || f.type === "master_status" ? (
                             <select
                               value={dynamicData[section.title]?.[f.name] || ""}
                               onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
@@ -2808,15 +2802,23 @@ Command: ${dashCommand}`;
                               {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
                             </div>
                           ) : (
-                            <input
-                              type={f.type === "date" ? "date" : "text"}
-                              inputMode={f.type === "number" ? "decimal" : undefined}
-                              value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name] || "")}
-                              readOnly={f.type === "calculated" || isSingleMasterValue}
-                              onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
-                              className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : isSingleMasterValue ? 'bg-indigo-50 text-indigo-700 border-indigo-200 cursor-not-allowed' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
-                              placeholder="..."
-                            />
+                            <>
+                              <input
+                                type={f.type === "date" ? "date" : "text"}
+                                inputMode={f.type === "number" ? "decimal" : undefined}
+                                value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name] || "")}
+                                readOnly={f.type === "calculated"}
+                                onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
+                                className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : hasMasterValues ? 'bg-indigo-50 hover:bg-white focus:bg-white text-indigo-700 border-indigo-200 focus:border-indigo-400' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
+                                placeholder={hasMasterValues ? "Select or type..." : "..."}
+                                list={hasMasterValues ? listId : undefined}
+                              />
+                              {hasMasterValues && (
+                                <datalist id={listId}>
+                                  {activeValues.map((val) => <option key={val.id} value={val.value_text} />)}
+                                </datalist>
+                              )}
+                            </>
                           )}
                         </div>
                       );})}
