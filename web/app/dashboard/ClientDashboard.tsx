@@ -57,7 +57,7 @@ export default function ClientDashboard() {
   const [isRunningCoordinator, setIsRunningCoordinator] = useState(false);
   const [records, setRecords] = useState([]);
   const [currentView, setCurrentView] = useState("dashboard"); // Default to Alerts for testing
-  const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data'>('menu');
+  const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint'>('menu');
   const { masterTree, findAllEntriesByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
   const { masterTree: autoMasterTree, findAllEntriesByKey: findAllAutoEntriesByKey } = useMasterDataFields(tenantId || undefined, 'auto');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -113,6 +113,53 @@ export default function ClientDashboard() {
   const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
   const [triageStatusFilters, setTriageStatusFilters] = useState<string[]>([]);
   const [triageDaysFilter, setTriageDaysFilter] = useState(3);
+  
+  // User Onboarding State
+  const [onboardEmail, setOnboardEmail] = useState("");
+  const [onboardPassword, setOnboardPassword] = useState("");
+  const [onboardRole, setOnboardRole] = useState("agent");
+  const [passwordCache, setPasswordCache] = useState<Record<string, string>>({});
+  
+  // Blueprint Configurator State
+  const [draggedSectionIdx, setDraggedSectionIdx] = useState<number | null>(null);
+  const [draggedFieldInfo, setDraggedFieldInfo] = useState<{sIdx: number, fIdx: number} | null>(null);
+
+  const handleCreateUser = async () => {
+    if (!onboardEmail || !onboardPassword) return alert("Credentials required.");
+    try {
+      const res = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: onboardEmail,
+          password: onboardPassword,
+          role: onboardRole,
+          tenantId: user?.tenant_id || tenantId
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create user");
+      }
+      
+      setPasswordCache(prev => ({ ...prev, [onboardEmail]: onboardPassword }));
+      alert(`✅ Success!\nEmail: ${onboardEmail}\nRole: ${onboardRole}`);
+      
+      // Refresh users list if possible, or just reset form
+      setOnboardEmail("");
+      setOnboardPassword("");
+    } catch (err: any) { alert("Auth Error: " + err.message); }
+  };
+  
+  const handleSaveBlueprint = async () => {
+    try {
+      const { error } = await supabase.from("tenant_schemas").update({ schema_config: blueprint }).eq("tenant_id", user?.tenant_id || tenantId);
+      if (error) throw error;
+      alert("✅ Schema updated successfully!");
+    } catch (e: any) {
+      alert("Failed to update schema: " + e.message);
+    }
+  };
 
   const handleQuoteReply = async (quote: any) => {
     const text = quoteReplyTexts[quote.id as keyof typeof quoteReplyTexts] as string;
@@ -1677,8 +1724,8 @@ Command: ${dashCommand}`;
               <h2 className="text-3xl font-bold text-gray-900 pl-2">Workspace Settings</h2>
             </header>
 
-            {settingsSubView === 'menu' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+             {settingsSubView === 'menu' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                  <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                     <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
                       <span className="text-xl">🗄️</span>
@@ -1686,11 +1733,120 @@ Command: ${dashCommand}`;
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
                     <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
                  </button>
+                 <button onClick={() => setSettingsSubView('users')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                    <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
+                      <span className="text-xl">👥</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">User Access</h3>
+                    <p className="text-sm text-gray-500">Onboard new agents, managers, and admins to this workspace.</p>
+                 </button>
+                 <button onClick={() => setSettingsSubView('blueprint')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                    <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
+                      <span className="text-xl">🏗️</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
+                    <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
+                 </button>
               </div>
             )}
 
             {settingsSubView === 'master-data' && tenantId && (
               <MasterDataUI tenantId={tenantId} schemaFields={blueprint.flatMap(section => section.fields.map(f => f.name))} />
+            )}
+
+            {settingsSubView === 'users' && (
+              <div className="bg-white border border-gray-200 p-10 rounded-3xl shadow-sm">
+                <div className="flex flex-col md:flex-row gap-4 mb-10 bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                  <input placeholder="Email" className="flex-1 bg-white border border-gray-200 p-3.5 rounded-xl text-sm outline-none" value={onboardEmail} onChange={e => setOnboardEmail(e.target.value)} />
+                  <input placeholder="Password" type="text" className="flex-1 bg-white border border-gray-200 p-3.5 rounded-xl text-sm outline-none" value={onboardPassword} onChange={e => setOnboardPassword(e.target.value)} />
+                  <select className="bg-white border border-gray-200 px-4 py-3.5 rounded-xl font-bold text-xs uppercase" value={onboardRole} onChange={e => setOnboardRole(e.target.value)}>
+                    <option value="agent">Agent</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button onClick={handleCreateUser} className="bg-black text-white px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors">Onboard User</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {tenantUsers.map(u => (
+                    <div key={u.id} className="p-6 border border-gray-100 bg-gray-50/50 rounded-2xl flex justify-between items-center group hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all">
+                      <div>
+                        <p className="font-bold text-sm text-gray-800">{u.email}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-400'}`}>{u.role}</span>
+                          <button onClick={() => { 
+                             const p = passwordCache[u.email]; 
+                             if(p) { navigator.clipboard.writeText(p); alert("Copied!"); } 
+                             else alert("Not in session. Reset user to change pass.");
+                           }} className="text-[10px] font-bold text-blue-600 hover:underline">Copy Password</button>
+                        </div>
+                      </div>
+                      <button onClick={async () => { 
+                        if(confirm("Revoke Access?")) { 
+                          await supabase.rpc('decommission_employee', { target_email: u.email }); 
+                          // Simple refresh
+                          const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", tenantId);
+                          setTenantUsers(users || []);
+                        } 
+                      }} className="text-red-400 hover:text-red-600 font-bold text-xs transition-colors">Revoke</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {settingsSubView === 'blueprint' && (
+              <div className="space-y-6">
+                <div className="flex justify-end mb-4">
+                  <button onClick={handleSaveBlueprint} className="bg-black text-white px-8 py-3 rounded-xl font-bold text-sm shadow-md hover:bg-gray-800 transition-colors">Save Blueprint Schema</button>
+                </div>
+                {blueprint.map((section, sIdx) => (
+                  <div key={`s-${sIdx}`} draggable onDragStart={() => setDraggedSectionIdx(sIdx)} onDragOver={e => e.preventDefault()} onDrop={() => {
+                    const nc = [...blueprint]; const [m] = nc.splice(draggedSectionIdx!, 1); nc.splice(sIdx, 0, m); setBlueprint(nc); setDraggedSectionIdx(null);
+                  }} className={`bg-white border border-gray-200 p-8 rounded-3xl relative shadow-sm group transition-all ${draggedSectionIdx === sIdx ? 'opacity-50 border-dashed' : ''}`}>
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab text-gray-300 hover:text-black text-2xl transition-all">≡</div>
+                    <div className="flex justify-between items-center mb-6">
+                      <input className="text-xl font-bold outline-none bg-transparent w-1/2 border-b border-transparent focus:border-gray-200 pb-1" value={section.title} onChange={e => { const nc = [...blueprint]; nc[sIdx].title = e.target.value; setBlueprint(nc); }} />
+                      <div className="flex items-center gap-6">
+                        <label className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest cursor-pointer">
+                          <input type="checkbox" checked={section.allow_multiple} onChange={e => { const nc = [...blueprint]; nc[sIdx].allow_multiple = e.target.checked; setBlueprint(nc); }} className="accent-black w-3.5 h-3.5" />
+                          Allow Multiple Rows
+                        </label>
+                        <button onClick={() => { const nc = [...blueprint]; nc.splice(sIdx, 1); setBlueprint(nc); }} className="text-red-400 hover:text-red-600 font-bold text-xs transition-colors">Delete</button>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {section.fields?.map((f: any, fIdx: number) => (
+                        <div key={`f-${fIdx}`} draggable onDragStart={(e) => { e.stopPropagation(); setDraggedFieldInfo({sIdx, fIdx}); }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            if (!draggedFieldInfo || draggedFieldInfo.sIdx !== sIdx) return;
+                            const nc = [...blueprint]; const [m] = nc[sIdx].fields.splice(draggedFieldInfo.fIdx, 1); nc[sIdx].fields.splice(fIdx, 0, m); setBlueprint(nc); setDraggedFieldInfo(null);
+                          }} className="grid grid-cols-12 gap-4 bg-gray-50 p-4 rounded-2xl items-center border border-transparent hover:border-gray-200 transition-colors">
+                          <div className="col-span-1 text-gray-300 hover:text-black cursor-grab text-center text-lg">≡</div>
+                          <input placeholder="Label" className="col-span-3 bg-transparent font-bold text-sm outline-none" value={f.label} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].label = e.target.value; setBlueprint(nc); }} />
+                          <input placeholder="db_key" className="col-span-2 font-mono text-xs outline-none bg-transparent text-blue-600" value={f.name} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].name = e.target.value; setBlueprint(nc); }} />
+                          
+                          <select className="col-span-2 text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 outline-none" value={f.type} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].type = e.target.value; setBlueprint(nc); }}>
+                            <option value="text">Text</option>
+                            <option value="number">Number</option>
+                            <option value="date">Date</option>
+                            <option value="dropdown">Dropdown</option>
+                            <option value="master_status">Master Status</option>
+                            <option value="attachment">Attachment</option>
+                            <option value="calculated">Formula</option>
+                            <option value="logged_in">Logged In User</option>
+                          </select>
+                          
+                          <input placeholder={f.type === 'calculated' ? "e.g. SUM[Products.item_br]" : f.type === 'master_status' ? "Inquiry, Approved..." : "Options..."} className="col-span-3 bg-white border border-gray-200 text-xs p-2 rounded-lg outline-none disabled:opacity-50" value={f.options || ""} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].options = e.target.value; setBlueprint(nc); }} disabled={f.type !== "dropdown" && f.type !== "calculated" && f.type !== "master_status"} />
+                          
+                          <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.splice(fIdx, 1); setBlueprint(nc); }} className="col-span-1 text-red-300 hover:text-red-500 font-bold text-right pr-2">✕</button>
+                        </div>
+                      ))}
+                      <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.push({ label: "", name: "", type: "text" }); setBlueprint(nc); }} className="text-[10px] font-black uppercase text-blue-600 tracking-widest mt-4 ml-4 hover:text-blue-800">+ Add Field</button>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={() => setBlueprint([...blueprint, { title: "New Section", fields: [], allow_multiple: false }])} className="w-full py-8 border-2 border-dashed border-gray-200 rounded-3xl text-gray-300 font-bold uppercase tracking-widest text-xs hover:border-black hover:text-black transition-all">+ Create New Module</button>
+              </div>
             )}
 
             {settingsSubView === 'menu' && (

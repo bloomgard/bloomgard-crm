@@ -18,8 +18,18 @@ export default function Login() {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // If a session exists (even a stored refresh token), bypass login!
-        router.replace("/dashboard");
+        // If a session exists, check role
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+          
+        if (profile?.role === "super_admin") {
+          router.replace("/boss");
+        } else {
+          router.replace("/dashboard");
+        }
       } else {
         // Only stop loading if there is truly no session
         setLoading(false);
@@ -42,10 +52,20 @@ export default function Login() {
         setLoading(false);
       } else {
         // Supabase automatically handles storing the session for persistence
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         
-        router.replace("/dashboard"); 
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authData.user.id)
+          .single();
+          
+        if (profile?.role === "super_admin") {
+          router.replace("/boss");
+        } else {
+          router.replace("/dashboard");
+        }
       }
     } catch (err: any) {
       setError(err.message);

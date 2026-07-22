@@ -54,12 +54,17 @@ export default function BossDashboard() {
   const [tenants, setTenants] = useState<any[]>([]); 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"blueprint" | "users" | "billing">("blueprint");
+  const [activeTab, setActiveTab] = useState<"users" | "billing">("users");
   const [currentTenantObj, setCurrentTenantObj] = useState<any>(null);
 
   const [schemaConfig, setSchemaConfig] = useState<any[]>([]);
   const [companyName, setCompanyName] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false); 
+  
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
   
   const [onboardEmail, setOnboardEmail] = useState("");
   const [onboardPassword, setOnboardPassword] = useState("");
@@ -78,18 +83,49 @@ export default function BossDashboard() {
     setLoading(false);
   }
 
-  const handleCreateWorkspace = async () => {
+  const handleCreateWorkspace = async (e: any) => {
+    e.preventDefault();
+    if (!newWorkspaceName || !newAdminEmail || !newAdminPassword) return alert("Fill all fields");
+
     const newId = crypto.randomUUID();
-    const { error } = await supabase.from("tenants").insert([{ id: newId, company_name: "New Workspace", ai_enabled: false }]);
+    const { error } = await supabase.from("tenants").insert([{ id: newId, company_name: newWorkspaceName, ai_enabled: false }]);
     if (!error) {
       await supabase.from("tenant_schemas").insert([{ 
         tenant_id: newId, 
-        company_name: "New Workspace", 
+        company_name: newWorkspaceName, 
         schema_config: DEFAULT_SCHEMA, 
         html_template: "" 
       }]);
+      
+      // Create admin user
+      try {
+        const res = await fetch('/api/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: newAdminEmail,
+            password: newAdminPassword,
+            role: 'admin',
+            tenantId: newId
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to create user");
+        }
+        alert("✅ Workspace & Admin User Created!");
+        setShowCreateModal(false);
+        setNewWorkspaceName("");
+        setNewAdminEmail("");
+        setNewAdminPassword("");
+      } catch (err: any) {
+        alert("Failed to create admin user: " + err.message);
+      }
+
       await fetchTenants();
       loadTenantData(newId);
+    } else {
+      alert("Failed to create tenant: " + error.message);
     }
   };
 
@@ -212,7 +248,7 @@ export default function BossDashboard() {
       <aside className="w-80 border-r bg-white fixed h-full z-50 flex flex-col shadow-sm">
         <div className="p-8 pb-4"><h1 className="text-4xl font-bold tracking-tighter">Bloomgard.</h1><p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mt-1">Boss Command</p></div>
         <div className="p-6 space-y-4">
-          <button onClick={handleCreateWorkspace} className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm shadow-md hover:scale-[1.02] transition-transform">+ New Workspace</button>
+          <button onClick={() => setShowCreateModal(true)} className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm shadow-md hover:scale-[1.02] transition-transform">+ New Workspace</button>
           <input placeholder="Search records..." className="w-full bg-gray-50 border border-transparent focus:border-gray-200 px-4 py-3 rounded-xl text-sm outline-none" onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <nav className="flex-1 overflow-y-auto px-4 space-y-2">
@@ -242,62 +278,11 @@ export default function BossDashboard() {
             </header>
 
             <div className="flex gap-2 mb-10 bg-white p-1 rounded-xl border border-gray-100 w-fit shadow-sm overflow-x-auto">
-              {["blueprint", "users", "billing"].map(tab => (
+              {["users", "billing"].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-8 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === tab ? 'bg-black text-white shadow-md' : 'text-gray-400 hover:text-black'}`}>{tab === 'billing' ? 'BILLING & USAGE' : tab.toUpperCase()}</button>
               ))}
             </div>
 
-            {activeTab === "blueprint" && (
-              <div className="space-y-6">
-                {schemaConfig.map((section, sIdx) => (
-                  <div key={`s-${sIdx}`} draggable onDragStart={() => setDraggedSectionIdx(sIdx)} onDragOver={e => e.preventDefault()} onDrop={() => {
-                    const nc = [...schemaConfig]; const [m] = nc.splice(draggedSectionIdx!, 1); nc.splice(sIdx, 0, m); setSchemaConfig(nc); setDraggedSectionIdx(null);
-                  }} className={`bg-white border border-gray-200 p-8 rounded-3xl relative shadow-sm group transition-all ${draggedSectionIdx === sIdx ? 'opacity-50 border-dashed' : ''}`}>
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab text-gray-300 hover:text-black text-2xl transition-all">≡</div>
-                    <div className="flex justify-between items-center mb-6">
-                      <input className="text-xl font-bold outline-none bg-transparent w-1/2 border-b border-transparent focus:border-gray-200 pb-1" value={section.title} onChange={e => { const nc = [...schemaConfig]; nc[sIdx].title = e.target.value; setSchemaConfig(nc); }} />
-                      <div className="flex items-center gap-6">
-                        <label className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest cursor-pointer">
-                          <input type="checkbox" checked={section.allow_multiple} onChange={e => { const nc = [...schemaConfig]; nc[sIdx].allow_multiple = e.target.checked; setSchemaConfig(nc); }} className="accent-black w-3.5 h-3.5" />
-                          Allow Multiple Rows
-                        </label>
-                        <button onClick={() => { const nc = [...schemaConfig]; nc.splice(sIdx, 1); setSchemaConfig(nc); }} className="text-red-400 hover:text-red-600 font-bold text-xs transition-colors">Delete</button>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      {section.fields?.map((f: any, fIdx: number) => (
-                        <div key={`f-${fIdx}`} draggable onDragStart={(e) => { e.stopPropagation(); setDraggedFieldInfo({sIdx, fIdx}); }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => {
-                            e.preventDefault(); e.stopPropagation();
-                            if (!draggedFieldInfo || draggedFieldInfo.sIdx !== sIdx) return;
-                            const nc = [...schemaConfig]; const [m] = nc[sIdx].fields.splice(draggedFieldInfo.fIdx, 1); nc[sIdx].fields.splice(fIdx, 0, m); setSchemaConfig(nc); setDraggedFieldInfo(null);
-                          }} className="grid grid-cols-12 gap-4 bg-gray-50 p-4 rounded-2xl items-center border border-transparent hover:border-gray-200 transition-colors">
-                          <div className="col-span-1 text-gray-300 hover:text-black cursor-grab text-center text-lg">≡</div>
-                          <input placeholder="Label" className="col-span-3 bg-transparent font-bold text-sm outline-none" value={f.label} onChange={e => { const nc = [...schemaConfig]; nc[sIdx].fields[fIdx].label = e.target.value; setSchemaConfig(nc); }} />
-                          <input placeholder="db_key" className="col-span-2 font-mono text-xs outline-none bg-transparent text-blue-600" value={f.name} onChange={e => { const nc = [...schemaConfig]; nc[sIdx].fields[fIdx].name = e.target.value; setSchemaConfig(nc); }} />
-                          
-                          <select className="col-span-2 text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 outline-none" value={f.type} onChange={e => { const nc = [...schemaConfig]; nc[sIdx].fields[fIdx].type = e.target.value; setSchemaConfig(nc); }}>
-                            <option value="text">Text</option>
-                            <option value="number">Number</option>
-                            <option value="date">Date</option>
-                            <option value="dropdown">Dropdown</option>
-                            <option value="master_status">Master Status</option>
-                            <option value="attachment">Attachment</option>
-                            <option value="calculated">Formula</option>
-                            <option value="logged_in">Logged In User</option>
-                          </select>
-                          
-                          <input placeholder={f.type === 'calculated' ? "e.g. SUM[Products.item_br]" : f.type === 'master_status' ? "Inquiry, Approved..." : "Options..."} className="col-span-3 bg-white border border-gray-200 text-xs p-2 rounded-lg outline-none disabled:opacity-50" value={f.options || ""} onChange={e => { const nc = [...schemaConfig]; nc[sIdx].fields[fIdx].options = e.target.value; setSchemaConfig(nc); }} disabled={f.type !== "dropdown" && f.type !== "calculated" && f.type !== "master_status"} />
-                          
-                          <button onClick={() => { const nc = [...schemaConfig]; nc[sIdx].fields.splice(fIdx, 1); setSchemaConfig(nc); }} className="col-span-1 text-red-300 hover:text-red-500 font-bold text-right pr-2">✕</button>
-                        </div>
-                      ))}
-                      <button onClick={() => { const nc = [...schemaConfig]; nc[sIdx].fields.push({ label: "", name: "", type: "text" }); setSchemaConfig(nc); }} className="text-[10px] font-black uppercase text-blue-600 tracking-widest mt-4 ml-4 hover:text-blue-800">+ Add Field</button>
-                    </div>
-                  </div>
-                ))}
-                <button onClick={() => setSchemaConfig([...schemaConfig, { title: "New Section", fields: [], allow_multiple: false }])} className="w-full py-8 border-2 border-dashed border-gray-200 rounded-3xl text-gray-300 font-bold uppercase tracking-widest text-xs hover:border-black hover:text-black transition-all">+ Create New Module</button>
-              </div>
-            )}
 
             {activeTab === "users" && (
               <div className="bg-white border border-gray-200 p-10 rounded-3xl shadow-sm">
@@ -409,6 +394,36 @@ export default function BossDashboard() {
           </div>
         ) : <div className="h-[70vh] flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-[3rem] bg-white/50 text-center p-10"><span className="text-4xl mb-4">🏢</span><p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Select a Workspace Engine from the sidebar to begin Administration.</p></div>}
       </main>
+
+      {/* Modal for Creating Workspace */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-10 max-w-md w-full shadow-2xl relative">
+            <button onClick={() => setShowCreateModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black">✕</button>
+            <h2 className="text-2xl font-bold mb-2">New Workspace</h2>
+            <p className="text-sm text-gray-500 mb-8">Provision a new tenant environment and admin.</p>
+            
+            <form onSubmit={handleCreateWorkspace} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Workspace Name</label>
+                <input required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500" value={newWorkspaceName} onChange={e => setNewWorkspaceName(e.target.value)} placeholder="Acme Corp" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Admin Email</label>
+                <input required type="email" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} placeholder="admin@acme.com" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Admin Password</label>
+                <input required type="password" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500" value={newAdminPassword} onChange={e => setNewAdminPassword(e.target.value)} placeholder="••••••••" />
+              </div>
+              
+              <button type="submit" className="w-full bg-black text-white font-bold py-4 rounded-xl mt-4 hover:bg-gray-800 transition-colors">
+                Provision Environment
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
