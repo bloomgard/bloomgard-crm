@@ -149,8 +149,23 @@ export default function BossDashboard() {
     if (tenant) { 
       setCompanyName(tenant.company_name || ""); 
       setAiEnabled(!!tenant.ai_enabled); 
+      
+      // Fetch Live Usage Metrics
+      const [quotesRes, emailsRes, tokensRes] = await Promise.all([
+        supabase.from('quotations').select('*', { count: 'exact', head: true }).eq('tenant_id', tId),
+        supabase.from('sent_emails').select('*', { count: 'exact', head: true }).eq('tenant_id', tId),
+        supabase.from('tenant_token_usage').select('total_tokens').eq('tenant_id', tId)
+      ]);
+
+      const quotesCount = quotesRes.count || 0;
+      const emailsCount = emailsRes.count || 0;
+      const tokensSum = tokensRes.data?.reduce((acc, curr) => acc + (Number(curr.total_tokens) || 0), 0) || 0;
+
       setCurrentTenantObj({
         ...tenant,
+        quotes_generated: quotesCount,
+        emails_sent: emailsCount,
+        ai_tokens_used: tokensSum,
         feature_flags: tenant.feature_flags || {
           ai_email: { enabled: false, billable: false },
           analytics: { enabled: false, billable: false },

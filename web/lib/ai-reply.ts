@@ -118,6 +118,13 @@ RULES:
     }
 
     const aiData = await aiResponse.json();
+    
+    // Log AI usage
+    if (aiData.usage) {
+      const { logAiUsage } = await import('@/utils/usageLogger');
+      await logAiUsage(tenant.id, null, 'ai-auto-reply', aiData.usage);
+    }
+
     const agentReply = aiData.choices[0].message.content.trim();
 
     // 5. Send the Auto-Reply Email
@@ -142,6 +149,12 @@ RULES:
       text: agentReply,
       headers
     });
+
+    // Log Email Usage
+    if (sentData) {
+      const { logEmailSent } = await import('@/utils/usageLogger');
+      await logEmailSent(tenant.id, lastEmail.sender_email, replySubject);
+    }
 
     // 6. Insert AI Reply into inbound_emails for UI threading
     const newMsgId = (sentData && sentData.id) ? `<${sentData.id}@resend.dev>` : `<auto-${Date.now()}@bloomgard.co>`;

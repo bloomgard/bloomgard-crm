@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const fromName = tenant.company_name || 'Bloomgard';
     
     // Uses the centralized postal module so it inherits the fallback testing logic
-    await sendEmail({
+    const sentData = await sendEmail({
       from: `${fromName} <${fromEmail}>`,
       to,
       replyTo: tenant.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : undefined,
@@ -44,6 +44,11 @@ export async function POST(request: Request) {
       html: htmlBody,
       headers
     });
+
+    if (sentData) {
+      const { logEmailSent } = await import('@/utils/usageLogger');
+      await logEmailSent(tenantId, to, subject);
+    }
 
     // Attempt to log it if it belongs to a known quote (by searching subject for QN)
     const qnMatch = subject.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);

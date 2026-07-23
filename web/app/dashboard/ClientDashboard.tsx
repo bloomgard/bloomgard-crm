@@ -1472,7 +1472,6 @@ Command: ${dashCommand}`;
             ['inbox', '📬 Inbox'],
             ['alerts', '🚨 Action Need'],
             ['leadgen', '🧲 Lead Gen'],
-            ['agents', '🤖 AI Agents'],
             ['docs', '📄 Docs'],
             ['settings', '⚙️ Settings']
           ].map(([v, label]) => (

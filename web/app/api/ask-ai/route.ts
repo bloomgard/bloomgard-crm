@@ -9,7 +9,7 @@ const corsHeaders = {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { query, data, context } = body;
+    const { query, data, context, tenantId, userId } = body;
 
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -77,6 +77,13 @@ ${query || "Give me a summary of client follow-ups and recent inbox emails."}`;
 
     const result = await response.json();
     
+    // Log AI Usage if tenantId is provided
+    if (tenantId && result.usage) {
+      // Dynamic import to avoid edge runtime issues if usageLogger uses node modules, though here it uses fetch.
+      const { logAiUsage } = await import('@/utils/usageLogger');
+      await logAiUsage(tenantId, userId || null, 'ask-ai', result.usage);
+    }
+
     const answer = result?.choices?.[0]?.message?.content || "Analysis complete. The system is finalising the report. Please refresh in a moment.";
 
     return NextResponse.json({ answer }, { status: 200, headers: corsHeaders });

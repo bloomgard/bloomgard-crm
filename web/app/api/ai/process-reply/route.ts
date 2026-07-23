@@ -99,6 +99,12 @@ RULES:
 
     if (aiResponse.ok) {
       const aiData = await aiResponse.json();
+      
+      if (aiData.usage) {
+        const { logAiUsage } = await import('@/utils/usageLogger');
+        await logAiUsage(tenantId, null, 'process-reply', aiData.usage);
+      }
+      
       const agentReply = aiData.choices[0].message.content.trim();
 
       // Send Email via Centralized Postal Module
@@ -114,14 +120,21 @@ RULES:
         ];
       }
 
-      await sendEmail({
+      const subject = `Re: Following up on Quote ${quote.qn_number}`;
+
+      const sentData = await sendEmail({
         from: `${fromName} <${fromEmail}>`,
         to: clientEmail,
         replyTo: tenant.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : undefined,
-        subject: `Re: Following up on Quote ${quote.qn_number}`,
+        subject,
         text: agentReply,
         headers
       });
+
+      if (sentData) {
+        const { logEmailSent } = await import('@/utils/usageLogger');
+        await logEmailSent(tenantId, clientEmail, subject);
+      }
 
       // Log the AI response to agent_conversations and status_logs
       let customMetadata = quote.custom_metadata || {};

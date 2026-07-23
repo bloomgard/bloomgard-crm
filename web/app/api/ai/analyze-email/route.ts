@@ -59,6 +59,11 @@ export async function POST(req: Request) {
 
     const result = await response.json();
     
+    if (email.tenant_id && result.usage) {
+      const { logAiUsage } = await import('@/utils/usageLogger');
+      await logAiUsage(email.tenant_id, null, 'analyze-email', result.usage);
+    }
+
     let analysis;
     try {
       analysis = JSON.parse(result?.choices?.[0]?.message?.content);

@@ -203,6 +203,13 @@ export async function POST(request: Request) {
 
           if (aiResponse.ok) {
             const aiData = await aiResponse.json();
+            
+            // Log AI usage
+            if (aiData.usage) {
+              const { logAiUsage } = await import('@/utils/usageLogger');
+              await logAiUsage(tenantData.id, null, 'agent-coordinator', aiData.usage);
+            }
+            
             const emailBody = aiData.choices[0].message.content.trim();
 
             const mailOptions = {
@@ -212,7 +219,11 @@ export async function POST(request: Request) {
               text: emailBody
             };
 
-            await sendEmail(mailOptions);
+            const sentData = await sendEmail(mailOptions);
+            
+            // Log Email Usage
+            const { logEmailSent } = await import('@/utils/usageLogger');
+            await logEmailSent(tenantData.id, clientEmail, mailOptions.subject);
             
             const now = new Date().toISOString();
             let meta = quote.custom_metadata;

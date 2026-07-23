@@ -64,6 +64,13 @@ export async function POST(req: Request) {
     let data;
     try {
       data = await sendEmail(emailPayload);
+      
+      // Log Email Usage
+      if (data && tenantId) {
+        const { logEmailSent } = await import('@/utils/usageLogger');
+        await logEmailSent(tenantId, to, subject);
+      }
+      
     } catch (sendError: any) {
       console.error('Email Delivery Error:', sendError);
       return NextResponse.json({ success: false, error: sendError.message || 'Failed to send email' }, { status: 400, headers: corsHeaders });

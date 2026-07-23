@@ -109,6 +109,12 @@ export async function POST(request: Request) {
 
     if (!aiResponse.ok) throw new Error('AI Generation failed');
     const aiData = await aiResponse.json();
+    
+    if (aiData.usage) {
+      const { logAiUsage } = await import('@/utils/usageLogger');
+      await logAiUsage(tenantId, null, 'trigger-agent', aiData.usage);
+    }
+    
     const emailBody = aiData.choices[0].message.content.trim();
 
     // Transporter removed in favor of native Resend
@@ -124,7 +130,13 @@ export async function POST(request: Request) {
       text: emailBody
     };
 
-    await sendEmail(mailOptions);
+    const sentData = await sendEmail(mailOptions);
+    
+    if (sentData) {
+      const { logEmailSent } = await import('@/utils/usageLogger');
+      await logEmailSent(tenantId, clientEmail, mailOptions.subject);
+    }
+    
     const now = new Date().toISOString();
 
     let meta = quote.custom_metadata;

@@ -13,21 +13,26 @@ export default function BossLogin() {
     e.preventDefault();
     setLoading(true);
 
-    // Strict check for your admin email
-    if (email !== "anshag239@gmail.com") {
-      alert("Unauthorized: Boss Access Only.");
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       alert("Access Denied: " + error.message);
       setLoading(false);
     } else {
-      // Direct jump to the Boss Control Center
-      router.push("/boss");
+      // Check if user has super_admin role
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .single();
+        
+      if (profile?.role === "super_admin") {
+        router.push("/boss");
+      } else {
+        alert("Unauthorized: Boss Access Only.");
+        setLoading(false);
+        await supabase.auth.signOut();
+      }
     }
   };
 
