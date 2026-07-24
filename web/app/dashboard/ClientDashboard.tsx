@@ -63,7 +63,7 @@ export default function ClientDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [focusedField, setFocusedField] = useState<{section: string, field: string, rowIdx: number | 'single'} | null>(null);
+  const [focusedField, setFocusedField] = useState<{ section: string, field: string, rowIdx: number | 'single' } | null>(null);
   const [viewingDoc, setViewingDoc] = useState(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -113,16 +113,16 @@ export default function ClientDashboard() {
   const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
   const [triageStatusFilters, setTriageStatusFilters] = useState<string[]>([]);
   const [triageDaysFilter, setTriageDaysFilter] = useState(3);
-  
+
   // User Onboarding State
   const [onboardEmail, setOnboardEmail] = useState("");
   const [onboardPassword, setOnboardPassword] = useState("");
   const [onboardRole, setOnboardRole] = useState("agent");
   const [passwordCache, setPasswordCache] = useState<Record<string, string>>({});
-  
+
   // Blueprint Configurator State
   const [draggedSectionIdx, setDraggedSectionIdx] = useState<number | null>(null);
-  const [draggedFieldInfo, setDraggedFieldInfo] = useState<{sIdx: number, fIdx: number} | null>(null);
+  const [draggedFieldInfo, setDraggedFieldInfo] = useState<{ sIdx: number, fIdx: number } | null>(null);
 
   const handleCreateUser = async () => {
     if (!onboardEmail || !onboardPassword) return alert("Credentials required.");
@@ -141,16 +141,16 @@ export default function ClientDashboard() {
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to create user");
       }
-      
+
       setPasswordCache(prev => ({ ...prev, [onboardEmail]: onboardPassword }));
       alert(`✅ Success!\nEmail: ${onboardEmail}\nRole: ${onboardRole}`);
-      
+
       // Refresh users list if possible, or just reset form
       setOnboardEmail("");
       setOnboardPassword("");
     } catch (err: any) { alert("Auth Error: " + err.message); }
   };
-  
+
   const handleSaveBlueprint = async () => {
     try {
       const { error } = await supabase.from("tenant_schemas").update({ schema_config: blueprint }).eq("tenant_id", user?.tenant_id || tenantId);
@@ -166,7 +166,7 @@ export default function ClientDashboard() {
     if (!text || !text.trim()) return;
     setIsSendingQuoteReply(quote.id);
     let targetEmail = quote.client_email || quote.clients?.email || quote.custom_metadata?.client_email || quote.custom_metadata?.['Client Information']?.email;
-    
+
     if (!targetEmail) {
       // Fallback: Check if we have received any inbound emails for this quote
       const { data: inboundEmails } = await supabase
@@ -203,15 +203,15 @@ export default function ClientDashboard() {
       if (res.ok) {
         setQuoteReplyTexts(prev => ({ ...prev, [quote.id]: '' }));
         alert("Reply sent successfully!");
-        
+
         // Update local selected record state so the UI instantly reflects the new message without requiring a full reload
         if (selectedRecord && selectedRecord.id === quote.id) {
-            const newMsg = { role: 'agent', content: text, timestamp: new Date().toISOString() };
-            const updatedMeta = { ...(selectedRecord.custom_metadata || {}) };
-            const conversations = [...(updatedMeta.agent_conversations || [])];
-            conversations.push(newMsg);
-            updatedMeta.agent_conversations = conversations;
-            setSelectedRecord({ ...selectedRecord, custom_metadata: updatedMeta });
+          const newMsg = { role: 'agent', content: text, timestamp: new Date().toISOString() };
+          const updatedMeta = { ...(selectedRecord.custom_metadata || {}) };
+          const conversations = [...(updatedMeta.agent_conversations || [])];
+          conversations.push(newMsg);
+          updatedMeta.agent_conversations = conversations;
+          setSelectedRecord({ ...selectedRecord, custom_metadata: updatedMeta });
         }
         fetchRecords(user?.tenant_id || tenantId);
       } else {
@@ -481,7 +481,7 @@ export default function ClientDashboard() {
 
     // Flag quotes that haven't been dispatched yet
     if (r.follow_up_status === 'Agent Dispatched' || r.custom_metadata?.follow_up_status === 'Agent Dispatched') return false;
-    
+
     // Don't flag quotes that are already Approved or Lost unless specified in filters
     if (triageStatusFilters.length === 0) {
       if (r.status === 'Approved' || r.status === 'Lost') return false;
@@ -500,7 +500,7 @@ export default function ClientDashboard() {
     };
 
     if (triageDaysFilter === 0) return true;
-    
+
     const dueDate = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
     if (!dueDate) {
       // Prioritize the manual 'date' field over the unchangeable 'created_at' so manual database edits actually take effect
@@ -926,11 +926,11 @@ export default function ClientDashboard() {
       }));
       await supabase.from("quotation_items").insert(parsedItems);
     }
-    
+
     // Save both the root status and the synchronized metadata back to the database
-    const { error: metaError } = await supabase.from("quotations").update({ 
+    const { error: metaError } = await supabase.from("quotations").update({
       status: newStatus,
-      custom_metadata: updatedMetadata 
+      custom_metadata: updatedMetadata
     }).eq("id", id);
     if (metaError) console.error("Metadata Sync Error:", metaError);
 
@@ -981,7 +981,7 @@ export default function ClientDashboard() {
     if (!msg.trim() || !tenantId) return;
     setCurrentInput("");
     setChatHistory(p => [...p, { role: 'user', content: msg }]); setIsThinking(true);
-    
+
     // 1. Comprehensive Quotes & Client Follow-up Trajectory
     const quotesData = visibleRecords.map(r => {
       const rawItems = extractArray(r, 'Quotation Items') || extractArray(r, 'Products') || [];
@@ -1268,13 +1268,13 @@ Command: ${dashCommand}`;
 
   const handleOpenEmailComposer = async (r: any) => {
     const name = `${r.qn_number} - ${getManifestTitle(r)}`;
-    
+
     // Auto-attach the document as a real PDF
     const html = await getRenderedHTML(r);
-    
+
     // Dynamically import html2pdf to prevent SSR errors
     const html2pdf = (await import('html2pdf.js')).default;
-    
+
     // Configure html2pdf to output a data URI string
     const opt = {
       margin: 0.5,
@@ -1283,7 +1283,7 @@ Command: ${dashCommand}`;
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
     };
-    
+
     // Generate the PDF
     const pdfBase64 = await html2pdf().set(opt).from(html).output('datauristring');
 
@@ -1467,7 +1467,7 @@ Command: ${dashCommand}`;
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto scrollbar-hide">
           {[
-            ['dashboard', '📊 Intelligence'],
+            ['dashboard', '📊 Dashboard'],
             ['pipeline', '🚀 Quotes'],
             ['inbox', '📬 Inbox'],
             ['alerts', '🚨 Action Need'],
@@ -1547,9 +1547,9 @@ Command: ${dashCommand}`;
                             <button
                               key={status as string}
                               onClick={() => {
-                                setTriageStatusFilters(prev => 
-                                  prev.includes(status as string) 
-                                    ? prev.filter(s => s !== status) 
+                                setTriageStatusFilters(prev =>
+                                  prev.includes(status as string)
+                                    ? prev.filter(s => s !== status)
                                     : [...prev, status as string]
                                 );
                               }}
@@ -1563,8 +1563,8 @@ Command: ${dashCommand}`;
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Days Dormant</label>
-                        <select 
-                          value={triageDaysFilter} 
+                        <select
+                          value={triageDaysFilter}
                           onChange={(e) => setTriageDaysFilter(Number(e.target.value))}
                           className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 outline-none focus:border-indigo-500"
                         >
@@ -1683,14 +1683,14 @@ Command: ${dashCommand}`;
                                   </div>
                                 )}
                                 <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                  <textarea 
+                                  <textarea
                                     value={quoteReplyTexts[r.id] || ''}
                                     onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
                                     placeholder="Type a manual reply to the client..."
                                     className="w-full p-4 text-sm focus:outline-none resize-y min-h-[80px] bg-transparent"
                                   />
                                   <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
-                                    <button 
+                                    <button
                                       onClick={() => handleQuoteReply(r)}
                                       disabled={isSendingQuoteReply === r.id || !(quoteReplyTexts[r.id] || '').trim()}
                                       className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
@@ -1723,29 +1723,29 @@ Command: ${dashCommand}`;
               <h2 className="text-3xl font-bold text-gray-900 pl-2">Workspace Settings</h2>
             </header>
 
-             {settingsSubView === 'menu' && (
+            {settingsSubView === 'menu' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                 <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                    <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-                      <span className="text-xl">🗄️</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
-                    <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
-                 </button>
-                 <button onClick={() => setSettingsSubView('users')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                    <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
-                      <span className="text-xl">👥</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">User Access</h3>
-                    <p className="text-sm text-gray-500">Onboard new agents, managers, and admins to this workspace.</p>
-                 </button>
-                 <button onClick={() => setSettingsSubView('blueprint')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                    <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
-                      <span className="text-xl">🏗️</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
-                    <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
-                 </button>
+                <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                    <span className="text-xl">🗄️</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
+                  <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
+                </button>
+                <button onClick={() => setSettingsSubView('users')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
+                    <span className="text-xl">👥</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">User Access</h3>
+                  <p className="text-sm text-gray-500">Onboard new agents, managers, and admins to this workspace.</p>
+                </button>
+                <button onClick={() => setSettingsSubView('blueprint')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                  <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
+                    <span className="text-xl">🏗️</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
+                  <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
+                </button>
               </div>
             )}
 
@@ -1772,20 +1772,20 @@ Command: ${dashCommand}`;
                         <p className="font-bold text-sm text-gray-800">{u.email}</p>
                         <div className="flex items-center gap-3 mt-2">
                           <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-400'}`}>{u.role}</span>
-                          <button onClick={() => { 
-                             const p = passwordCache[u.email]; 
-                             if(p) { navigator.clipboard.writeText(p); alert("Copied!"); } 
-                             else alert("Not in session. Reset user to change pass.");
-                           }} className="text-[10px] font-bold text-blue-600 hover:underline">Copy Password</button>
+                          <button onClick={() => {
+                            const p = passwordCache[u.email];
+                            if (p) { navigator.clipboard.writeText(p); alert("Copied!"); }
+                            else alert("Not in session. Reset user to change pass.");
+                          }} className="text-[10px] font-bold text-blue-600 hover:underline">Copy Password</button>
                         </div>
                       </div>
-                      <button onClick={async () => { 
-                        if(confirm("Revoke Access?")) { 
-                          await supabase.rpc('decommission_employee', { target_email: u.email }); 
+                      <button onClick={async () => {
+                        if (confirm("Revoke Access?")) {
+                          await supabase.rpc('decommission_employee', { target_email: u.email });
                           // Simple refresh
                           const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", tenantId);
                           setTenantUsers(users || []);
-                        } 
+                        }
                       }} className="text-red-400 hover:text-red-600 font-bold text-xs transition-colors">Revoke</button>
                     </div>
                   ))}
@@ -1815,15 +1815,15 @@ Command: ${dashCommand}`;
                     </div>
                     <div className="space-y-3">
                       {section.fields?.map((f: any, fIdx: number) => (
-                        <div key={`f-${fIdx}`} draggable onDragStart={(e) => { e.stopPropagation(); setDraggedFieldInfo({sIdx, fIdx}); }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => {
-                            e.preventDefault(); e.stopPropagation();
-                            if (!draggedFieldInfo || draggedFieldInfo.sIdx !== sIdx) return;
-                            const nc = [...blueprint]; const [m] = nc[sIdx].fields.splice(draggedFieldInfo.fIdx, 1); nc[sIdx].fields.splice(fIdx, 0, m); setBlueprint(nc); setDraggedFieldInfo(null);
-                          }} className="grid grid-cols-12 gap-4 bg-gray-50 p-4 rounded-2xl items-center border border-transparent hover:border-gray-200 transition-colors">
+                        <div key={`f-${fIdx}`} draggable onDragStart={(e) => { e.stopPropagation(); setDraggedFieldInfo({ sIdx, fIdx }); }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          if (!draggedFieldInfo || draggedFieldInfo.sIdx !== sIdx) return;
+                          const nc = [...blueprint]; const [m] = nc[sIdx].fields.splice(draggedFieldInfo.fIdx, 1); nc[sIdx].fields.splice(fIdx, 0, m); setBlueprint(nc); setDraggedFieldInfo(null);
+                        }} className="grid grid-cols-12 gap-4 bg-gray-50 p-4 rounded-2xl items-center border border-transparent hover:border-gray-200 transition-colors">
                           <div className="col-span-1 text-gray-300 hover:text-black cursor-grab text-center text-lg">≡</div>
                           <input placeholder="Label" className="col-span-3 bg-transparent font-bold text-sm outline-none" value={f.label} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].label = e.target.value; setBlueprint(nc); }} />
                           <input placeholder="db_key" className="col-span-2 font-mono text-xs outline-none bg-transparent text-blue-600" value={f.name} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].name = e.target.value; setBlueprint(nc); }} />
-                          
+
                           <select className="col-span-2 text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 outline-none" value={f.type} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].type = e.target.value; setBlueprint(nc); }}>
                             <option value="text">Text</option>
                             <option value="number">Number</option>
@@ -1834,9 +1834,9 @@ Command: ${dashCommand}`;
                             <option value="calculated">Formula</option>
                             <option value="logged_in">Logged In User</option>
                           </select>
-                          
+
                           <input placeholder={f.type === 'calculated' ? "e.g. SUM[Products.item_br]" : f.type === 'master_status' ? "Inquiry, Approved..." : "Options..."} className="col-span-3 bg-white border border-gray-200 text-xs p-2 rounded-lg outline-none disabled:opacity-50" value={f.options || ""} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].options = e.target.value; setBlueprint(nc); }} disabled={f.type !== "dropdown" && f.type !== "calculated" && f.type !== "master_status"} />
-                          
+
                           <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.splice(fIdx, 1); setBlueprint(nc); }} className="col-span-1 text-red-300 hover:text-red-500 font-bold text-right pr-2">✕</button>
                         </div>
                       ))}
@@ -1849,276 +1849,276 @@ Command: ${dashCommand}`;
             )}
 
             {settingsSubView === 'menu' && (
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
 
-              <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                <span className="text-2xl">✨</span>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">UI & Personalization</h3>
-                </div>
-              </div>
-
-              <div className="space-y-6 max-w-2xl mb-12">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                  <span className="text-2xl">✨</span>
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Theme Mode</label>
-                    <div className="flex bg-gray-100/50 p-1 rounded-xl w-full border border-gray-200/50">
-                      <button onClick={() => setUserPreferences({ ...userPreferences, theme: 'light' })} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'light' ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-700'}`}>Light Mode</button>
-                      <button onClick={() => setUserPreferences({ ...userPreferences, theme: 'dark' })} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'dark' ? 'bg-gray-900 shadow-sm text-white' : 'text-gray-500 hover:text-gray-700'}`}>Dark Mode</button>
+                    <h3 className="text-lg font-bold text-gray-900">UI & Personalization</h3>
+                  </div>
+                </div>
+
+                <div className="space-y-6 max-w-2xl mb-12">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Theme Mode</label>
+                      <div className="flex bg-gray-100/50 p-1 rounded-xl w-full border border-gray-200/50">
+                        <button onClick={() => setUserPreferences({ ...userPreferences, theme: 'light' })} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'light' ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-700'}`}>Light Mode</button>
+                        <button onClick={() => setUserPreferences({ ...userPreferences, theme: 'dark' })} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'dark' ? 'bg-gray-900 shadow-sm text-white' : 'text-gray-500 hover:text-gray-700'}`}>Dark Mode</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Workspace Wallpaper</label>
+                      <select
+                        value={userPreferences.wallpaper}
+                        onChange={e => setUserPreferences({ ...userPreferences, wallpaper: e.target.value })}
+                        className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors cursor-pointer"
+                      >
+                        <option value="legacy">Legacy UI (Solid Background)</option>
+                        <option value="wp1">Abstract - Midnight Blue</option>
+                        <option value="wp2">Abstract - Pastel Frost</option>
+                        <option value="wp3">Nature - Sunset Ocean</option>
+                        <option value="wp4">Nature - Misty Forest</option>
+                      </select>
                     </div>
                   </div>
+                  <button
+                    onClick={async () => {
+                      setIsSavingPrefs(true);
+                      localStorage.setItem('userPrefs_' + user?.id, JSON.stringify(userPreferences));
+                      if (user?.id) {
+                        await supabase.from('profiles').update({ custom_metadata: { ...user.custom_metadata, preferences: userPreferences } }).eq('id', user.id);
+                      }
+                      setIsSavingPrefs(false);
+                      alert("Personalization settings saved successfully!");
+                    }}
+                    disabled={isSavingPrefs}
+                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-indigo-400"
+                  >
+                    {isSavingPrefs ? "Saving..." : "Save UI Preferences"}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                  <span className="text-2xl">✉️</span>
                   <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Workspace Wallpaper</label>
-                    <select
-                      value={userPreferences.wallpaper}
-                      onChange={e => setUserPreferences({ ...userPreferences, wallpaper: e.target.value })}
-                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors cursor-pointer"
-                    >
-                      <option value="legacy">Legacy UI (Solid Background)</option>
-                      <option value="wp1">Abstract - Midnight Blue</option>
-                      <option value="wp2">Abstract - Pastel Frost</option>
-                      <option value="wp3">Nature - Sunset Ocean</option>
-                      <option value="wp4">Nature - Misty Forest</option>
+                    <h3 className="text-lg font-bold text-gray-900">Email Configuration</h3>
+
+                  </div>
+                </div>
+
+                <div className="space-y-4 max-w-md">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Custom Sender Email</label>
+                    <input
+                      type="email"
+                      value={customSender}
+                      onChange={e => setCustomSender(e.target.value)}
+                      placeholder="quotes@yourdomain.com"
+                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                      This email must belong to the domain you verified in GoDaddy/Resend.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5 mt-4">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Domain Alias (Routing Slug)</label>
+                    <input
+                      type="text"
+                      value={routingSlug}
+                      onChange={e => setRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                      placeholder=""
+                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                      Used to route incoming emails sent to alias@bloomgard.co. Must be unique.
+                    </p>
+                  </div>
+
+
+                  <button
+                    onClick={async () => {
+                      if (!tenantId) return;
+                      setIsSavingSettings(true);
+
+                      const newSchemaConfig = [
+                        ...blueprint,
+                        { is_agent_config: true, agents, title: "system_agents" },
+                        { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
+                        { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
+                      ];
+
+                      const [res1, res2] = await Promise.all([
+                        supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
+                        supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
+                      ]);
+
+                      setIsSavingSettings(false);
+                      if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
+                      else alert("Settings updated successfully!");
+                    }}
+                    disabled={isSavingSettings}
+                    className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform disabled:bg-gray-400"
+                  >
+                    {isSavingSettings ? "Saving..." : "Save Configuration"}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                  <span className="text-2xl">🤖</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">AI Personality Settings</h3>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mb-4">
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Tone</label>
+                    <select value={aiSettings.tone} onChange={e => setAiSettings({ ...aiSettings, tone: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                      <option>Professional</option>
+                      <option>Casual</option>
+                      <option>Friendly</option>
+                      <option>Aggressive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">English Level</label>
+                    <select value={aiSettings.englishLevel} onChange={e => setAiSettings({ ...aiSettings, englishLevel: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                      <option>Native</option>
+                      <option>Simple / Basic</option>
+                      <option>Corporate Jargon</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Desperation Level</label>
+                    <select value={aiSettings.desperation} onChange={e => setAiSettings({ ...aiSettings, desperation: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                      <option>Low (Confident)</option>
+                      <option>Medium (Eager)</option>
+                      <option>High (Need the deal)</option>
                     </select>
                   </div>
                 </div>
-                <button
-                  onClick={async () => {
-                    setIsSavingPrefs(true);
-                    localStorage.setItem('userPrefs_' + user?.id, JSON.stringify(userPreferences));
-                    if (user?.id) {
-                      await supabase.from('profiles').update({ custom_metadata: { ...user.custom_metadata, preferences: userPreferences } }).eq('id', user.id);
-                    }
-                    setIsSavingPrefs(false);
-                    alert("Personalization settings saved successfully!");
-                  }}
-                  disabled={isSavingPrefs}
-                  className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-indigo-400"
-                >
-                  {isSavingPrefs ? "Saving..." : "Save UI Preferences"}
-                </button>
-              </div>
 
-              <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                <span className="text-2xl">✉️</span>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Email Configuration</h3>
-
-                </div>
-              </div>
-
-              <div className="space-y-4 max-w-md">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Custom Sender Email</label>
-                  <input
-                    type="email"
-                    value={customSender}
-                    onChange={e => setCustomSender(e.target.value)}
-                    placeholder="quotes@yourdomain.com"
-                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
-                    This email must belong to the domain you verified in GoDaddy/Resend.
-                  </p>
-                </div>
-                <div className="space-y-1.5 mt-4">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Domain Alias (Routing Slug)</label>
-                  <input
-                    type="text"
-                    value={routingSlug}
-                    onChange={e => setRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                    placeholder=""
-                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
-                    Used to route incoming emails sent to alias@bloomgard.co. Must be unique.
-                  </p>
-                </div>
-
-
-                <button
-                  onClick={async () => {
-                    if (!tenantId) return;
-                    setIsSavingSettings(true);
-
-                    const newSchemaConfig = [
-                      ...blueprint,
-                      { is_agent_config: true, agents, title: "system_agents" },
-                      { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
-                      { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
-                    ];
-
-                    const [res1, res2] = await Promise.all([
-                      supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
-                      supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
-                    ]);
-
-                    setIsSavingSettings(false);
-                    if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
-                    else alert("Settings updated successfully!");
-                  }}
-                  disabled={isSavingSettings}
-                  className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform disabled:bg-gray-400"
-                >
-                  {isSavingSettings ? "Saving..." : "Save Configuration"}
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
-                <span className="text-2xl">🤖</span>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">AI Personality Settings</h3>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mb-4">
-                <div>
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Tone</label>
-                  <select value={aiSettings.tone} onChange={e => setAiSettings({ ...aiSettings, tone: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
-                    <option>Professional</option>
-                    <option>Casual</option>
-                    <option>Friendly</option>
-                    <option>Aggressive</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">English Level</label>
-                  <select value={aiSettings.englishLevel} onChange={e => setAiSettings({ ...aiSettings, englishLevel: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
-                    <option>Native</option>
-                    <option>Simple / Basic</option>
-                    <option>Corporate Jargon</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Desperation Level</label>
-                  <select value={aiSettings.desperation} onChange={e => setAiSettings({ ...aiSettings, desperation: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
-                    <option>Low (Confident)</option>
-                    <option>Medium (Eager)</option>
-                    <option>High (Need the deal)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* BRANDING / LOGO CONFIGURATION */}
-              <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
-                <span className="text-2xl">🎨</span>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Brand Identity</h3>
-                </div>
-              </div>
-              <div className="space-y-4 max-w-md">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Logo URL</label>
-                  <input
-                    type="url"
-                    value={logoUrl}
-                    onChange={e => setLogoUrl(e.target.value)}
-                    placeholder="https://example.com/logo.png"
-                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
-                    Accessible in the template as <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-500">{"{{company_logo}}"}</code>
-                  </p>
-                </div>
-              </div>
-
-              {/* HTML TEMPLATE EDITOR */}
-              <div className="flex justify-between items-center mt-10 mb-6 border-b border-gray-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">📝</span>
+                {/* BRANDING / LOGO CONFIGURATION */}
+                <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                  <span className="text-2xl">🎨</span>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">Quotation Template Editor</h3>
-                    <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Live Document Engine</p>
+                    <h3 className="text-lg font-bold text-gray-900">Brand Identity</h3>
                   </div>
                 </div>
-                <button
-                  onClick={async () => {
-                    if (!tenantId) return;
-                    setIsSavingSettings(true);
-
-                    const newSchemaConfig = [
-                      ...blueprint,
-                      { is_agent_config: true, agents, title: "system_agents" },
-                      { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
-                      { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
-                    ];
-
-                    const [res1, res2] = await Promise.all([
-                      supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
-                      supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
-                    ]);
-
-                    setIsSavingSettings(false);
-                    if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
-                    else alert("Template and Logo saved successfully!");
-                  }}
-                  disabled={isSavingSettings}
-                  className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-gray-400"
-                >
-                  {isSavingSettings ? "Saving..." : "Save Template & Logo"}
-                </button>
-              </div>
-              <div className="flex flex-col lg:flex-row gap-6 h-[800px] mb-12">
-                <div className="flex-1 bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-inner">
-                  <div className="bg-gray-950 px-6 py-4 border-b border-gray-800 flex justify-between items-center"><span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Source Code</span><span className="text-[10px] font-black text-indigo-400">{'{{db_key}}'} Supported</span></div>
-                  <textarea className="w-full flex-1 bg-transparent text-gray-300 font-mono text-[11px] p-6 outline-none resize-none leading-relaxed" value={htmlTemplate} onChange={e => setHtmlTemplate(e.target.value)} spellCheck={false} placeholder="Paste pure HTML here..." />
+                <div className="space-y-4 max-w-md">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Logo URL</label>
+                    <input
+                      type="url"
+                      value={logoUrl}
+                      onChange={e => setLogoUrl(e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                      Accessible in the template as <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-500">{"{{company_logo}}"}</code>
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
-                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
-                  {htmlTemplate ? (
-                    <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace(/\\{\\{\\{?company_logo\\}\\}?\\}?/g, logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview" /></div>
-                  ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
-                </div>
-              </div>
 
-              {/* TEAM MANAGEMENT */}
-              {(user?.role === 'admin' || user?.role === 'manager') && (
-                <>
-                  <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
-                    <span className="text-2xl">👥</span>
+                {/* HTML TEMPLATE EDITOR */}
+                <div className="flex justify-between items-center mt-10 mb-6 border-b border-gray-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📝</span>
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">Team Management</h3>
+                      <h3 className="text-lg font-bold text-gray-900">Quotation Template Editor</h3>
+                      <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Live Document Engine</p>
                     </div>
                   </div>
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-4xl">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-[#F8F9FA] border-b border-gray-100 text-xs text-gray-500 uppercase tracking-widest">
-                          <th className="p-4 font-bold">Email</th>
-                          <th className="p-4 font-bold">Role</th>
-                          <th className="p-4 font-bold">Joined</th>
-                          <th className="p-4 font-bold text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {tenantUsers.map((u) => (
-                          <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="p-4 text-gray-900 text-sm font-medium">{u.email || 'Unknown'}</td>
-                            <td className="p-4">
-                              <select
-                                value={u.role || 'agent'}
-                                onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                                className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer border ${u.role === 'admin' ? 'bg-black text-white border-black' : u.role === 'manager' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
-                              >
-                                <option value="agent">Agent</option>
-                                <option value="manager">Manager</option>
-                                <option value="admin">Admin</option>
-                              </select>
-                            </td>
-                            <td className="p-4 text-gray-500 text-sm">{new Date(u.created_at).toLocaleDateString()}</td>
-                            <td className="p-4 text-right">
-                              <button onClick={() => handleResetPassword(u.id)} className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md uppercase tracking-wider transition-colors">Reset Password</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {tenantUsers.length === 0 && <div className="p-12 text-center text-gray-500 text-sm">No team members found.</div>}
-                  </div>
-                </>
-              )}
+                  <button
+                    onClick={async () => {
+                      if (!tenantId) return;
+                      setIsSavingSettings(true);
 
-            </div>
+                      const newSchemaConfig = [
+                        ...blueprint,
+                        { is_agent_config: true, agents, title: "system_agents" },
+                        { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
+                        { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
+                      ];
+
+                      const [res1, res2] = await Promise.all([
+                        supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
+                        supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
+                      ]);
+
+                      setIsSavingSettings(false);
+                      if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
+                      else alert("Template and Logo saved successfully!");
+                    }}
+                    disabled={isSavingSettings}
+                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-gray-400"
+                  >
+                    {isSavingSettings ? "Saving..." : "Save Template & Logo"}
+                  </button>
+                </div>
+                <div className="flex flex-col lg:flex-row gap-6 h-[800px] mb-12">
+                  <div className="flex-1 bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-inner">
+                    <div className="bg-gray-950 px-6 py-4 border-b border-gray-800 flex justify-between items-center"><span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Source Code</span><span className="text-[10px] font-black text-indigo-400">{'{{db_key}}'} Supported</span></div>
+                    <textarea className="w-full flex-1 bg-transparent text-gray-300 font-mono text-[11px] p-6 outline-none resize-none leading-relaxed" value={htmlTemplate} onChange={e => setHtmlTemplate(e.target.value)} spellCheck={false} placeholder="Paste pure HTML here..." />
+                  </div>
+                  <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
+                    {htmlTemplate ? (
+                      <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace(/\\{\\{\\{?company_logo\\}\\}?\\}?/g, logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview" /></div>
+                    ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
+                  </div>
+                </div>
+
+                {/* TEAM MANAGEMENT */}
+                {(user?.role === 'admin' || user?.role === 'manager') && (
+                  <>
+                    <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                      <span className="text-2xl">👥</span>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">Team Management</h3>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-4xl">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-[#F8F9FA] border-b border-gray-100 text-xs text-gray-500 uppercase tracking-widest">
+                            <th className="p-4 font-bold">Email</th>
+                            <th className="p-4 font-bold">Role</th>
+                            <th className="p-4 font-bold">Joined</th>
+                            <th className="p-4 font-bold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {tenantUsers.map((u) => (
+                            <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="p-4 text-gray-900 text-sm font-medium">{u.email || 'Unknown'}</td>
+                              <td className="p-4">
+                                <select
+                                  value={u.role || 'agent'}
+                                  onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                  className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer border ${u.role === 'admin' ? 'bg-black text-white border-black' : u.role === 'manager' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                >
+                                  <option value="agent">Agent</option>
+                                  <option value="manager">Manager</option>
+                                  <option value="admin">Admin</option>
+                                </select>
+                              </td>
+                              <td className="p-4 text-gray-500 text-sm">{new Date(u.created_at).toLocaleDateString()}</td>
+                              <td className="p-4 text-right">
+                                <button onClick={() => handleResetPassword(u.id)} className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md uppercase tracking-wider transition-colors">Reset Password</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {tenantUsers.length === 0 && <div className="p-12 text-center text-gray-500 text-sm">No team members found.</div>}
+                    </div>
+                  </>
+                )}
+
+              </div>
             )}
           </div>
         )}
@@ -2458,14 +2458,14 @@ Command: ${dashCommand}`;
                                 </div>
                               )}
                               <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                <textarea 
+                                <textarea
                                   value={quoteReplyTexts[r.id] || ''}
                                   onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
                                   placeholder="Type a manual reply to the client..."
                                   className="w-full p-4 text-sm focus:outline-none resize-y min-h-[80px] bg-transparent"
                                 />
                                 <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
-                                  <button 
+                                  <button
                                     onClick={() => handleQuoteReply(r)}
                                     disabled={isSendingQuoteReply === r.id || !(quoteReplyTexts[r.id] || '').trim()}
                                     className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
@@ -2720,31 +2720,31 @@ Command: ${dashCommand}`;
                   .filter(log => !log.is_deleted)
                   .filter(log => log.subject?.toLowerCase().includes(inboxSearch.toLowerCase()) || log.sender_email?.toLowerCase().includes(inboxSearch.toLowerCase()))
                   .map((log) => (
-                  <div key={log.id} onClick={() => { setSelectedInboxEmail(log); if(!log.is_read) handleInboxAction(log.id, 'is_read', true); }} className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-indigo-50/50 dark:bg-indigo-900/20 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50 dark:hover:bg-gray-900/50 border-l-4 border-l-transparent'}`}>
-                    <div className="flex justify-between items-start mb-1">
-                      <span className={`text-sm ${log.is_read ? 'font-semibold text-gray-700' : 'font-black text-gray-900'} dark:text-white truncate pr-2`}>{log.sender_email}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-500 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString()}</span>
+                    <div key={log.id} onClick={() => { setSelectedInboxEmail(log); if (!log.is_read) handleInboxAction(log.id, 'is_read', true); }} className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-indigo-50/50 dark:bg-indigo-900/20 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50 dark:hover:bg-gray-900/50 border-l-4 border-l-transparent'}`}>
+                      <div className="flex justify-between items-start mb-1">
+                        <span className={`text-sm ${log.is_read ? 'font-semibold text-gray-700' : 'font-black text-gray-900'} dark:text-white truncate pr-2`}>{log.sender_email}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-500 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className={`text-xs ${log.is_read ? 'font-medium text-gray-600' : 'font-bold text-gray-800'} dark:text-gray-300 truncate mb-1`}>{log.subject || 'No Subject'}</div>
+                      <div className="text-xs text-gray-500 truncate flex items-center justify-between">
+                        <span className="truncate pr-4">{log.body_text?.substring(0, 50)}...</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleInboxAction(log.id, 'is_starred', !log.is_starred); }}
+                          className={`text-lg transition-colors ${log.is_starred ? 'text-yellow-400 hover:text-yellow-500' : 'text-gray-300 hover:text-gray-400'}`}
+                        >
+                          {log.is_starred ? '★' : '☆'}
+                        </button>
                       </div>
                     </div>
-                    <div className={`text-xs ${log.is_read ? 'font-medium text-gray-600' : 'font-bold text-gray-800'} dark:text-gray-300 truncate mb-1`}>{log.subject || 'No Subject'}</div>
-                    <div className="text-xs text-gray-500 truncate flex items-center justify-between">
-                      <span className="truncate pr-4">{log.body_text?.substring(0, 50)}...</span>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleInboxAction(log.id, 'is_starred', !log.is_starred); }}
-                        className={`text-lg transition-colors ${log.is_starred ? 'text-yellow-400 hover:text-yellow-500' : 'text-gray-300 hover:text-gray-400'}`}
-                      >
-                        {log.is_starred ? '★' : '☆'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
                 {inboxLogs.filter(log => !log.is_deleted).length === 0 && (
                   <div className="p-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">No Emails Yet</div>
                 )}
               </div>
             </div>
-            
+
             <div className="w-2/3 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden relative">
               {selectedInboxEmail ? (
                 <div className="flex-1 overflow-y-auto p-6 flex flex-col">
@@ -2759,20 +2759,20 @@ Command: ${dashCommand}`;
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => handleInboxAction(selectedInboxEmail.id, 'is_starred', !selectedInboxEmail.is_starred)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-lg" title="Star">
-                         {selectedInboxEmail.is_starred ? '⭐' : '☆'}
+                        {selectedInboxEmail.is_starred ? '⭐' : '☆'}
                       </button>
                       <button onClick={() => { handleInboxAction(selectedInboxEmail.id, 'is_deleted', true); setSelectedInboxEmail(null); }} className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors text-lg" title="Delete">
-                         🗑️
+                        🗑️
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="text-sm text-gray-800 dark:text-gray-300 whitespace-pre-wrap mb-8 bg-gray-50 dark:bg-gray-900/50 p-6 rounded-xl border border-gray-100 dark:border-gray-800 flex-1">
                     {selectedInboxEmail.body_text || selectedInboxEmail.body_html || "No Content"}
                   </div>
 
                   <div className="mb-8 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white shadow-sm">
-                    <textarea 
+                    <textarea
                       value={inboxReplyText}
                       onChange={(e) => setInboxReplyText(e.target.value)}
                       placeholder="Type your reply here..."
@@ -2782,7 +2782,7 @@ Command: ${dashCommand}`;
                       <div className="flex gap-2">
                         <button className="text-gray-400 hover:text-indigo-600 text-lg px-2" title="Attach File">📎</button>
                       </div>
-                      <button 
+                      <button
                         onClick={handleInboxReply}
                         disabled={isSendingReply || !inboxReplyText.trim()}
                         className="px-6 py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-md"
@@ -2926,7 +2926,7 @@ Command: ${dashCommand}`;
                               if (!parentValueInForm) return false;
                               return parentEntry.values?.some(v => v.value_text === parentValueInForm);
                             });
-                            
+
                             const manualValues = activeEntries.flatMap(e => e.values || []);
                             const activeValues = [...manualValues];
 
@@ -2944,7 +2944,7 @@ Command: ${dashCommand}`;
 
                             const hasMasterValues = activeValues.length > 0;
                             const isSingleMasterValue = manualValues.length === 1;
-                            
+
                             // Auto-fill logic (for manual single values)
                             if (isSingleMasterValue && (!row[f.name] || row[f.name] === "")) {
                               setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text, rIdx), 0);
@@ -2953,61 +2953,61 @@ Command: ${dashCommand}`;
                             const listId = `datalist-${section.title}-${f.name}-${fIdx}-${rIdx}`;
 
                             return (
-                            <div key={fIdx} className="space-y-1.5 relative">
-                              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
-                              {f.type === "dropdown" || f.type === "master_status" ? (
-                                <select
-                                  value={row[f.name] || ""}
-                                  onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
-                                  className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm"
-                                >
-                                  <option value="">Select...</option>
-                                  {f.options && String(f.options).split(",").map((o, i) => <option key={i} value={o.trim()}>{o.trim()}</option>)}
-                                </select>
-                              ) : f.type === "logged_in" ? (
-                                <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none shadow-sm cursor-not-allowed text-gray-500" />
-                              ) : f.type === "file" || f.type === "attachment" ? (
-                                <div className="flex flex-col gap-1">
-                                  <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result, rIdx) }; reader.readAsDataURL(file); } }} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                                  {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
-                                </div>
-                              ) : (
-                                <>
-                                  <input
-                                    type={f.type === "date" ? "date" : "text"}
-                                    inputMode={f.type === "number" ? "decimal" : undefined}
-                                    value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
-                                    readOnly={f.type === "calculated"}
-                                    onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: rIdx })}
-                                    onBlur={() => setTimeout(() => setFocusedField(null), 200)}
+                              <div key={fIdx} className="space-y-1.5 relative">
+                                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
+                                {f.type === "dropdown" || f.type === "master_status" ? (
+                                  <select
+                                    value={row[f.name] || ""}
                                     onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
-                                    className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${hasMasterValues ? 'border-indigo-200 text-indigo-700' : ''}`}
-                                    placeholder={hasMasterValues ? "Select or type..." : "..."}
-                                    autoComplete="off"
-                                  />
-                                  {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === rIdx && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                      {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).map((val) => (
-                                        <div 
-                                          key={val.id} 
-                                          className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
-                                          onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            updateDynamicDataField(section.title, f.name, val.value_text, rIdx);
-                                            setFocusedField(null);
-                                          }}
-                                        >
-                                          {val.value_text}
-                                        </div>
-                                      ))}
-                                      {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).length === 0 && (
-                                        <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
-                                      )}
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                                    className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm"
+                                  >
+                                    <option value="">Select...</option>
+                                    {f.options && String(f.options).split(",").map((o, i) => <option key={i} value={o.trim()}>{o.trim()}</option>)}
+                                  </select>
+                                ) : f.type === "logged_in" ? (
+                                  <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none shadow-sm cursor-not-allowed text-gray-500" />
+                                ) : f.type === "file" || f.type === "attachment" ? (
+                                  <div className="flex flex-col gap-1">
+                                    <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result, rIdx) }; reader.readAsDataURL(file); } }} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                                    {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
+                                  </div>
+                                ) : (
+                                  <>
+                                    <input
+                                      type={f.type === "date" ? "date" : "text"}
+                                      inputMode={f.type === "number" ? "decimal" : undefined}
+                                      value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
+                                      readOnly={f.type === "calculated"}
+                                      onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: rIdx })}
+                                      onBlur={() => setTimeout(() => setFocusedField(null), 200)}
+                                      onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
+                                      className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${hasMasterValues ? 'border-indigo-200 text-indigo-700' : ''}`}
+                                      placeholder={hasMasterValues ? "Select or type..." : "..."}
+                                      autoComplete="off"
+                                    />
+                                    {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === rIdx && (
+                                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                        {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).map((val) => (
+                                          <div
+                                            key={val.id}
+                                            className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
+                                            onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              updateDynamicDataField(section.title, f.name, val.value_text, rIdx);
+                                              setFocusedField(null);
+                                            }}
+                                          >
+                                            {val.value_text}
+                                          </div>
+                                        ))}
+                                        {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).length === 0 && (
+                                          <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             );
                           })}
                           <button onClick={() => { const nd = { ...dynamicData }; nd[section.title].splice(rIdx, 1); setDynamicData(nd); }} className="absolute -top-3 -right-3 bg-white text-red-500 hover:text-white hover:bg-red-500 w-7 h-7 rounded-full border border-gray-200 shadow-sm flex items-center justify-center text-xs transition-colors active:scale-95">✕</button>
@@ -3026,7 +3026,7 @@ Command: ${dashCommand}`;
                           if (!parentValueInForm) return false;
                           return parentEntry.values?.some(v => v.value_text === parentValueInForm);
                         });
-                        
+
                         const manualValues = activeEntries.flatMap(e => e.values || []);
                         const activeValues = [...manualValues];
 
@@ -3044,7 +3044,7 @@ Command: ${dashCommand}`;
 
                         const hasMasterValues = activeValues.length > 0;
                         const isSingleMasterValue = manualValues.length === 1;
-                        
+
                         // Auto-fill logic
                         if (isSingleMasterValue && (!dynamicData[section.title]?.[f.name] || dynamicData[section.title][f.name] === "")) {
                           setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text), 0);
@@ -3053,62 +3053,63 @@ Command: ${dashCommand}`;
                         const listId = `datalist-${section.title}-${f.name}-${fIdx}-single`;
 
                         return (
-                        <div key={fIdx} className="space-y-1.5 relative">
-                          <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
-                          {f.type === "dropdown" || f.type === "master_status" ? (
-                            <select
-                              value={dynamicData[section.title]?.[f.name] || ""}
-                              onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
-                              className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400"
-                            >
-                              <option value="">Select...</option>
-                              {f.options && String(f.options).split(",").map((o, i) => <option key={i} value={o.trim()}>{o.trim()}</option>)}
-                            </select>
-                          ) : f.type === "logged_in" ? (
-                            <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
-                          ) : f.type === "file" || f.type === "attachment" ? (
-                            <div className="flex flex-col gap-1">
-                              <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result) }; reader.readAsDataURL(file); } }} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                              {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
-                            </div>
-                          ) : (
-                            <>
-                              <input
-                                type={f.type === "date" ? "date" : "text"}
-                                inputMode={f.type === "number" ? "decimal" : undefined}
-                                value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name] || "")}
-                                readOnly={f.type === "calculated"}
-                                onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: 'single' })}
-                                onBlur={() => setTimeout(() => setFocusedField(null), 200)}
+                          <div key={fIdx} className="space-y-1.5 relative">
+                            <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
+                            {f.type === "dropdown" || f.type === "master_status" ? (
+                              <select
+                                value={dynamicData[section.title]?.[f.name] || ""}
                                 onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
-                                className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : hasMasterValues ? 'bg-indigo-50 hover:bg-white focus:bg-white text-indigo-700 border-indigo-200 focus:border-indigo-400' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
-                                placeholder={hasMasterValues ? "Select or type..." : "..."}
-                                autoComplete="off"
-                              />
-                              {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === 'single' && (
-                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                  {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).map((val) => (
-                                    <div 
-                                      key={val.id} 
-                                      className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        updateDynamicDataField(section.title, f.name, val.value_text);
-                                        setFocusedField(null);
-                                      }}
-                                    >
-                                      {val.value_text}
-                                    </div>
-                                  ))}
-                                  {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).length === 0 && (
-                                    <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      );})}
+                                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400"
+                              >
+                                <option value="">Select...</option>
+                                {f.options && String(f.options).split(",").map((o, i) => <option key={i} value={o.trim()}>{o.trim()}</option>)}
+                              </select>
+                            ) : f.type === "logged_in" ? (
+                              <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
+                            ) : f.type === "file" || f.type === "attachment" ? (
+                              <div className="flex flex-col gap-1">
+                                <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result) }; reader.readAsDataURL(file); } }} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                                {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
+                              </div>
+                            ) : (
+                              <>
+                                <input
+                                  type={f.type === "date" ? "date" : "text"}
+                                  inputMode={f.type === "number" ? "decimal" : undefined}
+                                  value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name] || "")}
+                                  readOnly={f.type === "calculated"}
+                                  onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: 'single' })}
+                                  onBlur={() => setTimeout(() => setFocusedField(null), 200)}
+                                  onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
+                                  className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : hasMasterValues ? 'bg-indigo-50 hover:bg-white focus:bg-white text-indigo-700 border-indigo-200 focus:border-indigo-400' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
+                                  placeholder={hasMasterValues ? "Select or type..." : "..."}
+                                  autoComplete="off"
+                                />
+                                {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === 'single' && (
+                                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                    {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).map((val) => (
+                                      <div
+                                        key={val.id}
+                                        className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          updateDynamicDataField(section.title, f.name, val.value_text);
+                                          setFocusedField(null);
+                                        }}
+                                      >
+                                        {val.value_text}
+                                      </div>
+                                    ))}
+                                    {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).length === 0 && (
+                                      <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -3414,9 +3415,9 @@ Command: ${dashCommand}`;
                     >
                       <span>💻</span> Upload from Device
                     </button>
-                    
+
                     <div className="flex-1 relative">
-                      <select 
+                      <select
                         className="w-full bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 font-semibold text-xs py-2.5 px-3 rounded-xl shadow-sm transition-colors appearance-none cursor-pointer outline-none focus:border-indigo-400"
                         onChange={async (e) => {
                           const id = e.target.value;
@@ -3424,7 +3425,7 @@ Command: ${dashCommand}`;
                           const quote = docsRecords.find(r => String(r.id) === String(id));
                           if (quote) {
                             const html = await getRenderedHTML(quote);
-                            
+
                             const html2pdf = (await import('html2pdf.js')).default;
                             const opt = {
                               margin: 0.5,
@@ -3433,10 +3434,10 @@ Command: ${dashCommand}`;
                               html2canvas: { scale: 2 },
                               jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
                             };
-                            
+
                             const pdfBase64 = await html2pdf().set(opt).from(html).output('datauristring');
                             const filename = `${quote.qn_number} - ${getManifestTitle(quote)}.pdf`;
-                            
+
                             setEmailDraft(prev => ({
                               ...prev,
                               attachments: [...(prev.attachments || []), { filename, base64: pdfBase64 }]
