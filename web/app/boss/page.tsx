@@ -219,7 +219,11 @@ export default function BossDashboard() {
     }
     
     const { error: tErr } = await supabase.from("tenants").update(tenantUpdatePayload).eq("id", selectedTenantId);
+    
+    if (sErr) alert("Schema Sync Error: " + sErr.message);
+    if (tErr) alert("Tenant Sync Error: " + tErr.message);
     if (!sErr && !tErr) alert("✅ Master System Synced.");
+    
     await fetchTenants();
   };
 
