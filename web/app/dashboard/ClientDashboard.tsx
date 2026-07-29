@@ -1543,8 +1543,11 @@ Command: ${dashCommand}`;
                   <button onClick={() => setTriageTab('due')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'due' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
                     <span className="text-amber-500">⚡</span> Pending Follow-ups <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
                   </button>
-                  <button onClick={() => setTriageTab('history')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <span className="text-indigo-500">📜</span> Follow-up History <span className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full">{historyAlerts.length}</span>
+                  <button onClick={() => setTriageTab('incoming')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'incoming' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                    <span className="text-emerald-500">📥</span> Incoming <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full">{emailThreads.filter(t => t.triage_status === 'incoming').length}</span>
+                  </button>
+                  <button onClick={() => setTriageTab('outgoing')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'outgoing' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                    <span className="text-blue-500">📤</span> Outgoing <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">{emailThreads.filter(t => t.triage_status === 'outgoing').length}</span>
                   </button>
                 </div>
 
@@ -1717,6 +1720,116 @@ Command: ${dashCommand}`;
                       </div>
                     )}
                   </>
+                )}
+
+                {(triageTab === 'incoming' || triageTab === 'outgoing') && (
+                  <div className="space-y-4">
+                    {(() => {
+                      const tabThreads = emailThreads.filter(t => t.triage_status === triageTab);
+                      if (tabThreads.length === 0) {
+                        return (
+                          <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
+                            <p className="text-sm text-gray-500 font-medium">No {triageTab} threads found.</p>
+                          </div>
+                        );
+                      }
+                      return tabThreads.map((thread) => {
+                        const q = thread.quotations || {};
+                        let meta = q.custom_metadata;
+                        if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
+                        
+                        const replyText = quoteReplyTexts[thread.id] !== undefined ? quoteReplyTexts[thread.id] : (thread.ai_draft_text || '');
+
+                        return (
+                          <div key={thread.id} className="bg-gray-50/50 border border-gray-200 rounded-2xl p-6 shadow-sm mt-4">
+                            <div className="flex justify-between items-center mb-6">
+                              <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number} • Last Updated {new Date(thread.last_updated).toLocaleString()}</p>
+                                <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
+                              </div>
+                            </div>
+
+                            {meta?.agent_summary && (
+                              <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
+                                <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
+                                <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
+                              </div>
+                            )}
+
+                            {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
+                              <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
+                                {meta.agent_conversations.map((msg: any, idx: number) => (
+                                  <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
+                                    <div className="flex items-center gap-2 mb-1 px-1">
+                                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
+                                      <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
+                                    </div>
+                                    <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
+                                      {msg.content}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
+                                <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
+                              </div>
+                            )}
+
+                            {triageTab === 'incoming' && (
+                              <div className="mt-4 border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm ring-2 ring-indigo-50">
+                                <div className="bg-indigo-50/50 p-3 border-b border-indigo-100 flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">✨ AI Suggested Reply</span>
+                                </div>
+                                <textarea
+                                  value={replyText}
+                                  onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: e.target.value }))}
+                                  placeholder="Type a manual reply to the client..."
+                                  className="w-full p-4 text-sm focus:outline-none resize-y min-h-[100px] bg-transparent"
+                                />
+                                <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
+                                  <button
+                                    onClick={async () => {
+                                      if (!replyText.trim()) return;
+                                      setIsSendingQuoteReply(thread.id);
+                                      try {
+                                        const res = await fetch('/api/agent/reply', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({
+                                            threadId: thread.id,
+                                            quoteId: q.id,
+                                            tenantId: q.tenant_id,
+                                            message: replyText
+                                          })
+                                        });
+                                        const data = await res.json();
+                                        if (data.success) {
+                                          alert("Reply sent successfully!");
+                                          setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: '' }));
+                                          await fetchRecords(tenantId);
+                                        } else {
+                                          alert("Failed: " + data.error);
+                                        }
+                                      } catch (e) {
+                                        alert("Error: " + e.message);
+                                      } finally {
+                                        setIsSendingQuoteReply(false);
+                                      }
+                                    }}
+                                    disabled={isSendingQuoteReply === thread.id || !replyText.trim()}
+                                    className="px-6 py-2 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
+                                  >
+                                    {isSendingQuoteReply === thread.id ? 'Sending...' : 'Send Reply'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 )}
               </div>
             </div>
@@ -2329,8 +2442,6 @@ Command: ${dashCommand}`;
                 <div className="space-y-6">
                   <div className="flex gap-4 border-b border-gray-100">
                     <button onClick={() => setAgentViewTab('follow_up')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'follow_up' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Follow-ups</button>
-                    <button onClick={() => setAgentViewTab('incoming')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'incoming' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Incoming</button>
-                    <button onClick={() => setAgentViewTab('outgoing')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'outgoing' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Outgoing</button>
                   </div>
 
                   {(() => {
@@ -2413,112 +2524,7 @@ Command: ${dashCommand}`;
                       });
                     }
 
-                    // INCOMING & OUTGOING TABS (Email Threads)
-                    const tabThreads = emailThreads.filter(t => t.agent_id === selectedAgentView.id && t.triage_status === agentViewTab);
 
-                    if (tabThreads.length === 0) {
-                      return (
-                        <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
-                          <p className="text-sm text-gray-500 font-medium">No {agentViewTab} threads found.</p>
-                        </div>
-                      );
-                    }
-
-                    return tabThreads.map((thread) => {
-                      const q = thread.quotations || {};
-                      let meta = q.custom_metadata;
-                      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
-                      
-                      const replyText = quoteReplyTexts[thread.id] !== undefined ? quoteReplyTexts[thread.id] : (thread.ai_draft_text || '');
-
-                      return (
-                        <div key={thread.id} className="bg-gray-50/50 border border-gray-200 rounded-2xl p-6 shadow-sm">
-                          <div className="flex justify-between items-center mb-6">
-                            <div>
-                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number} • Last Updated {new Date(thread.last_updated).toLocaleString()}</p>
-                              <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
-                            </div>
-                          </div>
-
-                          {meta?.agent_summary && (
-                            <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
-                              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
-                              <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
-                            </div>
-                          )}
-
-                          {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
-                            <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
-                              {meta.agent_conversations.map((msg: any, idx: number) => (
-                                <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
-                                  <div className="flex items-center gap-2 mb-1 px-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
-                                    <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
-                                  </div>
-                                  <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
-                                    {msg.content}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
-                              <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
-                            </div>
-                          )}
-
-                          {agentViewTab === 'incoming' && (
-                            <div className="mt-4 border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm ring-2 ring-indigo-50">
-                              <div className="bg-indigo-50/50 p-3 border-b border-indigo-100 flex items-center justify-between">
-                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">✨ AI Suggested Reply</span>
-                              </div>
-                              <textarea
-                                value={replyText}
-                                onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: e.target.value }))}
-                                placeholder="Type a manual reply to the client..."
-                                className="w-full p-4 text-sm focus:outline-none resize-y min-h-[100px] bg-transparent"
-                              />
-                              <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
-                                <button
-                                  onClick={async () => {
-                                    if (!replyText.trim()) return;
-                                    setIsSendingQuoteReply(thread.id);
-                                    try {
-                                      const res = await fetch('/api/agent/reply', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          threadId: thread.id,
-                                          quoteId: q.id,
-                                          tenantId: q.tenant_id,
-                                          message: replyText
-                                        })
-                                      });
-                                      const data = await res.json();
-                                      if (data.success) {
-                                        alert("Reply sent successfully!");
-                                        setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: '' }));
-                                        await fetchRecords(tenantId);
-                                      } else {
-                                        alert("Failed: " + data.error);
-                                      }
-                                    } catch (e) {
-                                      alert("Error: " + e.message);
-                                    } finally {
-                                      setIsSendingQuoteReply(false);
-                                    }
-                                  }}
-                                  disabled={isSendingQuoteReply === thread.id || !replyText.trim()}
-                                  className="px-6 py-2 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
-                                >
-                                  {isSendingQuoteReply === thread.id ? 'Sending...' : 'Send Reply'}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    });
                   })()}
                 </div>
               </div>
