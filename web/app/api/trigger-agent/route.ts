@@ -11,7 +11,7 @@ const AI_MODEL = 'openai/gpt-3.5-turbo';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { quoteId, tenantId, agentEmail, customMessage } = body;
+    const { quoteId, tenantId, agentEmail, agentId, customMessage } = body;
 
     if (!quoteId || !tenantId) {
       return NextResponse.json({ success: false, error: 'Missing quoteId or tenantId' }, { status: 400 });
@@ -156,6 +156,22 @@ export async function POST(request: Request) {
 
     await supabase.from('quotations').update({ follow_up_status: 'Agent Dispatched', last_contact_date: now, custom_metadata: meta }).eq('id', quoteId);
     await supabase.from('status_logs').insert([{ quotation_id: quoteId, old_status: quote.status, new_status: quote.status, comments: `AI Agent dispatched automated follow-up email. Triggered by ${agentEmail}.` }]);
+
+    // Create or update email_threads
+    if (agentId) {
+      const { data: existingThread } = await supabase.from('email_threads').select('id').eq('quote_id', quoteId).eq('agent_id', agentId).maybeSingle();
+      if (existingThread) {
+        await supabase.from('email_threads').update({ triage_status: 'outgoing', last_updated: now, ai_draft_text: null }).eq('id', existingThread.id);
+      } else {
+        await supabase.from('email_threads').insert({
+          tenant_id: tenantId,
+          quote_id: quoteId,
+          agent_id: agentId,
+          triage_status: 'outgoing',
+          last_updated: now
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, message: 'Agent dispatched successfully' });
 

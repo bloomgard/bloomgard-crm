@@ -107,3 +107,16 @@ CREATE POLICY tenant_isolation_sent_emails ON sent_emails FOR ALL USING (tenant_
 CREATE POLICY super_admin_all_tenant_token_usage ON tenant_token_usage FOR ALL USING (is_super_admin());
 CREATE POLICY tenant_isolation_tenant_token_usage ON tenant_token_usage FOR ALL USING (tenant_id = get_current_user_tenant_id());
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_formula TEXT DEFAULT '(quotes * 0.5) + (tokens * 0.001) + (emails * 0.1) + 50'; ALTER TABLE tenants ADD COLUMN IF NOT EXISTS feature_flags JSONB DEFAULT '{"ai_email": {"enabled": false, "billable": false}, "analytics": {"enabled": false, "billable": false}, "custom_branding": {"enabled": false, "billable": false}}'::jsonb;
+
+CREATE TABLE IF NOT EXISTS email_threads (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    quote_id UUID REFERENCES quotations(id) ON DELETE CASCADE,
+    agent_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    triage_status VARCHAR(50) DEFAULT 'follow_up',
+    ai_draft_text TEXT DEFAULT NULL,
+    last_updated TIMESTAMP DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+CREATE POLICY super_admin_all_email_threads ON email_threads FOR ALL USING (is_super_admin());
+CREATE POLICY tenant_isolation_email_threads ON email_threads FOR ALL USING (tenant_id = get_current_user_tenant_id());
+

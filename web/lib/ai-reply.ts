@@ -127,66 +127,23 @@ RULES:
 
     const agentReply = aiData.choices[0].message.content.trim();
 
-    // 5. Send the Auto-Reply Email
-    const fromEmail = tenant.custom_email_sender || 'support@bloomgard.co';
-    const fromName = tenant.company_name || 'Bloomgard';
-    
-    let headers: any = undefined;
-    if (lastEmail.message_id) {
-      headers = [
-        { name: 'In-Reply-To', value: lastEmail.message_id },
-        { name: 'References', value: lastEmail.message_id }
-      ];
-    }
-    
-    const replySubject = lastEmail.subject.startsWith('Re:') ? lastEmail.subject : `Re: ${lastEmail.subject}`;
-
-    const sentData = await sendEmail({
-      from: `${fromName} <${fromEmail}>`,
-      to: lastEmail.sender_email, // Send back to the client
-      replyTo: tenant.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : undefined,
-      subject: replySubject,
-      text: agentReply,
-      headers
-    });
-
-    // Log Email Usage
-    if (sentData) {
-      const { logEmailSent } = await import('@/utils/usageLogger');
-      await logEmailSent(tenant.id, lastEmail.sender_email, replySubject);
-    }
-
-    // 6. Insert AI Reply into inbound_emails for UI threading
-    const newMsgId = (sentData && sentData.id) ? `<${sentData.id}@resend.dev>` : `<auto-${Date.now()}@bloomgard.co>`;
-    
-    await supabase.from('inbound_emails').insert({
-      tenant_id: tenant.id,
-      sender_email: fromEmail,
-      subject: replySubject,
-      body_text: agentReply,
-      body_html: agentReply.replace(/\n/g, '<br/>'),
-      message_id: newMsgId,
-      thread_id: threadId
-    });
-
-    // 7. Log to Quote conversation history
+    // 5. Save Draft to email_threads for HITL
     if (qnMatch) {
        const { data: quote } = await supabase.from('quotations').select('*').eq('tenant_id', tenant.id).eq('qn_number', qnMatch[0]).single();
        if (quote) {
-          let customMetadata = quote.custom_metadata || {};
-          let conversations = customMetadata.agent_conversations || [];
-          conversations.push({ role: 'agent', content: agentReply, timestamp: new Date().toISOString() });
-          customMetadata.agent_conversations = conversations;
-
-          await supabase.from('quotations').update({ 
-              custom_metadata: customMetadata, 
-              last_contact_date: new Date().toISOString() 
-          }).eq('id', quote.id);
+          const { data: existingThread } = await supabase.from('email_threads').select('id').eq('quote_id', quote.id).maybeSingle();
+          if (existingThread) {
+             await supabase.from('email_threads').update({
+               triage_status: 'incoming',
+               ai_draft_text: agentReply,
+               last_updated: new Date().toISOString()
+             }).eq('id', existingThread.id);
+          }
        }
     }
 
-    console.log('processAiAutoReply: Auto-pilot reply sent successfully.');
-    return { success: true, message: 'Auto-pilot reply sent.' };
+    console.log('processAiAutoReply: Draft generated for HITL triage.');
+    return { success: true, message: 'Draft generated.' };
   } catch (error: any) {
     console.error('processAiAutoReply: Auto-Pilot Engine Error:', error);
     return { success: false, error: error.message || 'Internal Server Error' };

@@ -94,7 +94,8 @@ export default function ClientDashboard() {
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [agentQuoteSearch, setAgentQuoteSearch] = useState("");
   const [selectedAgentView, setSelectedAgentView] = useState(null);
-  const [agentViewTab, setAgentViewTab] = useState('due');
+  const [agentViewTab, setAgentViewTab] = useState('follow_up');
+  const [emailThreads, setEmailThreads] = useState<any[]>([]);
   const [triageTab, setTriageTab] = useState('due');
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [htmlTemplate, setHtmlTemplate] = useState("");
@@ -448,6 +449,16 @@ export default function ClientDashboard() {
           return { ...r, custom_metadata: m };
         });
         setRecords(parsed);
+      }
+
+      const { data: threadsData, error: threadsError } = await supabase
+        .from("email_threads")
+        .select("*, quotations(*, clients(*))")
+        .eq("tenant_id", tId)
+        .order("last_updated", { ascending: false });
+        
+      if (!threadsError && threadsData) {
+        setEmailThreads(threadsData);
       }
     } catch (err) {
       console.error("Fetch Error:", err);
@@ -1826,6 +1837,7 @@ Command: ${dashCommand}`;
 
                           <select className="col-span-2 text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 outline-none" value={f.type} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].type = e.target.value; setBlueprint(nc); }}>
                             <option value="text">Text</option>
+                            <option value="paragraph">Paragraph (Long Text)</option>
                             <option value="number">Number</option>
                             <option value="date">Date</option>
                             <option value="dropdown">Dropdown</option>
@@ -2316,64 +2328,59 @@ Command: ${dashCommand}`;
 
                 <div className="space-y-6">
                   <div className="flex gap-4 border-b border-gray-100">
-                    <button onClick={() => setAgentViewTab('due')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'due' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Action Needed (Due)</button>
-                    <button onClick={() => setAgentViewTab('history')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Follow-up History</button>
+                    <button onClick={() => setAgentViewTab('follow_up')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'follow_up' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Follow-ups</button>
+                    <button onClick={() => setAgentViewTab('incoming')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'incoming' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Incoming</button>
+                    <button onClick={() => setAgentViewTab('outgoing')} className={`pb-3 text-xs font-bold uppercase tracking-widest ${agentViewTab === 'outgoing' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Outgoing</button>
                   </div>
 
                   {(() => {
-                    const assignedQuotes = records.filter(r => {
-                      let m = r.custom_metadata;
-                      if (typeof m === 'string') { try { m = JSON.parse(m); } catch (e) { m = {}; } }
-                      return m?.agent_id === selectedAgentView.id;
-                    });
+                    // FOLLOW-UP TAB (Quotes Due)
+                    if (agentViewTab === 'follow_up') {
+                      const assignedQuotes = records.filter(r => {
+                        let m = r.custom_metadata;
+                        if (typeof m === 'string') { try { m = JSON.parse(m); } catch (e) { m = {}; } }
+                        return m?.agent_id === selectedAgentView.id;
+                      });
 
-                    // Filter based on tab
-                    const displayedQuotes = assignedQuotes.filter(q => {
-                      const isHistory = q.follow_up_status != null;
-                      if (agentViewTab === 'history') return isHistory;
+                      const displayedQuotes = assignedQuotes.filter(q => {
+                        const isHistory = q.follow_up_status != null;
+                        if (isHistory) return false;
 
-                      // For 'due' tab:
-                      if (isHistory) return false;
+                        const freq = selectedAgentView.frequency;
+                        if (freq === 0 || freq === 'Immediate') return true;
 
-                      const freq = selectedAgentView.frequency;
-                      if (freq === 0 || freq === 'Immediate') return true;
+                        const targetDate = new Date(q.created_at);
+                        if (typeof freq === 'number') {
+                          targetDate.setDate(targetDate.getDate() + freq);
+                        } else {
+                          if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
+                          if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
+                          if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                        }
+                        return new Date() >= targetDate;
+                      });
 
-                      const targetDate = new Date(q.created_at);
-                      if (typeof freq === 'number') {
-                        targetDate.setDate(targetDate.getDate() + freq);
-                      } else {
-                        if (freq === 'Daily') targetDate.setDate(targetDate.getDate() + 1);
-                        if (freq === '3 Days') targetDate.setDate(targetDate.getDate() + 3);
-                        if (freq === 'Weekly') targetDate.setDate(targetDate.getDate() + 7);
+                      if (displayedQuotes.length === 0) {
+                        return (
+                          <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
+                            <p className="text-sm text-gray-500 font-medium">No quotes due for follow up.</p>
+                          </div>
+                        );
                       }
 
-                      return new Date() >= targetDate;
-                    });
+                      return displayedQuotes.map((q) => {
+                        let meta = q.custom_metadata;
+                        if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
 
-                    if (displayedQuotes.length === 0) {
-                      return (
-                        <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
-                          <p className="text-sm text-gray-500 font-medium">No quotes found in this section.</p>
-                        </div>
-                      );
-                    }
-
-                    return displayedQuotes.map((q) => {
-                      let meta = q.custom_metadata;
-                      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
-
-                      return (
-                        <div key={q.id} className="bg-gray-50/50 border border-gray-200 rounded-2xl p-6 shadow-sm">
-                          <div className="flex justify-between items-center mb-6">
-                            <div>
-                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number}</p>
-                              <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
-                            </div>
-
-                            {agentViewTab === 'due' ? (
+                        return (
+                          <div key={q.id} className="bg-gray-50/50 border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <div className="flex justify-between items-center mb-6">
+                              <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number}</p>
+                                <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
+                              </div>
                               <button
                                 onClick={async () => {
-                                  // Dispatch Agent Manually
                                   try {
                                     const res = await fetch('/api/trigger-agent', {
                                       method: 'POST',
@@ -2381,7 +2388,8 @@ Command: ${dashCommand}`;
                                       body: JSON.stringify({
                                         quoteId: q.id,
                                         tenantId: q.tenant_id,
-                                        agentEmail: selectedAgentView.email
+                                        agentEmail: selectedAgentView.email,
+                                        agentId: selectedAgentView.id
                                       })
                                     });
                                     const data = await res.json();
@@ -2399,82 +2407,114 @@ Command: ${dashCommand}`;
                               >
                                 Dispatch Agent Manually
                               </button>
-                            ) : (
-                              <button
-                                onClick={async () => {
-                                  const msg = prompt("Enter a simulated client reply:");
-                                  if (!msg) return;
-                                  const res = await fetch('/api/inbound-email', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      quoteId: q.id,
-                                      tenantId: q.tenant_id,
-                                      clientMessage: msg,
-                                      agentEmail: selectedAgentView.email
-                                    })
-                                  });
-                                  const data = await res.json();
-                                  if (data.success) {
-                                    alert("Simulated reply processed!");
-                                    await fetchRecords(tenantId);
-                                  } else {
-                                    alert("Failed: " + data.error);
-                                  }
-                                }}
-                                className="px-4 py-2 bg-white text-indigo-600 border border-gray-200 rounded-lg text-[10px] font-bold shadow-sm hover:border-indigo-300 transition-colors"
-                              >
-                                Simulate Client Reply
-                              </button>
-                            )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    }
+
+                    // INCOMING & OUTGOING TABS (Email Threads)
+                    const tabThreads = emailThreads.filter(t => t.agent_id === selectedAgentView.id && t.triage_status === agentViewTab);
+
+                    if (tabThreads.length === 0) {
+                      return (
+                        <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
+                          <p className="text-sm text-gray-500 font-medium">No {agentViewTab} threads found.</p>
+                        </div>
+                      );
+                    }
+
+                    return tabThreads.map((thread) => {
+                      const q = thread.quotations || {};
+                      let meta = q.custom_metadata;
+                      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
+                      
+                      const replyText = quoteReplyTexts[thread.id] !== undefined ? quoteReplyTexts[thread.id] : (thread.ai_draft_text || '');
+
+                      return (
+                        <div key={thread.id} className="bg-gray-50/50 border border-gray-200 rounded-2xl p-6 shadow-sm">
+                          <div className="flex justify-between items-center mb-6">
+                            <div>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number} • Last Updated {new Date(thread.last_updated).toLocaleString()}</p>
+                              <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
+                            </div>
                           </div>
 
-                          {agentViewTab === 'history' && (
-                            <>
-                              {meta?.agent_summary && (
-                                <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
-                                  <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
-                                  <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
-                                </div>
-                              )}
+                          {meta?.agent_summary && (
+                            <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
+                              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
+                              <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
+                            </div>
+                          )}
 
-                              {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
-                                <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
-                                  {meta.agent_conversations.map((msg: any, idx: number) => (
-                                    <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
-                                      <div className="flex items-center gap-2 mb-1 px-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
-                                        <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
-                                      </div>
-                                      <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
-                                        {msg.content}
-                                      </div>
-                                    </div>
-                                  ))}
+                          {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
+                            <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
+                              {meta.agent_conversations.map((msg: any, idx: number) => (
+                                <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
+                                  <div className="flex items-center gap-2 mb-1 px-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
+                                    <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
+                                  </div>
+                                  <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
+                                    {msg.content}
+                                  </div>
                                 </div>
-                              ) : (
-                                <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
-                                  <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
-                                </div>
-                              )}
-                              <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                <textarea
-                                  value={quoteReplyTexts[r.id] || ''}
-                                  onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                  placeholder="Type a manual reply to the client..."
-                                  className="w-full p-4 text-sm focus:outline-none resize-y min-h-[80px] bg-transparent"
-                                />
-                                <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
-                                  <button
-                                    onClick={() => handleQuoteReply(r)}
-                                    disabled={isSendingQuoteReply === r.id || !(quoteReplyTexts[r.id] || '').trim()}
-                                    className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
-                                  >
-                                    {isSendingQuoteReply === r.id ? 'Sending...' : 'Send Reply'}
-                                  </button>
-                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
+                              <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
+                            </div>
+                          )}
+
+                          {agentViewTab === 'incoming' && (
+                            <div className="mt-4 border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm ring-2 ring-indigo-50">
+                              <div className="bg-indigo-50/50 p-3 border-b border-indigo-100 flex items-center justify-between">
+                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">✨ AI Suggested Reply</span>
                               </div>
-                            </>
+                              <textarea
+                                value={replyText}
+                                onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: e.target.value }))}
+                                placeholder="Type a manual reply to the client..."
+                                className="w-full p-4 text-sm focus:outline-none resize-y min-h-[100px] bg-transparent"
+                              />
+                              <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
+                                <button
+                                  onClick={async () => {
+                                    if (!replyText.trim()) return;
+                                    setIsSendingQuoteReply(thread.id);
+                                    try {
+                                      const res = await fetch('/api/agent/reply', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          threadId: thread.id,
+                                          quoteId: q.id,
+                                          tenantId: q.tenant_id,
+                                          message: replyText
+                                        })
+                                      });
+                                      const data = await res.json();
+                                      if (data.success) {
+                                        alert("Reply sent successfully!");
+                                        setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: '' }));
+                                        await fetchRecords(tenantId);
+                                      } else {
+                                        alert("Failed: " + data.error);
+                                      }
+                                    } catch (e) {
+                                      alert("Error: " + e.message);
+                                    } finally {
+                                      setIsSendingQuoteReply(false);
+                                    }
+                                  }}
+                                  disabled={isSendingQuoteReply === thread.id || !replyText.trim()}
+                                  className="px-6 py-2 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
+                                >
+                                  {isSendingQuoteReply === thread.id ? 'Sending...' : 'Send Reply'}
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
                       );
@@ -2971,6 +3011,17 @@ Command: ${dashCommand}`;
                                     <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result, rIdx) }; reader.readAsDataURL(file); } }} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
                                     {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
                                   </div>
+                                ) : f.type === "paragraph" ? (
+                                  <div className="flex flex-col gap-1">
+                                    <textarea
+                                      value={row[f.name] || ""}
+                                      maxLength={1500}
+                                      onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
+                                      className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm min-h-[100px] resize-y"
+                                      placeholder="Enter text..."
+                                    />
+                                    <span className="text-[9px] text-gray-400 text-right">{(row[f.name] || "").length}/1500</span>
+                                  </div>
                                 ) : (
                                   <>
                                     <input
@@ -3070,6 +3121,17 @@ Command: ${dashCommand}`;
                               <div className="flex flex-col gap-1">
                                 <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result) }; reader.readAsDataURL(file); } }} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
                                 {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
+                              </div>
+                            ) : f.type === "paragraph" ? (
+                              <div className="flex flex-col gap-1">
+                                <textarea
+                                  value={dynamicData[section.title]?.[f.name] || ""}
+                                  maxLength={1500}
+                                  onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
+                                  className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400 min-h-[100px] resize-y"
+                                  placeholder="Enter text..."
+                                />
+                                <span className="text-[9px] text-gray-400 text-right">{(dynamicData[section.title]?.[f.name] || "").length}/1500</span>
                               </div>
                             ) : (
                               <>
