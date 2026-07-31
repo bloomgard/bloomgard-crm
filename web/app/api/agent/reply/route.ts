@@ -8,7 +8,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { threadId, quoteId, tenantId, message } = body;
+    const { threadId, quoteId, tenantId, agentId, message } = body;
 
     if (!threadId || !quoteId || !tenantId || !message) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -52,12 +52,30 @@ export async function POST(request: Request) {
       .single();
 
     const tenantDomain = tenantData?.website ? new URL(tenantData.website).hostname.replace('www.', '') : undefined;
-    const fromString = getDynamicSender(tenantData?.company_name, tenantData?.custom_email_sender, tenantDomain);
+    
+    // Fetch Agent Details
+    let agent = null;
+    if (agentId) {
+      const { data } = await supabase.from('profiles').select('email, full_name, inbound_email').eq('id', agentId).single();
+      agent = data;
+    }
+
+    // Determine From Address
+    let fromString = getDynamicSender(tenantData?.company_name, tenantData?.custom_email_sender, tenantDomain);
+    if (agent && agent.email && tenantDomain && agent.email.endsWith(`@${tenantDomain}`)) {
+      fromString = `${agent.full_name || 'Agent'} <${agent.email}>`;
+    }
+
+    // Determine Reply-To
+    let replyTo = tenantData?.inbound_routing_id ? `${tenantData.inbound_routing_id}@inbound.bloomgard.co` : `${tenantId}@inbound.bloomgard.co`;
+    if (agent && agent.inbound_email) {
+      replyTo = agent.inbound_email;
+    }
 
     const mailOptions = {
       from: fromString,
       to: clientEmail,
-      replyTo: tenantData?.inbound_routing_id ? `${tenantData.inbound_routing_id}@inbound.bloomgard.co` : `${tenantId}@inbound.bloomgard.co`,
+      replyTo: replyTo,
       subject: `Re: Following up on Quote ${quote.qn_number}`,
       html: message.replace(/\n/g, '<br/>')
     };

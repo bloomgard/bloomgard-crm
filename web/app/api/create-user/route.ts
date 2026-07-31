@@ -55,7 +55,8 @@ export async function POST(request: Request) {
         id: userId, 
         email: email, 
         tenant_id: tenantId, 
-        role: role 
+        role: role,
+        inbound_email: `${userId}@inbound.bloomgard.co`
       }, { onConflict: 'id' });
     
     if (pErr) throw pErr;

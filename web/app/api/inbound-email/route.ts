@@ -38,17 +38,44 @@ export async function POST(request: Request) {
     
     console.log("PARSED TENANT ID:", parsedTenantId);
 
-    // 3. Tenant Lookup
-    const { data: tenant, error: tenantError } = await supabase
+    // 3. Routing Lookup (User-level or Workspace-level)
+    let tenantId = null;
+    let agentId = null;
+    let tenant = null;
+
+    // First try: User-level forwarding
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, tenant_id')
+      .ilike('inbound_email', exactEmail)
+      .maybeSingle();
+
+    if (profile) {
+      tenantId = profile.tenant_id;
+      agentId = profile.id;
+    } else {
+      // Fallback: Workspace-level forwarding
+      const { data: fallbackTenant } = await supabase
+        .from('tenants')
+        .select('id')
+        .ilike('inbound_routing_id', parsedTenantId)
+        .maybeSingle();
+      if (fallbackTenant) {
+        tenantId = fallbackTenant.id;
+      }
+    }
+
+    if (!tenantId) {
+      console.error(`Tenant/Agent not found for email: ${exactEmail}`);
+      return NextResponse.json({ error: 'Routing not found' }, { status: 400 });
+    }
+
+    const { data: tenantData } = await supabase
       .from('tenants')
       .select('id, company_name, ai_enabled')
-      .ilike('inbound_routing_id', parsedTenantId)
+      .eq('id', tenantId)
       .single();
-
-    if (tenantError || !tenant) {
-      console.error(`Tenant not found for routing ID: ${parsedTenantId}`, tenantError);
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
-    }
+    tenant = tenantData;
 
     // 4. Fetch Full Email Body & Extract Threading Headers
     const emailId = payload.data?.email_id;
@@ -147,7 +174,7 @@ export async function POST(request: Request) {
         if (tenant.ai_enabled && isAgentDispatched) {
           const { processAiAutoReply } = require('@/lib/ai-reply');
           try {
-            const res = await processAiAutoReply(threadId, tenant.id);
+            const res = await processAiAutoReply(threadId, tenant.id, agentId);
             console.log('Async AI Auto-Pilot finished:', res);
           } catch (err) {
             console.error("Async AI Auto-Pilot trigger failed:", err);

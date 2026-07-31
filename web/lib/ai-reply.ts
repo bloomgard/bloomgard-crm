@@ -8,7 +8,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const AI_MODEL = 'openai/gpt-4o-mini';
 
-export async function processAiAutoReply(threadId: string, tenantId: string) {
+export async function processAiAutoReply(threadId: string, tenantId: string, agentId: string | null = null) {
   try {
     if (!threadId || !tenantId) {
       console.error('processAiAutoReply: Missing required fields');
@@ -133,11 +133,15 @@ RULES:
        if (quote) {
           const { data: existingThread } = await supabase.from('email_threads').select('id').eq('quote_id', quote.id).maybeSingle();
           if (existingThread) {
-             await supabase.from('email_threads').update({
+             const updatePayload: any = {
                triage_status: 'incoming',
                ai_draft_text: agentReply,
                last_updated: new Date().toISOString()
-             }).eq('id', existingThread.id);
+             };
+             if (agentId) {
+               updatePayload.agent_id = agentId;
+             }
+             await supabase.from('email_threads').update(updatePayload).eq('id', existingThread.id);
           }
        }
     }

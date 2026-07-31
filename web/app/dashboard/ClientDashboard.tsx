@@ -1800,6 +1800,7 @@ Command: ${dashCommand}`;
                                             threadId: thread.id,
                                             quoteId: q.id,
                                             tenantId: q.tenant_id,
+                                            agentId: thread.agent_id,
                                             message: replyText
                                           })
                                         });
@@ -1902,6 +1903,13 @@ Command: ${dashCommand}`;
                             else alert("Not in session. Reset user to change pass.");
                           }} className="text-[10px] font-bold text-blue-600 hover:underline">Copy Password</button>
                         </div>
+                        {u.inbound_email && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-[10px] text-gray-500">Fwd to:</span>
+                            <code className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{u.inbound_email}</code>
+                            <button onClick={() => { navigator.clipboard.writeText(u.inbound_email); alert("Forwarding address copied!"); }} className="text-[10px] font-bold text-blue-600 hover:underline">Copy</button>
+                          </div>
+                        )}
                       </div>
                       <button onClick={async () => {
                         if (confirm("Revoke Access?")) {
