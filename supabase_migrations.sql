@@ -120,3 +120,9 @@ CREATE TABLE IF NOT EXISTS email_threads (
 CREATE POLICY super_admin_all_email_threads ON email_threads FOR ALL USING (is_super_admin());
 CREATE POLICY tenant_isolation_email_threads ON email_threads FOR ALL USING (tenant_id = get_current_user_tenant_id());
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='inbound_email') THEN
+    ALTER TABLE profiles ADD COLUMN inbound_email VARCHAR(255) UNIQUE;
+  END IF;
+END $$;

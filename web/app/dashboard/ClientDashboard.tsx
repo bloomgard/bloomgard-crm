@@ -482,6 +482,7 @@ export default function ClientDashboard() {
   const isManager = user?.role?.toLowerCase() === 'manager' || user?.role?.toLowerCase() === 'admin';
   const visibleRecords = (isManager ? records : records.filter(r => r.created_by_email === user?.email)).filter(r => currentView === 'leadgen' ? r.status === 'Lead' : r.status !== 'Lead');
   const docsRecords = visibleRecords.filter(r => r.status === 'Approved' || r.custom_metadata?.has_pdf_generated === true);
+  const visibleEmailThreads = isManager ? emailThreads : emailThreads.filter(t => t.quotations?.created_by_email === user?.email || t.agent_id === user?.id);
 
   // DERIVED STATE: AI Alerts Triage
   const pendingAlerts = visibleRecords.filter(r => {
@@ -1544,10 +1545,10 @@ Command: ${dashCommand}`;
                     <span className="text-amber-500">⚡</span> Pending Follow-ups <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
                   </button>
                   <button onClick={() => setTriageTab('incoming')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'incoming' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <span className="text-emerald-500">📥</span> Incoming <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full">{emailThreads.filter(t => t.triage_status === 'incoming').length}</span>
+                    <span className="text-indigo-500">📥</span> Incoming <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'incoming').length}</span>
                   </button>
-                  <button onClick={() => setTriageTab('outgoing')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'outgoing' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <span className="text-blue-500">📤</span> Outgoing <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">{emailThreads.filter(t => t.triage_status === 'outgoing').length}</span>
+                  <button onClick={() => setTriageTab('outgoing')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'outgoing' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                    <span className="text-blue-500">📤</span> Outgoing <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'outgoing').length}</span>
                   </button>
                 </div>
 
@@ -1725,7 +1726,7 @@ Command: ${dashCommand}`;
                 {(triageTab === 'incoming' || triageTab === 'outgoing') && (
                   <div className="space-y-4">
                     {(() => {
-                      const tabThreads = emailThreads.filter(t => t.triage_status === triageTab);
+                      const tabThreads = visibleEmailThreads.filter(t => t.triage_status === triageTab);
                       if (tabThreads.length === 0) {
                         return (
                           <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
