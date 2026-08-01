@@ -53,16 +53,6 @@ export async function POST(request: Request) {
     if (profile) {
       tenantId = profile.tenant_id;
       agentId = profile.id;
-    } else {
-      // Fallback: Workspace-level forwarding
-      const { data: fallbackTenant } = await supabase
-        .from('tenants')
-        .select('id')
-        .ilike('inbound_routing_id', parsedTenantId)
-        .maybeSingle();
-      if (fallbackTenant) {
-        tenantId = fallbackTenant.id;
-      }
     }
 
     if (!tenantId) {

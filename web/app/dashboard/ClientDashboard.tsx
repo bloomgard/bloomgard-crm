@@ -69,7 +69,7 @@ export default function ClientDashboard() {
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [customSender, setCustomSender] = useState("");
-  const [routingSlug, setRoutingSlug] = useState("");
+  const [userRoutingSlug, setUserRoutingSlug] = useState("");
   const [emailProvider, setEmailProvider] = useState("resend");
   const [aiSettings, setAiSettings] = useState({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low' });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -295,6 +295,7 @@ export default function ClientDashboard() {
 
         const fullUser = { ...profile, email: session.user.email };
         setUser(fullUser);
+        if (fullUser.inbound_email) setUserRoutingSlug(fullUser.inbound_email.split('@')[0]);
         setAuthState('authed');
 
         let prefs = { theme: 'light', wallpaper: 'legacy' };
@@ -316,7 +317,6 @@ export default function ClientDashboard() {
             if (tenantData.company_name) setCompanyName(tenantData.company_name);
             if (tenantData.ai_enabled === false) setAiEnabled(false);
             if (tenantData.custom_email_sender) setCustomSender(tenantData.custom_email_sender);
-            if (tenantData.routing_slug) setRoutingSlug(tenantData.routing_slug);
             if (tenantData.email_provider) setEmailProvider(tenantData.email_provider);
           }
 
@@ -2014,22 +2014,12 @@ Command: ${dashCommand}`;
                       placeholder="quotes@yourdomain.com"
                       className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors"
                     />
-                    <div className="mt-4">
-                      <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Inbound Routing Slug</label>
-                      <input
-                        type="text"
-                        value={routingSlug}
-                        onChange={e => setRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                        placeholder="e.g. acme"
-                        className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors"
-                      />
-                    </div>
                     <div className="mt-6">
                       <button
                         onClick={async () => {
                           if (!tenantId) return;
                           setIsSavingSettings(true);
-                          const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId);
+                          const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender, email_provider: emailProvider }).eq('id', tenantId);
                           setIsSavingSettings(false);
                           if (error) alert("Failed to save: " + error.message);
                           else alert("Workspace Email Settings updated successfully!");
@@ -2059,17 +2049,41 @@ Command: ${dashCommand}`;
                     <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Your Unique Forwarding Address</label>
                     <p className="text-xs text-gray-500 mb-4">Set up an auto-forwarding rule in your personal inbox (Gmail/Outlook) to route replies here.</p>
                     <div className="flex items-center gap-3">
-                      <input
-                        type="email"
-                        value={user?.inbound_email || 'Not generated yet'}
-                        disabled
-                        className="flex-1 bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none opacity-70 cursor-not-allowed text-blue-600 font-mono"
-                      />
+                      <div className="flex-1 flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden focus-within:border-emerald-400 transition-colors">
+                        <input
+                          type="text"
+                          value={userRoutingSlug}
+                          onChange={e => setUserRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                          placeholder="your-name"
+                          className="w-1/2 bg-transparent px-4 py-3 text-sm font-medium outline-none text-blue-600 font-mono text-right"
+                        />
+                        <span className="text-sm font-medium text-gray-500 pr-4 py-3 font-mono">@inbound.bloomgard.co</span>
+                      </div>
                       <button 
-                        onClick={() => { if(user?.inbound_email) { navigator.clipboard.writeText(user.inbound_email); alert("Copied!"); } }}
-                        className="bg-gray-900 text-white px-6 py-3 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform"
+                        onClick={() => { if(userRoutingSlug) { navigator.clipboard.writeText(`${userRoutingSlug}@inbound.bloomgard.co`); alert("Copied!"); } }}
+                        className="bg-gray-200 text-gray-800 px-4 py-3 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-300 active:scale-95 transition-transform"
                       >
                         Copy
+                      </button>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        onClick={async () => {
+                          if (!user?.id) return;
+                          setIsSavingSettings(true);
+                          const newInbound = `${userRoutingSlug}@inbound.bloomgard.co`;
+                          const { error } = await supabase.from('profiles').update({ inbound_email: newInbound }).eq('id', user.id);
+                          setIsSavingSettings(false);
+                          if (error) alert("Failed to save: " + error.message);
+                          else {
+                            setUser({ ...user, inbound_email: newInbound });
+                            alert("Personal Routing Slug updated successfully!");
+                          }
+                        }}
+                        disabled={isSavingSettings}
+                        className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-700 active:scale-95 transition-transform disabled:bg-emerald-400"
+                      >
+                        {isSavingSettings ? "Saving..." : "Save Routing Address"}
                       </button>
                     </div>
                   </div>
@@ -2211,7 +2225,7 @@ Command: ${dashCommand}`;
                       ];
 
                       const [res1, res2] = await Promise.all([
-                        supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
+                        supabase.from('tenants').update({ custom_email_sender: customSender, email_provider: emailProvider }).eq('id', tenantId),
                         supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
                       ]);
 
