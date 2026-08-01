@@ -57,7 +57,7 @@ export default function ClientDashboard() {
   const [isRunningCoordinator, setIsRunningCoordinator] = useState(false);
   const [records, setRecords] = useState([]);
   const [currentView, setCurrentView] = useState("dashboard"); // Default to Alerts for testing
-  const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint'>('menu');
+  const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint' | 'email'>('menu');
   const { masterTree, findAllEntriesByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
   const { masterTree: autoMasterTree, findAllEntriesByKey: findAllAutoEntriesByKey } = useMasterDataFields(tenantId || undefined, 'auto');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -74,6 +74,7 @@ export default function ClientDashboard() {
   const [aiSettings, setAiSettings] = useState({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low' });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
+  const [emailSenderPref, setEmailSenderPref] = useState<'personal' | 'common'>('personal');
 
   const [emailDraft, setEmailDraft] = useState({ to: "", subject: "", message: "", attachmentBase64: "", filename: "" });
   const [chatHistory, setChatHistory] = useState([]);
@@ -1354,6 +1355,8 @@ Command: ${dashCommand}`;
         message: emailDraft.message,
         attachments: emailDraft.attachments || [],
         agentEmail: user?.email,
+        agentId: user?.id,
+        senderPreference: emailSenderPref,
         tenantId: tenantId,
         companyName: companyName || "",
         customSender: customSender || "",
@@ -1872,6 +1875,13 @@ Command: ${dashCommand}`;
                   <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
                   <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
                 </button>
+                <button onClick={() => setSettingsSubView('email')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4">
+                    <span className="text-xl">✉️</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Email Settings</h3>
+                  <p className="text-sm text-gray-500">Configure workspace-wide and personal email routing.</p>
+                </button>
               </div>
             )}
 
@@ -1982,6 +1992,92 @@ Command: ${dashCommand}`;
               </div>
             )}
 
+            {settingsSubView === 'email' && (
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
+                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
+                  <span className="text-2xl">✉️</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Email Routing Settings</h3>
+                    <p className="text-xs text-gray-500 mt-1">Configure your workspace and personal dispatch emails.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Common Workspace Email */}
+                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                    <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Common Workspace Email</label>
+                    <p className="text-xs text-gray-500 mb-4">Any agent can use this verified domain address to dispatch manual or AI-generated emails.</p>
+                    <input
+                      type="email"
+                      value={customSender}
+                      onChange={e => setCustomSender(e.target.value)}
+                      placeholder="quotes@yourdomain.com"
+                      className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors"
+                    />
+                    <div className="mt-4">
+                      <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Inbound Routing Slug</label>
+                      <input
+                        type="text"
+                        value={routingSlug}
+                        onChange={e => setRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                        placeholder="e.g. acme"
+                        className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors"
+                      />
+                    </div>
+                    <div className="mt-6">
+                      <button
+                        onClick={async () => {
+                          if (!tenantId) return;
+                          setIsSavingSettings(true);
+                          const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId);
+                          setIsSavingSettings(false);
+                          if (error) alert("Failed to save: " + error.message);
+                          else alert("Workspace Email Settings updated successfully!");
+                        }}
+                        disabled={isSavingSettings}
+                        className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-700 active:scale-95 transition-transform disabled:bg-emerald-400"
+                      >
+                        {isSavingSettings ? "Saving..." : "Save Workspace Email"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Personal Email */}
+                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                    <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Your Personal Email</label>
+                    <p className="text-xs text-gray-500 mb-4">Used by default when you dispatch quotes. Replies to your quotes will also be tied to this identity.</p>
+                    <input
+                      type="email"
+                      value={user?.email || ''}
+                      disabled
+                      className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none opacity-70 cursor-not-allowed"
+                    />
+                  </div>
+
+                  {/* Forwarded Email */}
+                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                    <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Your Unique Forwarding Address</label>
+                    <p className="text-xs text-gray-500 mb-4">Set up an auto-forwarding rule in your personal inbox (Gmail/Outlook) to route replies here.</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="email"
+                        value={user?.inbound_email || 'Not generated yet'}
+                        disabled
+                        className="flex-1 bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none opacity-70 cursor-not-allowed text-blue-600 font-mono"
+                      />
+                      <button 
+                        onClick={() => { if(user?.inbound_email) { navigator.clipboard.writeText(user.inbound_email); alert("Copied!"); } }}
+                        className="bg-gray-900 text-white px-6 py-3 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
             {settingsSubView === 'menu' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
 
@@ -2033,70 +2129,7 @@ Command: ${dashCommand}`;
                   </button>
                 </div>
 
-                <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                  <span className="text-2xl">✉️</span>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Email Configuration</h3>
 
-                  </div>
-                </div>
-
-                <div className="space-y-4 max-w-md">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Custom Sender Email</label>
-                    <input
-                      type="email"
-                      value={customSender}
-                      onChange={e => setCustomSender(e.target.value)}
-                      placeholder="quotes@yourdomain.com"
-                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
-                      This email must belong to the domain you verified in GoDaddy/Resend.
-                    </p>
-                  </div>
-                  <div className="space-y-1.5 mt-4">
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Domain Alias (Routing Slug)</label>
-                    <input
-                      type="text"
-                      value={routingSlug}
-                      onChange={e => setRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                      placeholder=""
-                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
-                      Used to route incoming emails sent to alias@bloomgard.co. Must be unique.
-                    </p>
-                  </div>
-
-
-                  <button
-                    onClick={async () => {
-                      if (!tenantId) return;
-                      setIsSavingSettings(true);
-
-                      const newSchemaConfig = [
-                        ...blueprint,
-                        { is_agent_config: true, agents, title: "system_agents" },
-                        { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
-                        { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
-                      ];
-
-                      const [res1, res2] = await Promise.all([
-                        supabase.from('tenants').update({ custom_email_sender: customSender, routing_slug: routingSlug, email_provider: emailProvider }).eq('id', tenantId),
-                        supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
-                      ]);
-
-                      setIsSavingSettings(false);
-                      if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
-                      else alert("Settings updated successfully!");
-                    }}
-                    disabled={isSavingSettings}
-                    className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform disabled:bg-gray-400"
-                  >
-                    {isSavingSettings ? "Saving..." : "Save Configuration"}
-                  </button>
-                </div>
 
                 <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
                   <span className="text-2xl">🤖</span>
@@ -3465,6 +3498,13 @@ Command: ${dashCommand}`;
               <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-red-500 font-bold w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform">✕</button>
             </div>
             <div className="p-6 space-y-5 flex-1 overflow-y-auto">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Send As</label>
+                <select value={emailSenderPref} onChange={e => setEmailSenderPref(e.target.value as 'personal' | 'common')} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400">
+                  <option value="personal">Personal ({user?.email})</option>
+                  {customSender && <option value="common">Common Workspace Email ({customSender})</option>}
+                </select>
+              </div>
               <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Recipient</label><input type="email" value={emailDraft.to} onChange={e => setEmailDraft({ ...emailDraft, to: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="client@company.com" /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">CC</label><input type="text" value={emailDraft.cc || ""} onChange={e => setEmailDraft({ ...emailDraft, cc: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="Optional" /></div>

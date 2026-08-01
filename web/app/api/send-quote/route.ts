@@ -21,15 +21,26 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { to, cc, bcc, subject, message, attachments, agentEmail, tenantId, companyName, customSender, provider } = body;
+    const { to, cc, bcc, subject, message, attachments, agentEmail, agentId, senderPreference, tenantId, companyName, customSender, provider } = body;
 
     if (!to || !subject || !message) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400, headers: corsHeaders });
     }
 
+    // Fetch Agent Details
+    let agent = null;
+    if (agentId) {
+      const { data } = await supabase.from('profiles').select('email, full_name, inbound_email').eq('id', agentId).single();
+      agent = data;
+    }
+
     // Extract domain from user email if tenant domain not explicitly passed
     const tenantDomain = agentEmail ? agentEmail.split('@')[1] : undefined;
-    const fromString = getDynamicSender(companyName, customSender, tenantDomain);
+    let fromString = getDynamicSender(companyName, customSender, tenantDomain);
+
+    if (senderPreference === 'personal' && agent && agent.email && tenantDomain && agent.email.endsWith(`@${tenantDomain}`)) {
+      fromString = `${agent.full_name || 'Agent'} <${agent.email}>`;
+    }
 
     const formattedAttachments = attachments?.map((att: any) => {
       const base64Data = att.base64.includes(',') ? att.base64.split(',')[1] : att.base64;
@@ -47,6 +58,10 @@ export async function POST(req: Request) {
       } else {
         replyToAddress = `${tenantId}@inbound.bloomgard.co`;
       }
+    }
+
+    if (agent && agent.inbound_email) {
+      replyToAddress = agent.inbound_email;
     }
 
     const emailPayload: any = {
