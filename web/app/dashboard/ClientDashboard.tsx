@@ -1854,27 +1854,31 @@ Command: ${dashCommand}`;
 
             {settingsSubView === 'menu' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-                    <span className="text-xl">🗄️</span>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
-                  <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
-                </button>
-                <button onClick={() => setSettingsSubView('users')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
-                    <span className="text-xl">👥</span>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">User Access</h3>
-                  <p className="text-sm text-gray-500">Onboard new agents, managers, and admins to this workspace.</p>
-                </button>
-                <button onClick={() => setSettingsSubView('blueprint')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                  <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
-                    <span className="text-xl">🏗️</span>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
-                  <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
-                </button>
+                {isManager && (
+                  <>
+                    <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                      <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+                        <span className="text-xl">🗄️</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
+                      <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
+                    </button>
+                    <button onClick={() => setSettingsSubView('users')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                      <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
+                        <span className="text-xl">👥</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">User Access</h3>
+                      <p className="text-sm text-gray-500">Onboard new agents, managers, and admins to this workspace.</p>
+                    </button>
+                    <button onClick={() => setSettingsSubView('blueprint')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                      <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
+                        <span className="text-xl">🏗️</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
+                      <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
+                    </button>
+                  </>
+                )}
                 <button onClick={() => setSettingsSubView('email')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                   <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4">
                     <span className="text-xl">✉️</span>
@@ -2145,112 +2149,116 @@ Command: ${dashCommand}`;
 
 
 
-                <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
-                  <span className="text-2xl">🤖</span>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">AI Personality Settings</h3>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mb-4">
-                  <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Tone</label>
-                    <select value={aiSettings.tone} onChange={e => setAiSettings({ ...aiSettings, tone: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
-                      <option>Professional</option>
-                      <option>Casual</option>
-                      <option>Friendly</option>
-                      <option>Aggressive</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">English Level</label>
-                    <select value={aiSettings.englishLevel} onChange={e => setAiSettings({ ...aiSettings, englishLevel: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
-                      <option>Native</option>
-                      <option>Simple / Basic</option>
-                      <option>Corporate Jargon</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Desperation Level</label>
-                    <select value={aiSettings.desperation} onChange={e => setAiSettings({ ...aiSettings, desperation: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
-                      <option>Low (Confident)</option>
-                      <option>Medium (Eager)</option>
-                      <option>High (Need the deal)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* BRANDING / LOGO CONFIGURATION */}
-                <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
-                  <span className="text-2xl">🎨</span>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Brand Identity</h3>
-                  </div>
-                </div>
-                <div className="space-y-4 max-w-md">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Logo URL</label>
-                    <input
-                      type="url"
-                      value={logoUrl}
-                      onChange={e => setLogoUrl(e.target.value)}
-                      placeholder="https://example.com/logo.png"
-                      className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
-                      Accessible in the template as <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-500">{"{{company_logo}}"}</code>
-                    </p>
-                  </div>
-                </div>
-
-                {/* HTML TEMPLATE EDITOR */}
-                <div className="flex justify-between items-center mt-10 mb-6 border-b border-gray-100 pb-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">📝</span>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">Quotation Template Editor</h3>
-                      <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Live Document Engine</p>
+                {isManager && (
+                  <>
+                    <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                      <span className="text-2xl">🤖</span>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">AI Personality Settings</h3>
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      if (!tenantId) return;
-                      setIsSavingSettings(true);
 
-                      const newSchemaConfig = [
-                        ...blueprint,
-                        { is_agent_config: true, agents, title: "system_agents" },
-                        { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
-                        { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
-                      ];
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mb-4">
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Tone</label>
+                        <select value={aiSettings.tone} onChange={e => setAiSettings({ ...aiSettings, tone: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                          <option>Professional</option>
+                          <option>Casual</option>
+                          <option>Friendly</option>
+                          <option>Aggressive</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">English Level</label>
+                        <select value={aiSettings.englishLevel} onChange={e => setAiSettings({ ...aiSettings, englishLevel: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                          <option>Native</option>
+                          <option>Simple / Basic</option>
+                          <option>Corporate Jargon</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Desperation Level</label>
+                        <select value={aiSettings.desperation} onChange={e => setAiSettings({ ...aiSettings, desperation: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 mt-1 cursor-pointer">
+                          <option>Low (Confident)</option>
+                          <option>Medium (Eager)</option>
+                          <option>High (Need the deal)</option>
+                        </select>
+                      </div>
+                    </div>
 
-                      const [res1, res2] = await Promise.all([
-                        supabase.from('tenants').update({ custom_email_sender: customSender, email_provider: emailProvider }).eq('id', tenantId),
-                        supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
-                      ]);
+                    {/* BRANDING / LOGO CONFIGURATION */}
+                    <div className="flex items-center gap-3 mt-10 mb-6 border-b border-gray-100 pb-4">
+                      <span className="text-2xl">🎨</span>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">Brand Identity</h3>
+                      </div>
+                    </div>
+                    <div className="space-y-4 max-w-md">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Logo URL</label>
+                        <input
+                          type="url"
+                          value={logoUrl}
+                          onChange={e => setLogoUrl(e.target.value)}
+                          placeholder="https://example.com/logo.png"
+                          className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
+                          Accessible in the template as <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-500">{"{{company_logo}}"}</code>
+                        </p>
+                      </div>
+                    </div>
 
-                      setIsSavingSettings(false);
-                      if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
-                      else alert("Template and Logo saved successfully!");
-                    }}
-                    disabled={isSavingSettings}
-                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-gray-400"
-                  >
-                    {isSavingSettings ? "Saving..." : "Save Template & Logo"}
-                  </button>
-                </div>
-                <div className="flex flex-col lg:flex-row gap-6 h-[800px] mb-12">
-                  <div className="flex-1 bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-inner">
-                    <div className="bg-gray-950 px-6 py-4 border-b border-gray-800 flex justify-between items-center"><span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Source Code</span><span className="text-[10px] font-black text-indigo-400">{'{{db_key}}'} Supported</span></div>
-                    <textarea className="w-full flex-1 bg-transparent text-gray-300 font-mono text-[11px] p-6 outline-none resize-none leading-relaxed" value={htmlTemplate} onChange={e => setHtmlTemplate(e.target.value)} spellCheck={false} placeholder="Paste pure HTML here..." />
-                  </div>
-                  <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
-                    {htmlTemplate ? (
-                      <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace(/\\{\\{\\{?company_logo\\}\\}?\\}?/g, logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview" /></div>
-                    ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
-                  </div>
-                </div>
+                    {/* HTML TEMPLATE EDITOR */}
+                    <div className="flex justify-between items-center mt-10 mb-6 border-b border-gray-100 pb-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">📝</span>
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">Quotation Template Editor</h3>
+                          <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Live Document Engine</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!tenantId) return;
+                          setIsSavingSettings(true);
+
+                          const newSchemaConfig = [
+                            ...blueprint,
+                            { is_agent_config: true, agents, title: "system_agents" },
+                            { ...aiSettings, is_ai_settings: true, title: "ai_settings" },
+                            { is_branding: true, logo_url: logoUrl, title: "branding_settings" }
+                          ];
+
+                          const [res1, res2] = await Promise.all([
+                            supabase.from('tenants').update({ custom_email_sender: customSender, email_provider: emailProvider }).eq('id', tenantId),
+                            supabase.from('tenant_schemas').update({ schema_config: newSchemaConfig, html_template: htmlTemplate }).eq('tenant_id', tenantId)
+                          ]);
+
+                          setIsSavingSettings(false);
+                          if (res1.error || res2.error) alert("Failed to save: " + (res1.error?.message || res2.error?.message));
+                          else alert("Template and Logo saved successfully!");
+                        }}
+                        disabled={isSavingSettings}
+                        className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-gray-400"
+                      >
+                        {isSavingSettings ? "Saving..." : "Save Template & Logo"}
+                      </button>
+                    </div>
+                    <div className="flex flex-col lg:flex-row gap-6 h-[800px] mb-12">
+                      <div className="flex-1 bg-gray-900 rounded-3xl overflow-hidden flex flex-col shadow-inner">
+                        <div className="bg-gray-950 px-6 py-4 border-b border-gray-800 flex justify-between items-center"><span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Source Code</span><span className="text-[10px] font-black text-indigo-400">{'{{db_key}}'} Supported</span></div>
+                        <textarea className="w-full flex-1 bg-transparent text-gray-300 font-mono text-[11px] p-6 outline-none resize-none leading-relaxed" value={htmlTemplate} onChange={e => setHtmlTemplate(e.target.value)} spellCheck={false} placeholder="Paste pure HTML here..." />
+                      </div>
+                      <div className="flex-1 bg-gray-100 rounded-3xl border-4 border-dashed border-gray-200 flex flex-col items-center p-8 overflow-y-auto">
+                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
+                        {htmlTemplate ? (
+                          <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace(/\\{\\{\\{?company_logo\\}\\}?\\}?/g, logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview" /></div>
+                        ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* TEAM MANAGEMENT */}
                 {(user?.role === 'admin' || user?.role === 'manager') && (
