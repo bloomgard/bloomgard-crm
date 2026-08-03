@@ -1,5 +1,6 @@
 "use client";
 // @ts-nocheck
+import { Flame, Check, Building2, X } from 'lucide-react';
 import { useState, useEffect } from "react";
 import { supabase } from "@/utils/supabaseClient";
 

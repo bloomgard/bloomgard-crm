@@ -1,6 +1,7 @@
 
 // @ts-nocheck
 "use client";
+import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File } from 'lucide-react';
 import { useState, useEffect, useRef } from "react";
 import MasterDataUI from "@/components/MasterDataUI";
 import { supabase } from "@/utils/supabaseClient";

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { Search } from 'lucide-react';
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation"; 
 
