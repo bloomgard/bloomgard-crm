@@ -2769,7 +2769,7 @@ Command: ${dashCommand}`;
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                       <th className="px-3 py-2 whitespace-nowrap">Ref ID</th>
-                      {tableColumns.map((c, i) => <th key={i} className={`px-3 py-2 whitespace-nowrap ${c.name === 'client_name' ? 'w-full min-w-[200px]' : ''}`}>{c.label}</th>)}
+                      {tableColumns.map((c, i) => <th key={i} className={`px-3 py-2 whitespace-nowrap ${c.name === 'client_name' ? 'min-w-[200px]' : ''}`}>{c.label}</th>)}
                       <th className="px-3 py-2 whitespace-nowrap w-[1%]">Created By</th>
                       <th className="px-3 py-2 whitespace-nowrap w-[1%] text-center">Status</th>
                       <th className="px-3 py-2 whitespace-nowrap w-[1%] text-center">Docs</th>
@@ -2782,7 +2782,7 @@ Command: ${dashCommand}`;
                           <p className="text-xs font-semibold text-gray-900">{r.qn_number || r.qn || r.id?.slice(0, 8)}</p>
                           <p className="text-[9px] text-gray-500 mt-0.5">{r.date || r.quote_date}</p>
                         </td>
-                        {tableColumns.map((c, j) => <td key={j} className={`px-3 py-2 whitespace-nowrap text-[11px] text-gray-600 truncate ${c.name === 'client_name' ? 'w-full max-w-[200px]' : 'max-w-[150px]'}`}>{getFieldValue(r, c)}</td>)}
+                        {tableColumns.map((c, j) => <td key={j} className={`px-3 py-2 whitespace-nowrap text-[11px] text-gray-600 truncate ${c.name === 'client_name' ? 'max-w-[250px]' : 'max-w-[150px]'}`}>{getFieldValue(r, c)}</td>)}
                         <td className="px-3 py-2 whitespace-nowrap text-[11px] text-gray-600 truncate max-w-[150px] w-[1%]">{r.created_by_email}</td>
                         <td className="px-3 py-2 whitespace-nowrap w-[1%] text-center">
                           <span className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wide border shadow-sm ${r.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : r.status === 'Lost' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
