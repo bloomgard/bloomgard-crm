@@ -13,7 +13,7 @@ export default function Login() {
   const router = useRouter(); 
 
   useEffect(() => {
-    // 🔍 Check for an existing, valid session on load
+    // <Search className="w-5 h-5 inline text-gray-500" /> Check for an existing, valid session on load
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       

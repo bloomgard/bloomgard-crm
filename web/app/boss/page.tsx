@@ -1,9 +1,9 @@
-// @ts-nocheck
 "use client";
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/utils/supabaseClient";
 
-// 🔥 REFINED SCHEMA: Master Status and Attachments are now native components
+// <Flame className="w-5 h-5 inline text-orange-500" /> REFINED SCHEMA: Master Status and Attachments are now native components
 const DEFAULT_SCHEMA = [
   {
     title: "Client Information",
@@ -113,7 +113,7 @@ export default function BossDashboard() {
         if (!res.ok || !data.success) {
           throw new Error(data.error || "Failed to create user");
         }
-        alert("✅ Workspace & Admin User Created!");
+        alert("Workspace & Admin User Created!");
         setShowCreateModal(false);
         setNewWorkspaceName("");
         setNewAdminEmail("");
@@ -198,7 +198,7 @@ export default function BossDashboard() {
       }
       
       setPasswordCache(prev => ({ ...prev, [onboardEmail]: onboardPassword }));
-      alert(`✅ Success!\nEmail: ${onboardEmail}`);
+      alert(`<Check className="w-4 h-4 inline text-green-500" /> Success!\nEmail: ${onboardEmail}`);
       loadTenantData(selectedTenantId!);
       setOnboardEmail("");
       setOnboardPassword("");
@@ -222,7 +222,7 @@ export default function BossDashboard() {
     
     if (sErr) alert("Schema Sync Error: " + sErr.message);
     if (tErr) alert("Tenant Sync Error: " + tErr.message);
-    if (!sErr && !tErr) alert("✅ Master System Synced.");
+    if (!sErr && !tErr) alert("Master System Synced.");
     
     await fetchTenants();
   };
@@ -411,14 +411,14 @@ export default function BossDashboard() {
               </div>
             )}
           </div>
-        ) : <div className="h-[70vh] flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-[3rem] bg-white/50 text-center p-10"><span className="text-4xl mb-4">🏢</span><p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Select a Workspace Engine from the sidebar to begin Administration.</p></div>}
+        ) : <div className="h-[70vh] flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-[3rem] bg-white/50 text-center p-10"><span className="text-4xl mb-4"><Building2 className="w-4 h-4 inline" /></span><p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Select a Workspace Engine from the sidebar to begin Administration.</p></div>}
       </main>
 
       {/* Modal for Creating Workspace */}
       {showCreateModal && (
         <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-10 max-w-md w-full shadow-2xl relative">
-            <button onClick={() => setShowCreateModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black">✕</button>
+            <button onClick={() => setShowCreateModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black"><X className="w-4 h-4" /></button>
             <h2 className="text-2xl font-bold mb-2">New Workspace</h2>
             <p className="text-sm text-gray-500 mb-8">Provision a new tenant environment and admin.</p>
             

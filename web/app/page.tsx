@@ -1,4 +1,5 @@
 "use client";
+import { Sparkles, Bot, Zap, X, Mail, Check } from 'lucide-react';
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -85,17 +86,17 @@ export default function BloomgardLanding() {
           <BentoCard 
             title="Auto Follow-Up" 
             desc="Set your pipeline on autopilot. Intelligent, timed email follow-ups ensure no lead goes cold without manual intervention." 
-            icon="⚡" 
+            icon={<Zap className="w-4 h-4 inline text-amber-500" />} 
           />
           <BentoCard 
             title="AI Agent Fleet" 
             desc="Deploy your autonomous agents. Real-time telemetry, predictive pipeline analytics, and deep email parsing running 24/7." 
-            icon="🤖" 
+            icon={<Bot className="w-4 h-4 inline" />} 
           />
           <BentoCard 
             title="Liquid Glass UI" 
             desc="Experience the new Liquid Glass aesthetic. A distraction-free, hyper-optimized environment that looks as good as it performs." 
-            icon="✨" 
+            icon={<Sparkles className="w-4 h-4 inline" />} 
           />
         </div>
       </section>
@@ -148,7 +149,7 @@ export default function BloomgardLanding() {
       {/* --- PORTAL MODAL --- */}
       {showPortal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-3xl animate-in fade-in duration-300">
-          <button onClick={() => setShowPortal(false)} className="absolute top-10 right-10 text-4xl text-white font-light hover:rotate-90 transition-all">✕</button>
+          <button onClick={() => setShowPortal(false)} className="absolute top-10 right-10 text-4xl text-white font-light hover:rotate-90 transition-all"><X className="w-4 h-4" /></button>
           
           <div className="w-full max-w-lg space-y-6 animate-in zoom-in-95 duration-500">
             <div 
@@ -174,10 +175,10 @@ export default function BloomgardLanding() {
       {/* --- CONTACT MODAL --- */}
       {showContactModal && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-black/60 backdrop-blur-3xl animate-in fade-in duration-300">
-          <button onClick={() => setShowContactModal(false)} className="absolute top-10 right-10 text-4xl text-white font-light hover:rotate-90 transition-all">✕</button>
+          <button onClick={() => setShowContactModal(false)} className="absolute top-10 right-10 text-4xl text-white font-light hover:rotate-90 transition-all"><X className="w-4 h-4" /></button>
           
           <div className="w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-2xl p-10 rounded-[3rem] shadow-2xl text-center animate-in zoom-in-95 duration-500">
-            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner border border-white/10">✉️</div>
+            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner border border-white/10"><Mail className="w-4 h-4 inline" /></div>
             <h3 className="text-3xl font-bold tracking-tighter mb-2 text-white">Contact Sales</h3>
             <p className="text-white/60 font-medium mb-8 text-sm">Copy our email address below or open your web client directly.</p>
 
@@ -190,7 +191,7 @@ export default function BloomgardLanding() {
                 onClick={handleCopyEmail} 
                 className="w-full bg-white text-black py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl"
               >
-                {copied ? "✓ Copied to Clipboard" : "Copy Email Address"}
+                {copied ? <><Check className="w-4 h-4 inline" /> Copied to Clipboard</> : "Copy Email Address"}
               </button>
               <a 
                 href={`https://mail.google.com/mail/?view=cm&fs=1&to=bloomgarderp@gmail.com&cc=anshag239@gmail.com&su=Bloomgard%20Enterprise%20Inquiry&body=${preWrittenBody}`} 

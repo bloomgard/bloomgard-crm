@@ -145,7 +145,7 @@ export default function ClientDashboard() {
       }
 
       setPasswordCache(prev => ({ ...prev, [onboardEmail]: onboardPassword }));
-      alert(`✅ Success!\nEmail: ${onboardEmail}\nRole: ${onboardRole}`);
+      alert(`Success!\nEmail: ${onboardEmail}\nRole: ${onboardRole}`);
 
       // Refresh users list if possible, or just reset form
       setOnboardEmail("");
@@ -157,7 +157,7 @@ export default function ClientDashboard() {
     try {
       const { error } = await supabase.from("tenant_schemas").update({ schema_config: blueprint }).eq("tenant_id", user?.tenant_id || tenantId);
       if (error) throw error;
-      alert("✅ Schema updated successfully!");
+      alert("Schema updated successfully!");
     } catch (e: any) {
       alert("Failed to update schema: " + e.message);
     }
@@ -1469,7 +1469,7 @@ Command: ${dashCommand}`;
   return (
     <div className={`flex min-h-screen font-sans transition-colors duration-500 ${isDark ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode !bg-transparent' : 'bg-gray-50 dark:bg-[#030712]'}`}>
       {!isMobileMenuOpen && !selectedRecord && !viewingDoc && !showEmailModal && (
-        <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-md active:scale-95 transition-transform">☰</button>
+        <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-md active:scale-95 transition-transform"><Menu className="w-5 h-5" /></button>
       )}
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity"></div>}
 
@@ -1482,19 +1482,19 @@ Command: ${dashCommand}`;
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto scrollbar-hide">
           {[
-            ['dashboard', '📊 Dashboard'],
-            ['pipeline', '🚀 Quotes'],
-            ['inbox', '📬 Inbox'],
-            ['alerts', '🚨 Action Need'],
-            ['leadgen', '🧲 Lead Gen'],
-            ['docs', '📄 Docs'],
-            ['settings', '⚙️ Settings']
+            ['dashboard', <div key='dashboard' className='flex items-center gap-2'><LayoutDashboard className='w-4 h-4' /> Dashboard</div>],
+            ['pipeline', <div key='pipeline' className='flex items-center gap-2'><Rocket className='w-4 h-4' /> Quotes</div>],
+            ['inbox', <div key='inbox' className='flex items-center gap-2'><Inbox className='w-4 h-4' /> Inbox</div>],
+            ['alerts', <div key='alerts' className='flex items-center gap-2'><Bell className='w-4 h-4' /> Follow ups</div>],
+            ['leadgen', <div key='leadgen' className='flex items-center gap-2'><Magnet className='w-4 h-4' /> Lead Gen</div>],
+            ['docs', <div key='docs' className='flex items-center gap-2'><FileText className='w-4 h-4' /> Docs</div>],
+            ['settings', <div key='settings' className='flex items-center gap-2'><Settings className='w-4 h-4' /> Settings</div>]
           ].map(([v, label]) => (
             <div key={v} onClick={() => { setCurrentView(v); setIsMobileMenuOpen(false); }} className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm ${currentView === v ? 'bg-gray-900 text-white shadow-md' : 'text-gray-800 hover:bg-gray-100/50'}`}>
               <span>{label}</span>
             </div>
           ))}
-          <div onClick={() => { setCurrentView('copilot'); setIsMobileMenuOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm mt-2 ${currentView === 'copilot' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}>🤖 Bloomgard AI</div>
+          <div onClick={() => { setCurrentView('copilot'); setIsMobileMenuOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm mt-2 ${currentView === 'copilot' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}><Bot className="w-4 h-4 inline mr-2" /> Bloomgard AI</div>
         </nav>
         <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-black/40 border-white/30' : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800'}`}>
           <div className="flex items-center gap-3">
@@ -1521,7 +1521,7 @@ Command: ${dashCommand}`;
 
         {!tenantId && (
           <div className="max-w-6xl mx-auto bg-amber-50 border-l-4 border-amber-500 p-4 md:p-6 rounded-xl mb-8 flex items-start gap-4">
-            <span className="text-2xl">⚠️</span>
+            <AlertTriangle className="w-6 h-6 text-amber-500" />
             <div>
               <h3 className="text-sm font-bold text-amber-900">Workspace Connection Missing</h3>
               <p className="text-xs text-amber-800 mt-1">This client account does not have a <code>tenant_id</code> assigned in the database. Quotes and AI features cannot load until this is fixed. Please update their profile in Supabase.</p>
@@ -1532,7 +1532,7 @@ Command: ${dashCommand}`;
         {currentView === "alerts" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
             <header className="mb-10">
-              <h2 className="text-3xl font-bold text-gray-900">Action Needed</h2>
+              <h2 className="text-3xl font-bold text-gray-900">Follow ups</h2>
               <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">AI Follow-Up Triage</p>
             </header>
 
@@ -1545,13 +1545,13 @@ Command: ${dashCommand}`;
               <div className="relative z-10">
                 <div className="flex gap-4 border-b border-indigo-100/50 mb-8">
                   <button onClick={() => setTriageTab('due')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'due' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <span className="text-amber-500">⚡</span> Pending Follow-ups <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
+                    <Zap className="w-4 h-4 text-amber-500" /> Pending Follow-ups <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
                   </button>
                   <button onClick={() => setTriageTab('incoming')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'incoming' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <span className="text-indigo-500">📥</span> Incoming <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'incoming').length}</span>
+                    <Download className="w-4 h-4 text-indigo-500" /> Incoming <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'incoming').length}</span>
                   </button>
                   <button onClick={() => setTriageTab('outgoing')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'outgoing' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <span className="text-blue-500">📤</span> Outgoing <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'outgoing').length}</span>
+                    <Upload className="w-4 h-4 text-blue-500" /> Outgoing <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'outgoing').length}</span>
                   </button>
                 </div>
 
@@ -1599,7 +1599,7 @@ Command: ${dashCommand}`;
 
                     {pendingAlerts.length === 0 ? (
                       <div className="text-center py-16">
-                        <span className="text-4xl mb-4 block opacity-50">✨</span>
+                        <Sparkles className="w-10 h-10 mb-4 block opacity-50" />
                         <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
                         <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here {triageDaysFilter} days after creation.</p>
                       </div>
@@ -1622,7 +1622,7 @@ Command: ${dashCommand}`;
                                   />
                                   <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2 flex justify-between items-center">
                                     <span>Suggested Email Snippet • Waiting for Approval</span>
-                                    <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">✎ Edit</span>
+                                    <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity"><div className="flex items-center gap-1"><Pen className="w-3 h-3" /> Edit</div></span>
                                   </p>
                                 </div>
                               </div>
@@ -1639,7 +1639,7 @@ Command: ${dashCommand}`;
                                   {dispatchingId === r.id ? (
                                     <><div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div> Dispatching...</>
                                   ) : (
-                                    <>🤖 Approve Agent</>
+                                    <><div className="flex items-center gap-2"><Bot className="w-4 h-4" /> Approve Agent</div></>
                                   )}
                                 </button>
                               </div>
@@ -1655,7 +1655,7 @@ Command: ${dashCommand}`;
                   <>
                     {historyAlerts.length === 0 ? (
                       <div className="text-center py-16">
-                        <span className="text-4xl mb-4 block opacity-50">📜</span>
+                        <Scroll className="w-10 h-10 mb-4 block opacity-50" />
                         <p className="text-gray-500 font-medium text-sm">No follow-up history yet.</p>
                       </div>
                     ) : (
@@ -1783,7 +1783,7 @@ Command: ${dashCommand}`;
                             {triageTab === 'incoming' && (
                               <div className="mt-4 border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm ring-2 ring-indigo-50">
                                 <div className="bg-indigo-50/50 p-3 border-b border-indigo-100 flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">✨ AI Suggested Reply</span>
+                                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4" /> AI Suggested Reply</span>
                                 </div>
                                 <textarea
                                   value={replyText}
@@ -1858,21 +1858,21 @@ Command: ${dashCommand}`;
                   <>
                     <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                       <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-                        <span className="text-xl">🗄️</span>
+                        <Database className="w-5 h-5 text-blue-600" />
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
                       <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
                     </button>
                     <button onClick={() => setSettingsSubView('users')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                       <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
-                        <span className="text-xl">👥</span>
+                        <Users className="w-5 h-5 text-indigo-600" />
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">User Access</h3>
                       <p className="text-sm text-gray-500">Onboard new agents, managers, and admins to this workspace.</p>
                     </button>
                     <button onClick={() => setSettingsSubView('blueprint')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                       <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
-                        <span className="text-xl">🏗️</span>
+                        <Wrench className="w-5 h-5 text-gray-200" />
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
                       <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
@@ -1881,14 +1881,14 @@ Command: ${dashCommand}`;
                 )}
                 <button onClick={() => setSettingsSubView('email')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                   <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4">
-                    <span className="text-xl">✉️</span>
+                    <Mail className="w-5 h-5 text-emerald-600" />
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">Email Settings</h3>
                   <p className="text-sm text-gray-500">Configure workspace-wide and personal email routing.</p>
                 </button>
                 <button onClick={() => setSettingsSubView('personalization')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                   <div className="w-12 h-12 bg-pink-50 rounded-xl flex items-center justify-center mb-4">
-                    <span className="text-xl">✨</span>
+                    <Sparkles className="w-5 h-5 text-pink-600" />
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">Personalization</h3>
                   <p className="text-sm text-gray-500">Customize your workspace UI, theme, and wallpapers.</p>
@@ -1897,14 +1897,14 @@ Command: ${dashCommand}`;
                   <>
                     <button onClick={() => setSettingsSubView('ai-personality')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                       <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mb-4">
-                        <span className="text-xl">🤖</span>
+                        <Bot className="w-5 h-5 text-amber-600" />
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">AI Personality</h3>
                       <p className="text-sm text-gray-500">Adjust the agent tone, style, and desperation level.</p>
                     </button>
                     <button onClick={() => setSettingsSubView('quote-template')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
                       <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center mb-4">
-                        <span className="text-xl">🎨</span>
+                        <Palette className="w-5 h-5 text-red-600" />
                       </div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">Quote Template</h3>
                       <p className="text-sm text-gray-500">Manage brand identity, logos, and HTML generation template.</p>
@@ -2010,7 +2010,7 @@ Command: ${dashCommand}`;
 
                           <input placeholder={f.type === 'calculated' ? "e.g. SUM[Products.item_br]" : f.type === 'master_status' ? "Inquiry, Approved..." : "Options..."} className="col-span-3 bg-white border border-gray-200 text-xs p-2 rounded-lg outline-none disabled:opacity-50" value={f.options || ""} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].options = e.target.value; setBlueprint(nc); }} disabled={f.type !== "dropdown" && f.type !== "calculated" && f.type !== "master_status"} />
 
-                          <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.splice(fIdx, 1); setBlueprint(nc); }} className="col-span-1 text-red-300 hover:text-red-500 font-bold text-right pr-2">✕</button>
+                          <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.splice(fIdx, 1); setBlueprint(nc); }} className="col-span-1 text-red-300 hover:text-red-500 font-bold text-right pr-2"><X className="w-4 h-4" /></button>
                         </div>
                       ))}
                       <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.push({ label: "", name: "", type: "text" }); setBlueprint(nc); }} className="text-[10px] font-black uppercase text-blue-600 tracking-widest mt-4 ml-4 hover:text-blue-800">+ Add Field</button>
@@ -2024,7 +2024,7 @@ Command: ${dashCommand}`;
             {settingsSubView === 'email' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
                 <div className="flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
-                  <span className="text-2xl">✉️</span>
+                  <Mail className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Email Routing Settings</h3>
                     <p className="text-xs text-gray-500 mt-1">Configure your workspace and personal dispatch emails.</p>
@@ -2124,7 +2124,7 @@ Command: ${dashCommand}`;
             {settingsSubView === 'personalization' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
                 <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                  <span className="text-2xl">✨</span>
+                  <Sparkles className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">UI & Personalization</h3>
                   </div>
@@ -2176,7 +2176,7 @@ Command: ${dashCommand}`;
             {settingsSubView === 'ai-personality' && isManager && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-3xl">
                 <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                  <span className="text-2xl">🤖</span>
+                  <Bot className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">AI Personality Settings</h3>
                   </div>
@@ -2240,7 +2240,7 @@ Command: ${dashCommand}`;
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
                 {/* BRANDING / LOGO CONFIGURATION */}
                 <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                  <span className="text-2xl">🎨</span>
+                  <Palette className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Brand Identity</h3>
                   </div>
@@ -2264,7 +2264,7 @@ Command: ${dashCommand}`;
                 {/* HTML TEMPLATE EDITOR */}
                 <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">📝</span>
+                    <ClipboardList className="w-6 h-6" />
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">Quotation Template Editor</h3>
                       <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Live Document Engine</p>
@@ -2303,7 +2303,7 @@ Command: ${dashCommand}`;
                     <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">A4 Live Preview</span>
                     {htmlTemplate ? (
                       <div className="shadow-2xl bg-white shrink-0 overflow-hidden origin-top" style={{ width: '794px', height: '1123px', transform: 'scale(0.7)', marginBottom: '-300px' }}><iframe srcDoc={htmlTemplate.replace(/\\{\\{\\{?company_logo\\}\\}?\\}?/g, logoUrl)} className="w-full h-full border-none pointer-events-none" title="Live Preview" /></div>
-                    ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><span className="text-5xl mb-4">🖥️</span><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
+                    ) : (<div className="flex flex-col items-center justify-center text-gray-400 mt-40"><Monitor className="w-12 h-12 mb-4" /><p className="font-bold uppercase tracking-widest text-xs text-center max-w-xs">Write or paste your code on the left to see the live rendering here.</p></div>)}
                   </div>
                 </div>
               </div>
@@ -2315,7 +2315,7 @@ Command: ${dashCommand}`;
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-8">
             <header className="mb-8 flex justify-between items-end border-b border-gray-200 pb-8">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900">🤖 Agent Fleet</h2>
+                <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Bot className="w-8 h-8" /> Agent Fleet</h2>
                 <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">Manage Autonomous Follow-up Agents</p>
               </div>
               <div className="flex items-center gap-3">
@@ -2595,7 +2595,7 @@ Command: ${dashCommand}`;
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {agents.length === 0 ? (
                   <div className="col-span-full text-center py-16 border-2 border-dashed border-gray-200 rounded-3xl">
-                    <span className="text-4xl mb-4 block opacity-50">🤖</span>
+                    <Bot className="w-10 h-10 mb-4 block opacity-50" />
                     <p className="text-gray-500 font-medium text-sm">No Agents Created Yet</p>
                     <p className="text-gray-400 text-xs mt-1">Create an agent to automate your follow-ups and negotiations.</p>
                   </div>
@@ -2754,7 +2754,7 @@ Command: ${dashCommand}`;
 
             {records.length === 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-6 flex items-start gap-4">
-                <span className="text-2xl">⚠️</span>
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
                 <div>
                   <p className="text-sm font-bold text-amber-900">No quotes loaded</p>
                   <p className="text-xs text-amber-700 mt-1">This could mean: (1) Your Supabase <code>quotations</code> table is empty. (2) Your profile's <code>tenant_id</code> doesn't match the records. (3) The <code>qn_number</code> column doesn't exist.</p>
@@ -2814,7 +2814,7 @@ Command: ${dashCommand}`;
                   </div>
                 </div>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search emails..."
@@ -2843,7 +2843,7 @@ Command: ${dashCommand}`;
                           onClick={(e) => { e.stopPropagation(); handleInboxAction(log.id, 'is_starred', !log.is_starred); }}
                           className={`text-lg transition-colors ${log.is_starred ? 'text-yellow-400 hover:text-yellow-500' : 'text-gray-300 hover:text-gray-400'}`}
                         >
-                          {log.is_starred ? '★' : '☆'}
+                          {log.is_starred ? <Star className="w-4 h-4 fill-amber-400 text-amber-400" /> : <Star className="w-4 h-4 text-gray-400" />}
                         </button>
                       </div>
                     </div>
@@ -2868,10 +2868,10 @@ Command: ${dashCommand}`;
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => handleInboxAction(selectedInboxEmail.id, 'is_starred', !selectedInboxEmail.is_starred)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-lg" title="Star">
-                        {selectedInboxEmail.is_starred ? '⭐' : '☆'}
+                        {selectedInboxEmail.is_starred ? <Star className="w-4 h-4 fill-amber-400 text-amber-400" /> : <Star className="w-4 h-4 text-gray-400" />}
                       </button>
                       <button onClick={() => { handleInboxAction(selectedInboxEmail.id, 'is_deleted', true); setSelectedInboxEmail(null); }} className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors text-lg" title="Delete">
-                        🗑️
+                        <Trash className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -2889,7 +2889,7 @@ Command: ${dashCommand}`;
                     />
                     <div className="bg-gray-50 p-3 border-t border-gray-200 flex justify-between items-center">
                       <div className="flex gap-2">
-                        <button className="text-gray-400 hover:text-indigo-600 text-lg px-2" title="Attach File">📎</button>
+                        <button className="text-gray-400 hover:text-indigo-600 text-lg px-2" title="Attach File"><Paperclip className="w-4 h-4" /></button>
                       </div>
                       <button
                         onClick={handleInboxReply}
@@ -2904,7 +2904,7 @@ Command: ${dashCommand}`;
                   <div className="mt-4 border-t border-gray-200 dark:border-gray-800 pt-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 flex items-center gap-2">
-                        <span>🤖</span> Bloomgard AI Analysis
+                        <div className="flex items-center gap-2"><Bot className="w-4 h-4 text-indigo-600" /> <span className="font-bold text-indigo-600">Bloomgard AI Analysis</span></div>
                       </h3>
                       {!emailAiAnalysis[selectedInboxEmail.id] && (
                         <button onClick={() => handleAnalyzeEmail(selectedInboxEmail)} disabled={isAnalyzingEmail} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-md disabled:opacity-50">
@@ -2951,7 +2951,7 @@ Command: ${dashCommand}`;
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-gray-400 font-medium text-sm flex-col gap-3">
-                  <span className="text-4xl">📥</span>
+                  <Download className="w-10 h-10 text-gray-400" />
                   <p>Select an email to view contents</p>
                 </div>
               )}
@@ -2965,7 +2965,7 @@ Command: ${dashCommand}`;
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {docsRecords.length > 0 ? docsRecords.map((r, i) => (
                 <div key={r.id || i} className="relative bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md transition-all group flex flex-col">
-                  <button onClick={e => { e.stopPropagation(); handleDelete(r.id); }} className="absolute top-4 right-4 w-7 h-7 bg-red-50 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all z-10 active:scale-95">🗑</button>
+                  <button onClick={e => { e.stopPropagation(); handleDelete(r.id); }} className="absolute top-4 right-4 w-7 h-7 bg-red-50 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all z-10 active:scale-95"><Trash className="w-4 h-4" /></button>
                   <div className="flex justify-between items-start mb-6">
                     <div className="w-10 h-10 bg-gray-100 text-gray-600 rounded-xl flex items-center justify-center font-bold text-[10px] border border-gray-200 group-hover:bg-gray-900 group-hover:text-white transition-colors">PDF</div>
                     <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-widest bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100">{r.date || r.quote_date}</span>
@@ -3078,7 +3078,7 @@ Command: ${dashCommand}`;
                                 ) : f.type === "file" || f.type === "attachment" ? (
                                   <div className="flex flex-col gap-1">
                                     <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result, rIdx) }; reader.readAsDataURL(file); } }} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                                    {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
+                                    {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1"><Check className="w-3 h-3 inline mr-1" /> File Attached</span>}
                                   </div>
                                 ) : f.type === "paragraph" ? (
                                   <div className="flex flex-col gap-1">
@@ -3130,7 +3130,7 @@ Command: ${dashCommand}`;
                               </div>
                             );
                           })}
-                          <button onClick={() => { const nd = { ...dynamicData }; nd[section.title].splice(rIdx, 1); setDynamicData(nd); }} className="absolute -top-3 -right-3 bg-white text-red-500 hover:text-white hover:bg-red-500 w-7 h-7 rounded-full border border-gray-200 shadow-sm flex items-center justify-center text-xs transition-colors active:scale-95">✕</button>
+                          <button onClick={() => { const nd = { ...dynamicData }; nd[section.title].splice(rIdx, 1); setDynamicData(nd); }} className="absolute -top-3 -right-3 bg-white text-red-500 hover:text-white hover:bg-red-500 w-7 h-7 rounded-full border border-gray-200 shadow-sm flex items-center justify-center text-xs transition-colors active:scale-95"><X className="w-4 h-4" /></button>
                         </div>
                       ))}
                     </div>
@@ -3189,7 +3189,7 @@ Command: ${dashCommand}`;
                             ) : f.type === "file" || f.type === "attachment" ? (
                               <div className="flex flex-col gap-1">
                                 <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result) }; reader.readAsDataURL(file); } }} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                                {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1">✓ File Attached</span>}
+                                {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1"><Check className="w-3 h-3 inline mr-1" /> File Attached</span>}
                               </div>
                             ) : f.type === "paragraph" ? (
                               <div className="flex flex-col gap-1">
@@ -3255,7 +3255,7 @@ Command: ${dashCommand}`;
             <div className="flex-1 bg-white border border-gray-200 rounded-[2rem] shadow-sm flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 bg-gray-50/30">
                 {chatHistory.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-50 px-4"><div className="text-5xl mb-4">🧠</div><p className="text-sm font-bold text-gray-700">How can I help you analyze your pipeline today?</p><p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mt-2">I can read your manifest data in real-time.</p></div>
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-50 px-4"><div className="mb-4 flex justify-center"><Brain className="w-12 h-12 text-gray-400" /></div><p className="text-sm font-bold text-gray-700">How can I help you analyze your pipeline today?</p><p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mt-2">I can read your manifest data in real-time.</p></div>
                 ) : chatHistory.map((msg, i) => (
                   <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] md:max-w-[80%] rounded-2xl p-5 shadow-sm text-sm leading-relaxed ${msg.role === 'user' ? 'bg-gray-900 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-700 rounded-bl-none'}`}>{msg.role === 'ai' ? formatAIText(msg.content) : msg.content}</div></div>
                 ))}
@@ -3290,9 +3290,9 @@ Command: ${dashCommand}`;
                 <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mt-1">Ref ID: {selectedRecord.qn_number || selectedRecord.qn || selectedRecord.id?.slice(0, 8).toUpperCase()}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => loadRecordForEditing(selectedRecord)} className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-600 active:scale-95 transition-transform" title="Edit">✎</button>
-                <button onClick={() => handleDelete(selectedRecord.id)} className="w-10 h-10 bg-red-50 border border-red-100 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 active:scale-95 transition-transform" title="Delete">🗑</button>
-                <button onClick={() => setSelectedRecord(null)} className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200 active:scale-95 transition-transform">✕</button>
+                <button onClick={() => loadRecordForEditing(selectedRecord)} className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-600 active:scale-95 transition-transform" title="Edit"><Pen className="w-4 h-4" /></button>
+                <button onClick={() => handleDelete(selectedRecord.id)} className="w-10 h-10 bg-red-50 border border-red-100 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 active:scale-95 transition-transform" title="Delete"><Trash className="w-4 h-4" /></button>
+                <button onClick={() => setSelectedRecord(null)} className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200 active:scale-95 transition-transform"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
@@ -3308,7 +3308,7 @@ Command: ${dashCommand}`;
                       onClick={() => updateStatus(selectedRecord.id, 'Draft')}
                       className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest shadow-md active:scale-95 transition-all bg-indigo-600 text-white w-full"
                     >
-                      ⚡ Convert to Quote
+                      <Zap className="w-4 h-4 inline mr-2" /> Convert to Quote
                     </button>
                   ) : (
                     ['Draft', 'Pending', 'Approved', 'Rejected', 'Lost'].map(s => (
@@ -3383,7 +3383,7 @@ Command: ${dashCommand}`;
             <div className="space-y-8">
               {selectedRecord.status === 'Lead' && (
                 <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-200 shadow-sm mb-8">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-4 border-b border-amber-200 pb-2">📬 Original Lead Email</h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-4 border-b border-amber-200 pb-2"><Mail className="w-4 h-4 inline mr-2 align-text-bottom" /> Original Lead Email</h4>
                   <div className="mb-4">
                     <p className="text-[9px] font-bold text-amber-600 uppercase">Subject</p>
                     <p className="text-sm font-medium text-amber-900">{selectedRecord.custom_metadata?.lead_email_subject || 'No Subject'}</p>
@@ -3395,7 +3395,7 @@ Command: ${dashCommand}`;
                     </div>
                   </div>
 
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-500 mb-4 border-b border-indigo-100 pb-2 mt-8">🤖 AI Extracted Items</h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-500 mb-4 border-b border-indigo-100 pb-2 mt-8"><Bot className="w-4 h-4 inline mr-2 align-text-bottom" /> AI Extracted Items</h4>
                   {selectedRecord.custom_metadata?.ai_parsed_items?.length > 0 ? (
                     <div className="space-y-3">
                       {selectedRecord.custom_metadata.ai_parsed_items.map((item, idx) => (
@@ -3431,7 +3431,7 @@ Command: ${dashCommand}`;
                                   <div key={fIdx} className="flex flex-col">
                                     <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{f.label}</p>
                                     <p className="text-sm font-medium text-gray-900 break-words">
-                                      {f.type === 'file' || f.type === 'attachment' ? (v ? <span className="text-green-600 text-[10px] font-bold">✓ File Secured</span> : '—') : (v !== '' && v != null ? String(v) : '—')}
+                                      {f.type === 'file' || f.type === 'attachment' ? (v ? <span className="text-green-600 text-[10px] font-bold"><Check className="w-3 h-3 inline mr-1" /> File Secured</span> : '—') : (v !== '' && v != null ? String(v) : '—')}
                                     </p>
                                   </div>
                                 );
@@ -3448,7 +3448,7 @@ Command: ${dashCommand}`;
                             <div key={fIdx} className="flex flex-col border-b border-gray-50 pb-2">
                               <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{f.label}</p>
                               <p className="text-sm font-medium text-gray-900 break-words">
-                                {f.type === 'file' || f.type === 'attachment' ? (v ? <span className="text-green-600 text-[10px] font-bold">✓ File Secured</span> : '—') : (v != null && v !== '' ? String(v) : '—')}
+                                {f.type === 'file' || f.type === 'attachment' ? (v ? <span className="text-green-600 text-[10px] font-bold"><Check className="w-3 h-3 inline mr-1" /> File Secured</span> : '—') : (v != null && v !== '' ? String(v) : '—')}
                               </p>
                             </div>
                           );
@@ -3488,7 +3488,7 @@ Command: ${dashCommand}`;
                   }
                 }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-sm active:scale-95 transition-transform">Save Edits</button>
                 <button onClick={() => downloadDirectPDF(viewingDoc.html, viewingDoc.title)} className="bg-white border border-gray-200 hover:border-gray-400 text-gray-700 px-4 py-2 rounded-lg text-[10px] font-semibold uppercase tracking-wider shadow-sm hidden sm:block active:scale-95 transition-transform">Export PDF</button>
-                <button onClick={() => setViewingDoc(null)} className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-red-500 hover:text-white rounded-lg font-bold transition-colors active:scale-95 transition-transform">✕</button>
+                <button onClick={() => setViewingDoc(null)} className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-red-500 hover:text-white rounded-lg font-bold transition-colors active:scale-95 transition-transform"><X className="w-4 h-4" /></button>
               </div>
             </div>
             <div className="flex-1 bg-gray-100 p-2 md:p-6 flex justify-center overflow-hidden">
@@ -3516,7 +3516,7 @@ Command: ${dashCommand}`;
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-200 max-h-[90vh]">
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
               <h3 className="text-lg font-bold text-gray-900">Deploy Email</h3>
-              <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-red-500 font-bold w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform">✕</button>
+              <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-red-500 font-bold w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6 space-y-5 flex-1 overflow-y-auto">
               <div className="space-y-1.5">
@@ -3536,7 +3536,7 @@ Command: ${dashCommand}`;
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Message</label>
                   <button onClick={handleGenerateEmailDraft} disabled={isGeneratingDraft} className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 active:scale-95">
-                    {isGeneratingDraft ? <div className="w-3 h-3 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin"></div> : "✨"} Generate Draft
+                    {isGeneratingDraft ? <div className="w-3 h-3 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin"></div> : <Sparkles className="w-4 h-4 inline" />} Generate Draft
                   </button>
                 </div>
                 <textarea rows={5} value={emailDraft.message} onChange={e => setEmailDraft({ ...emailDraft, message: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm outline-none focus:border-gray-400 resize-none" />
@@ -3551,7 +3551,7 @@ Command: ${dashCommand}`;
                       onClick={() => document.getElementById('email-file-upload').click()}
                       className="flex-1 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 font-semibold text-xs py-2.5 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2"
                     >
-                      <span>💻</span> Upload from Device
+                      <div className="flex items-center justify-center gap-2"><Laptop className="w-4 h-4" /> Upload from Device</div>
                     </button>
 
                     <div className="flex-1 relative">
@@ -3584,7 +3584,7 @@ Command: ${dashCommand}`;
                           e.target.value = ""; // reset
                         }}
                       >
-                        <option value="">📄 Select CRM Document...</option>
+                        <option value="">Select CRM Document...</option>
                         {docsRecords.map(r => (
                           <option key={r.id} value={r.id}>{r.qn_number} - {getManifestTitle(r)}</option>
                         ))}
@@ -3620,7 +3620,7 @@ Command: ${dashCommand}`;
                     {emailDraft.attachments.map((att, idx) => (
                       <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 p-2.5 rounded-xl shadow-sm">
                         <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="w-7 h-7 bg-white rounded flex items-center justify-center text-xs shadow-sm border border-gray-100 shrink-0">📎</div>
+                          <div className="w-7 h-7 bg-white rounded flex items-center justify-center text-xs shadow-sm border border-gray-100 shrink-0"><Paperclip className="w-4 h-4" /></div>
                           <p className="text-[11px] font-semibold text-gray-800 truncate">{att.filename}</p>
                         </div>
                         <button
@@ -3633,7 +3633,7 @@ Command: ${dashCommand}`;
                           }}
                           className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2.5 py-1.5 rounded-lg active:scale-95 transition-transform shrink-0 border border-red-100"
                         >
-                          ✕ Remove
+                          <X className="w-4 h-4" /> Remove
                         </button>
                       </div>
                     ))}
