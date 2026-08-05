@@ -72,7 +72,7 @@ export default function ClientDashboard() {
   const [customSender, setCustomSender] = useState("");
   const [userRoutingSlug, setUserRoutingSlug] = useState("");
   const [emailProvider, setEmailProvider] = useState("resend");
-  const [aiSettings, setAiSettings] = useState({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low' });
+  const [aiSettings, setAiSettings] = useState<{ tone: string, englishLevel: string, desperation: string, instructions?: string, emailRouting?: { lookFor: string, routeTo: string, sendRouteMessage: boolean, routeMessage: string }[] }>({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low', instructions: '', emailRouting: [] });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
   const [emailSenderPref, setEmailSenderPref] = useState<'personal' | 'common'>('personal');
@@ -329,7 +329,7 @@ export default function ClientDashboard() {
             const agentConfig = schema.schema_config.find(s => s.is_agent_config);
             if (agentConfig) setAgents(agentConfig.agents || []);
             const aiSettingsConfig = schema.schema_config.find(s => s.is_ai_settings);
-            if (aiSettingsConfig) setAiSettings({ tone: aiSettingsConfig.tone || 'Professional', englishLevel: aiSettingsConfig.englishLevel || 'Native', desperation: aiSettingsConfig.desperation || 'Low' });
+            if (aiSettingsConfig) setAiSettings({ tone: aiSettingsConfig.tone || 'Professional', englishLevel: aiSettingsConfig.englishLevel || 'Native', desperation: aiSettingsConfig.desperation || 'Low', instructions: aiSettingsConfig.instructions || '', emailRouting: aiSettingsConfig.emailRouting || [] });
             const brandingConfig = schema.schema_config.find(s => s.is_branding);
             if (brandingConfig) setLogoUrl(brandingConfig.logo_url || "");
 
@@ -1900,7 +1900,7 @@ Command: ${dashCommand}`;
                       <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mb-4">
                         <Bot className="w-5 h-5 text-amber-600" />
                       </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">AI Personality</h3>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">AI Settings</h3>
                       <p className="text-sm text-gray-500">Adjust the agent tone, style, and desperation level.</p>
                     </button>
                     <button onClick={() => setSettingsSubView('quote-template')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
@@ -2179,7 +2179,7 @@ Command: ${dashCommand}`;
                 <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
                   <Bot className="w-6 h-6" />
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">AI Personality Settings</h3>
+                    <h3 className="text-lg font-bold text-gray-900">AI Settings</h3>
                   </div>
                 </div>
 
@@ -2210,7 +2210,106 @@ Command: ${dashCommand}`;
                     </select>
                   </div>
                 </div>
-                
+
+                <div className="mb-8">
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 mb-2 block">System Instructions</label>
+                  <textarea
+                    value={aiSettings.instructions || ''}
+                    onChange={e => setAiSettings({ ...aiSettings, instructions: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-indigo-400 min-h-[100px] resize-y"
+                    placeholder="Provide specific instructions for the AI on how to craft messages, its core objective, constraints, etc."
+                  />
+                </div>
+
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Routing Rules</label>
+                    <button
+                      onClick={() => setAiSettings({ ...aiSettings, emailRouting: [...(aiSettings.emailRouting || []), { lookFor: '', routeTo: '', sendRouteMessage: false, routeMessage: '' }] })}
+                      className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg hover:bg-indigo-100 transition-colors uppercase tracking-wider"
+                    >
+                      + Add Rule
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {(aiSettings.emailRouting || []).map((rule, idx) => (
+                      <div key={idx} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative">
+                        <button
+                          onClick={() => setAiSettings({ ...aiSettings, emailRouting: aiSettings.emailRouting.filter((_, i) => i !== idx) })}
+                          className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pr-8">
+                          <div>
+                            <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-1">Condition (Look For)</label>
+                            <input
+                              type="text"
+                              value={rule.lookFor}
+                              onChange={e => {
+                                const newRouting = [...aiSettings.emailRouting];
+                                newRouting[idx].lookFor = e.target.value;
+                                setAiSettings({ ...aiSettings, emailRouting: newRouting });
+                              }}
+                              placeholder="e.g. Invoices, support, urgent complaints..."
+                              className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm outline-none focus:border-indigo-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-1">Route To (Email ID)</label>
+                            <input
+                              type="email"
+                              value={rule.routeTo}
+                              onChange={e => {
+                                const newRouting = [...aiSettings.emailRouting];
+                                newRouting[idx].routeTo = e.target.value;
+                                setAiSettings({ ...aiSettings, emailRouting: newRouting });
+                              }}
+                              placeholder="support@company.com"
+                              className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm outline-none focus:border-indigo-400"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mb-2 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={rule.sendRouteMessage}
+                            onChange={e => {
+                              const newRouting = [...aiSettings.emailRouting];
+                              newRouting[idx].sendRouteMessage = e.target.checked;
+                              setAiSettings({ ...aiSettings, emailRouting: newRouting });
+                            }}
+                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                          />
+                          <label className="text-xs font-semibold text-gray-700">Send custom message with routed email?</label>
+                        </div>
+
+                        {rule.sendRouteMessage && (
+                          <div>
+                            <textarea
+                              value={rule.routeMessage}
+                              onChange={e => {
+                                const newRouting = [...aiSettings.emailRouting];
+                                newRouting[idx].routeMessage = e.target.value;
+                                setAiSettings({ ...aiSettings, emailRouting: newRouting });
+                              }}
+                              className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm outline-none focus:border-indigo-400 min-h-[60px]"
+                              placeholder="Message to prepend when routing (e.g., 'Hey team, please look at this urgent invoice...')"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {(aiSettings.emailRouting || []).length === 0 && (
+                      <div className="text-center py-6 text-sm text-gray-500 bg-gray-50 border border-gray-200 border-dashed rounded-xl">
+                        No email routing rules configured.
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <button
                     onClick={async () => {
                       if (!tenantId) return;
@@ -2232,7 +2331,7 @@ Command: ${dashCommand}`;
                     disabled={isSavingSettings}
                     className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-gray-400"
                   >
-                    {isSavingSettings ? "Saving..." : "Save AI Personality"}
+                    {isSavingSettings ? "Saving..." : "Save AI Settings"}
                   </button>
               </div>
             )}
