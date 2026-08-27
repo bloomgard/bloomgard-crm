@@ -126,6 +126,106 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data }, { status: 200 });
     }
 
+    if (action === 'deleteValueOption') {
+      const { error } = await supabase.from('master_data_values').delete().eq('id', payload.id);
+      if (error) throw error;
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
+
+    if (action === 'bulkAddValues') {
+      // payload: { entry_id, values: string[], parent_value_id?: string | null }
+      const rows = (payload.values || [])
+        .map((v: string) => String(v || '').trim())
+        .filter(Boolean)
+        .map((value_text: string) => ({
+          entry_id: payload.entry_id,
+          value_text,
+          parent_value_id: payload.parent_value_id ?? null,
+        }));
+      if (rows.length === 0) return NextResponse.json({ success: true, inserted: 0 }, { status: 200 });
+      const { data, error } = await supabase
+        .from('master_data_values')
+        .upsert(rows, { onConflict: 'entry_id,value_text,parent_value_id', ignoreDuplicates: true })
+        .select();
+      if (error) throw error;
+      return NextResponse.json({ success: true, inserted: data?.length || 0 }, { status: 200 });
+    }
+
+    if (action === 'bulkImport') {
+      // payload: { tenant_id, tab_type, columns: [{key_name}], rows: string[][] }
+      const { tenant_id, tab_type = 'manual', columns = [], rows = [] } = payload;
+      if (!tenant_id || columns.length === 0) {
+        return NextResponse.json({ error: 'tenant_id and columns required' }, { status: 400 });
+      }
+
+      // 1. Resolve (find-or-create) an entry per column, chaining parent_id left -> right.
+      const entryIds: string[] = [];
+      let parentId: string | null = null;
+      for (const col of columns) {
+        const keyName = String(col.key_name || '').trim();
+        if (!keyName) throw new Error('Every mapped column needs a key_name');
+
+        let query = supabase
+          .from('master_data_entries')
+          .select('id')
+          .eq('tenant_id', tenant_id)
+          .eq('tab_type', tab_type)
+          .eq('key_name', keyName);
+        query = parentId ? query.eq('parent_id', parentId) : query.is('parent_id', null);
+        const { data: existing } = await query.maybeSingle();
+
+        let entryId = existing?.id;
+        if (!entryId) {
+          const { data: created, error: cErr } = await supabase
+            .from('master_data_entries')
+            .insert({ tenant_id, tab_type, key_name: keyName, parent_id: parentId })
+            .select('id')
+            .single();
+          if (cErr) throw cErr;
+          entryId = created.id;
+        }
+        entryIds.push(entryId);
+        parentId = entryId;
+      }
+
+      // 2. Walk each row left -> right, upserting values linked by parent_value_id.
+      const valueCache = new Map<string, string>(); // `${entryId}|${parentValueId}|${text}` -> valueId
+      let valuesCreated = 0;
+      let rowsProcessed = 0;
+
+      for (const row of rows) {
+        let parentValueId: string | null = null;
+        let broke = false;
+        for (let i = 0; i < entryIds.length; i++) {
+          const text = String(row[i] ?? '').trim();
+          if (!text) { broke = true; break; } // can't link deeper cols without this parent
+          const cacheKey = `${entryIds[i]}|${parentValueId ?? ''}|${text.toLowerCase()}`;
+          let valueId: string | undefined = valueCache.get(cacheKey);
+          if (!valueId) {
+            const upRes: any = await supabase
+              .from('master_data_values')
+              .upsert(
+                { entry_id: entryIds[i], value_text: text, parent_value_id: parentValueId },
+                { onConflict: 'entry_id,value_text,parent_value_id' }
+              )
+              .select('id')
+              .single();
+            if (upRes.error) throw upRes.error;
+            valueId = upRes.data.id as string;
+            valueCache.set(cacheKey, valueId);
+            valuesCreated++;
+          }
+          parentValueId = valueId ?? null;
+        }
+        if (!broke || parentValueId) rowsProcessed++;
+      }
+
+      return NextResponse.json(
+        { success: true, entries: entryIds.length, valuesTouched: valuesCreated, rowsProcessed },
+        { status: 200 }
+      );
+    }
+
     if (action === 'deleteMasterKey') {
       const { data, error } = await supabase.from('master_data_entries').delete().eq('id', payload.id);
       if (error) throw error;

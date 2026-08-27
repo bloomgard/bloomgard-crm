@@ -4,6 +4,7 @@ export type MasterDataValue = {
   id: string;
   value_text: string;
   is_default: boolean;
+  parent_value_id?: string | null;
 };
 
 export type MasterDataEntry = {

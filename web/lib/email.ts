@@ -1,3 +1,4 @@
+// Centralized outbound email module. All mail goes through Resend.
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);

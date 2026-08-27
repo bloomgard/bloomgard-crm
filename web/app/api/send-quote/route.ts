@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDynamicSender, sendEmail } from '@/lib/postal';
+import { getDynamicSender, sendEmail } from '@/lib/email';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -21,7 +21,7 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { to, cc, bcc, subject, message, attachments, agentEmail, agentId, senderPreference, tenantId, companyName, customSender, provider } = body;
+    const { to, cc, bcc, subject, message, attachments, agentEmail, agentId, senderPreference, tenantId, companyName, customSender } = body;
 
     if (!to || !subject || !message) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400, headers: corsHeaders });

@@ -71,7 +71,6 @@ export default function ClientDashboard() {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [customSender, setCustomSender] = useState("");
   const [userRoutingSlug, setUserRoutingSlug] = useState("");
-  const [emailProvider, setEmailProvider] = useState("resend");
   const [aiSettings, setAiSettings] = useState<{ tone: string, englishLevel: string, desperation: string, instructions?: string, emailRouting?: { lookFor: string, routeTo: string, sendRouteMessage: boolean, routeMessage: string }[] }>({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low', instructions: '', emailRouting: [] });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
@@ -313,12 +312,11 @@ export default function ClientDashboard() {
         if (profile.tenant_id) {
           setTenantId(profile.tenant_id);
 
-          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled, custom_email_sender, routing_slug, email_provider").eq("id", profile.tenant_id).maybeSingle();
+          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled, custom_email_sender, routing_slug").eq("id", profile.tenant_id).maybeSingle();
           if (tenantData) {
             if (tenantData.company_name) setCompanyName(tenantData.company_name);
             if (tenantData.ai_enabled === false) setAiEnabled(false);
             if (tenantData.custom_email_sender) setCustomSender(tenantData.custom_email_sender);
-            if (tenantData.email_provider) setEmailProvider(tenantData.email_provider);
           }
 
           const { data: schema } = await supabase.from("tenant_schemas").select("schema_config, html_template").eq("tenant_id", profile.tenant_id).maybeSingle();
@@ -1360,8 +1358,7 @@ Command: ${dashCommand}`;
         senderPreference: emailSenderPref,
         tenantId: tenantId,
         companyName: companyName || "",
-        customSender: customSender || "",
-        provider: emailProvider || "resend"
+        customSender: customSender || ""
       };
 
       const res = await fetch(url, {
@@ -2049,7 +2046,7 @@ Command: ${dashCommand}`;
                         onClick={async () => {
                           if (!tenantId) return;
                           setIsSavingSettings(true);
-                          const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender, email_provider: emailProvider }).eq('id', tenantId);
+                          const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender }).eq('id', tenantId);
                           setIsSavingSettings(false);
                           if (error) alert("Failed to save: " + error.message);
                           else alert("Workspace Email Settings updated successfully!");
@@ -3136,7 +3133,16 @@ Command: ${dashCommand}`;
                               return parentEntry.values?.some(v => v.value_text === parentValueInForm);
                             });
 
-                            const manualValues = activeEntries.flatMap(e => e.values || []);
+                            // Value-level cascade: for a child key, keep only the values
+                            // linked (parent_value_id) to the parent's currently-selected value.
+                            // Values with no parent_value_id stay unconditional (back-compat).
+                            const manualValues = activeEntries.flatMap(entry => {
+                              const vals = entry.values || [];
+                              if (!entry.parent_id) return vals;
+                              const parentEntry = findEntryById(entry.parent_id);
+                              const parentValObj = parentEntry?.values?.find(v => v.value_text === row[parentEntry.key_name]);
+                              return vals.filter(v => !v.parent_value_id || (parentValObj && v.parent_value_id === parentValObj.id));
+                            });
                             const activeValues = [...manualValues];
 
                             // Check for Auto-Captured keys from DB
@@ -3247,7 +3253,14 @@ Command: ${dashCommand}`;
                           return parentEntry.values?.some(v => v.value_text === parentValueInForm);
                         });
 
-                        const manualValues = activeEntries.flatMap(e => e.values || []);
+                        // Value-level cascade (see multi-row block above for rationale).
+                        const manualValues = activeEntries.flatMap(entry => {
+                          const vals = entry.values || [];
+                          if (!entry.parent_id) return vals;
+                          const parentEntry = findEntryById(entry.parent_id);
+                          const parentValObj = parentEntry?.values?.find(v => v.value_text === dynamicData[section.title]?.[parentEntry.key_name]);
+                          return vals.filter(v => !v.parent_value_id || (parentValObj && v.parent_value_id === parentValObj.id));
+                        });
                         const activeValues = [...manualValues];
 
                         // Check for Auto-Captured keys from DB

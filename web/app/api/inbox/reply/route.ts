@@ -31,11 +31,11 @@ export async function POST(request: Request) {
       }
     }
 
-    const { getDynamicSender, sendEmail } = require('@/lib/postal');
+    const { getDynamicSender, sendEmail } = require('@/lib/email');
     const fromEmail = tenant.custom_email_sender || 'support@bloomgard.co';
     const fromName = tenant.company_name || 'Bloomgard';
     
-    // Uses the centralized postal module so it inherits the fallback testing logic
+    // Uses the centralized email module so it inherits the fallback testing logic
     const sentData = await sendEmail({
       from: `${fromName} <${fromEmail}>`,
       to,

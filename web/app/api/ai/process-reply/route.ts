@@ -108,7 +108,7 @@ RULES:
       const agentReply = aiData.choices[0].message.content.trim();
 
       // Send Email via Centralized Postal Module
-      const { sendEmail } = require('@/lib/postal');
+      const { sendEmail } = require('@/lib/email');
       const fromEmail = tenant.custom_email_sender || 'support@bloomgard.co';
       const fromName = tenant.company_name || 'Bloomgard';
       

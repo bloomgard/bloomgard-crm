@@ -126,3 +126,21 @@ BEGIN
     ALTER TABLE profiles ADD COLUMN inbound_email VARCHAR(255) UNIQUE;
   END IF;
 END $$;
+
+-- ============================================================
+-- Master Data: value-level cascading (parent -> child autofill)
+-- ============================================================
+-- Links a child key's value option to a specific parent key value,
+-- so the quote form can cascade: pick parent value -> child options
+-- narrow to the ones that belong to it (and auto-fill when only one).
+ALTER TABLE master_data_values
+  ADD COLUMN IF NOT EXISTS parent_value_id UUID
+  REFERENCES master_data_values(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_master_data_values_parent_value_id
+  ON master_data_values(parent_value_id);
+
+-- De-dupe guard for bulk Excel imports: one value per (entry, text, parent).
+-- NULLS NOT DISTINCT keeps root-level values unique too (Postgres 15+).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_master_data_values_entry_text_parent
+  ON master_data_values (entry_id, value_text, parent_value_id) NULLS NOT DISTINCT;
