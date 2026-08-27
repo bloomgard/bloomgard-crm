@@ -3159,10 +3159,17 @@ Command: ${dashCommand}`;
 
                             const hasMasterValues = activeValues.length > 0;
                             const isSingleMasterValue = manualValues.length === 1;
+                            const isChildField = allEntries.some(e => e.parent_id);
 
-                            // Auto-fill logic (for manual single values)
-                            if (isSingleMasterValue && (!row[f.name] || row[f.name] === "")) {
-                              setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text, rIdx), 0);
+                            // Cascade autofill / reset: keep a child field in sync with its parent's selection.
+                            if (manualValues.length > 0) {
+                              const allowed = manualValues.map(v => v.value_text);
+                              const cur = row[f.name];
+                              if (isChildField && cur && !allowed.includes(cur)) {
+                                setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues.length === 1 ? manualValues[0].value_text : "", rIdx), 0);
+                              } else if (isSingleMasterValue && (!cur || cur === "")) {
+                                setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text, rIdx), 0);
+                              }
                             }
 
                             const listId = `datalist-${section.title}-${f.name}-${fIdx}-${rIdx}`;
@@ -3177,7 +3184,10 @@ Command: ${dashCommand}`;
                                     className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm"
                                   >
                                     <option value="">Select...</option>
-                                    {f.options && String(f.options).split(",").map((o, i) => <option key={i} value={o.trim()}>{o.trim()}</option>)}
+                                    {Array.from(new Set([
+                                      ...(f.options ? String(f.options).split(",").map(o => o.trim()).filter(Boolean) : []),
+                                      ...activeValues.map(v => v.value_text),
+                                    ])).map((o, i) => <option key={i} value={o}>{o}</option>)}
                                   </select>
                                 ) : f.type === "logged_in" ? (
                                   <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none shadow-sm cursor-not-allowed text-gray-500" />
@@ -3277,10 +3287,17 @@ Command: ${dashCommand}`;
 
                         const hasMasterValues = activeValues.length > 0;
                         const isSingleMasterValue = manualValues.length === 1;
+                        const isChildField = allEntries.some(e => e.parent_id);
 
-                        // Auto-fill logic
-                        if (isSingleMasterValue && (!dynamicData[section.title]?.[f.name] || dynamicData[section.title][f.name] === "")) {
-                          setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text), 0);
+                        // Cascade autofill / reset: keep a child field in sync with its parent's selection.
+                        if (manualValues.length > 0) {
+                          const allowed = manualValues.map(v => v.value_text);
+                          const cur = dynamicData[section.title]?.[f.name];
+                          if (isChildField && cur && !allowed.includes(cur)) {
+                            setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues.length === 1 ? manualValues[0].value_text : ""), 0);
+                          } else if (isSingleMasterValue && (!cur || cur === "")) {
+                            setTimeout(() => updateDynamicDataField(section.title, f.name, manualValues[0].value_text), 0);
+                          }
                         }
 
                         const listId = `datalist-${section.title}-${f.name}-${fIdx}-single`;
@@ -3295,7 +3312,10 @@ Command: ${dashCommand}`;
                                 className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400"
                               >
                                 <option value="">Select...</option>
-                                {f.options && String(f.options).split(",").map((o, i) => <option key={i} value={o.trim()}>{o.trim()}</option>)}
+                                {Array.from(new Set([
+                                  ...(f.options ? String(f.options).split(",").map(o => o.trim()).filter(Boolean) : []),
+                                  ...activeValues.map(v => v.value_text),
+                                ])).map((o, i) => <option key={i} value={o}>{o}</option>)}
                               </select>
                             ) : f.type === "logged_in" ? (
                               <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
