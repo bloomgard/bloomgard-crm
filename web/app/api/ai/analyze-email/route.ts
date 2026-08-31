@@ -20,23 +20,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing email content" }, { status: 400, headers: corsHeaders });
     }
 
-    const systemPrompt = `You are an AI assistant helping to process inbound emails for a CRM platform. 
-    Analyze the following email and generate a JSON response strictly matching this schema:
-    {
-      "summary": "A 1-2 sentence summary of what the client wants",
-      "auto_reply": "A professional, polite response drafted on behalf of the company addressing the email",
-      "lead_gen_quote": {
-        // Extract relevant information mapping to the provided CRM Blueprint fields.
-        // Each key should be a Section Title from the blueprint.
-        // The value should be an array of objects representing rows, where keys are field names.
-        // E.g., "Client Information": [{ "email_id": "sender@email.com", "company_name": "Acme Corp" }]
-      }
+    let masterData = '';
+    if (email.tenant_id) {
+      try {
+        const { buildMasterDataContext } = await import('@/lib/masterDataContext');
+        masterData = await buildMasterDataContext(email.tenant_id);
+      } catch (e) { console.error('master data context failed', e); }
     }
-    
-    Here is the CRM Blueprint structure to guide your extraction for lead_gen_quote:
-    ${JSON.stringify(blueprint)}
-    
-    Return ONLY valid JSON. No markdown wrappers.`;
+
+    const systemPrompt = `You are an AI assistant processing an inbound sales email for a CRM.
+Return ONLY valid JSON (no markdown) matching:
+{
+  "summary": "1-2 sentence summary of what the client wants",
+  "auto_reply": "professional reply drafted on behalf of the company, using the master data for any specifics",
+  "lead_gen_quote": {
+    // keys = Blueprint Section Titles; values = arrays of row objects keyed by field name.
+    // Always fill the client's email into the Client Information email field.
+    // For product rows: when the client names or codes a product, resolve it against
+    // the master data and fill item_code / item_name / uom / item_rate consistently
+    // with the parent -> child relationships shown. Never invent codes or prices.
+  }
+}
+
+CRM BLUEPRINT (targets for lead_gen_quote):
+${JSON.stringify(blueprint)}
+
+${masterData || 'No master data configured for this workspace.'}
+
+Return ONLY valid JSON. No markdown wrappers.`;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

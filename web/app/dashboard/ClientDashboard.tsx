@@ -115,6 +115,8 @@ export default function ClientDashboard() {
   const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
   const [triageStatusFilters, setTriageStatusFilters] = useState<string[]>([]);
   const [triageDaysFilter, setTriageDaysFilter] = useState(3);
+  const [triageTempFilter, setTriageTempFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
+  const [triageTempSort, setTriageTempSort] = useState<'hot' | 'cold'>('hot');
 
   // User Onboarding State
   const [onboardEmail, setOnboardEmail] = useState("");
@@ -529,6 +531,32 @@ export default function ClientDashboard() {
   const historyAlerts = visibleRecords.filter(r => {
     return r.follow_up_status != null || r.custom_metadata?.follow_up_status != null;
   });
+
+  // Lead temperature: how long since the last touch on this quote, with an
+  // "incoming client reply waiting" override that always makes it hot.
+  const quoteTemperature = (r: any): 'hot' | 'warm' | 'cold' => {
+    const hasIncoming = (emailThreads || []).some(
+      (t: any) => t.quote_id === r.id && t.triage_status === 'incoming'
+    );
+    if (hasIncoming) return 'hot';
+    const last = r.last_contact_date || r.date || r.created_at;
+    const days = last ? (Date.now() - new Date(last).getTime()) / 86400000 : 999;
+    if (days <= 3) return 'hot';
+    if (days <= 10) return 'warm';
+    return 'cold';
+  };
+  const TEMP_META: Record<string, { label: string; cls: string; rank: number }> = {
+    hot: { label: 'Hot', cls: 'bg-red-100 text-red-700 border-red-200', rank: 0 },
+    warm: { label: 'Warm', cls: 'bg-amber-100 text-amber-700 border-amber-200', rank: 1 },
+    cold: { label: 'Cold', cls: 'bg-sky-100 text-sky-700 border-sky-200', rank: 2 },
+  };
+  const sortedPendingAlerts = [...pendingAlerts]
+    .filter(r => triageTempFilter === 'all' || quoteTemperature(r) === triageTempFilter)
+    .sort((a, b) => {
+      const t = TEMP_META[quoteTemperature(a)].rank - TEMP_META[quoteTemperature(b)].rank;
+      if (triageTempSort === 'cold') return -t || 0;
+      return t || 0;
+    });
 
   const extractMasterStatuses = () => {
     let options = new Set();
@@ -1415,6 +1443,34 @@ Command: ${dashCommand}`;
     }
   };
 
+  const [isCreatingQuoteFromEmail, setIsCreatingQuoteFromEmail] = useState(false);
+  const handleCreateQuoteFromEmail = async (email, analysis) => {
+    if (!analysis?.lead_gen_quote) return alert("Run 'Generate AI Actions' first.");
+    setIsCreatingQuoteFromEmail(true);
+    try {
+      const res = await fetch(getApiUrl('/api/quote-from-email'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, emailId: email.id, analysis, agentEmail: user?.email }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await fetchRecords(tenantId);
+        if (confirm(`Created ${json.qn_number} with ${json.itemCount} item(s). Open it now?`)) {
+          const rec = (records || []).find(r => r.qn_number === json.qn_number);
+          if (rec) loadRecordForEditing(rec);
+          setCurrentView('pipeline');
+        }
+      } else {
+        alert('Failed: ' + (json.error || 'unknown error'));
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
+      setIsCreatingQuoteFromEmail(false);
+    }
+  };
+
   const loadRecordForEditing = (rec) => {
     setEditingId(rec.id);
     setQn(rec.qn_number);
@@ -1593,9 +1649,30 @@ Command: ${dashCommand}`;
                           <option value={14}>14+ Days</option>
                         </select>
                       </div>
+                      <div>
+                        <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Temperature</label>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {(['all', 'hot', 'warm', 'cold'] as const).map(t => (
+                            <button
+                              key={t}
+                              onClick={() => setTriageTempFilter(t)}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all border ${triageTempFilter === t ? (t === 'all' ? 'bg-indigo-600 text-white border-indigo-600' : TEMP_META[t].cls + ' ring-2 ring-offset-1') : 'bg-white text-gray-600 hover:bg-gray-100 border-gray-200'}`}
+                            >
+                              {t}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => setTriageTempSort(s => s === 'hot' ? 'cold' : 'hot')}
+                            className="px-3 py-1 rounded-full text-xs font-semibold bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                            title="Toggle sort order"
+                          >
+                            Sort: {triageTempSort === 'hot' ? 'Hottest first' : 'Coldest first'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    {pendingAlerts.length === 0 ? (
+                    {sortedPendingAlerts.length === 0 ? (
                       <div className="text-center py-16">
                         <Sparkles className="w-10 h-10 mb-4 block opacity-50" />
                         <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
@@ -1603,14 +1680,18 @@ Command: ${dashCommand}`;
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {pendingAlerts.map(r => {
+                        {sortedPendingAlerts.map(r => {
                           const defaultSnippet = `Hi ${extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote (${r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.`;
                           const currentVal = editedSnippets[r.id] !== undefined ? editedSnippets[r.id] : defaultSnippet;
+                          const temp = quoteTemperature(r);
 
                           return (
                             <div key={r.id} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm hover:shadow-md hover:bg-white/80 transition-all gap-4">
                               <div className="flex-1 w-full md:w-auto">
-                                <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
+                                <p className="text-xs font-bold text-gray-900 mb-1 flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${TEMP_META[temp].cls}`}>{TEMP_META[temp].label}</span>
+                                  {r.qn_number || r.qn} - {getManifestTitle(r)}
+                                </p>
                                 <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-3">Due: {r.follow_up_due_date || r.custom_metadata?.follow_up_due_date ? new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString() : 'Overdue (> 3 days)'}</p>
                                 <div className="bg-white p-3 rounded-lg border border-indigo-100/50 shadow-sm relative group focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
                                   <textarea
@@ -3022,12 +3103,21 @@ Command: ${dashCommand}`;
                           <pre className="text-[10px] text-gray-600 dark:text-gray-400 mb-4 max-h-32 overflow-y-auto bg-white/50 p-2 rounded">
                             {JSON.stringify(emailAiAnalysis[selectedInboxEmail.id].lead_gen_quote, null, 2)}
                           </pre>
-                          <button onClick={() => {
-                            setEditingId("new");
-                            setQn("");
-                            setDynamicData(emailAiAnalysis[selectedInboxEmail.id].lead_gen_quote);
-                            setCurrentView("new_entry");
-                          }} className="px-3 py-1.5 bg-emerald-600 text-white border border-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-all uppercase tracking-wider">Approve & Open Quote</button>
+                          <div className="flex gap-2 flex-wrap">
+                            <button
+                              onClick={() => handleCreateQuoteFromEmail(selectedInboxEmail, emailAiAnalysis[selectedInboxEmail.id])}
+                              disabled={isCreatingQuoteFromEmail}
+                              className="px-3 py-1.5 bg-emerald-600 text-white border border-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-all uppercase tracking-wider disabled:opacity-50"
+                            >
+                              {isCreatingQuoteFromEmail ? "Creating…" : "Create Quote Now"}
+                            </button>
+                            <button onClick={() => {
+                              setEditingId("new");
+                              setQn("");
+                              setDynamicData(emailAiAnalysis[selectedInboxEmail.id].lead_gen_quote);
+                              setCurrentView("new_entry");
+                            }} className="px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-lg hover:bg-emerald-50 transition-all uppercase tracking-wider">Review in Form</button>
+                          </div>
                         </div>
                         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
                           <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Drafted Auto-Reply</h4>

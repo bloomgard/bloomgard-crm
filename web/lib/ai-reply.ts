@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { buildMasterDataContext } from '@/lib/masterDataContext';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -6,48 +7,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const AI_MODEL = 'openai/gpt-4o-mini';
-
-/**
- * Build a human-readable digest of the tenant's manual Master Data so the AI can
- * answer product / pricing / terms questions with authoritative company facts.
- * Includes keys whether or not they have an AI description.
- */
-async function buildMasterDataContext(tenantId: string): Promise<string> {
-  const { data: entries } = await supabase
-    .from('master_data_entries')
-    .select('id, key_name, parent_id, ai_description')
-    .eq('tenant_id', tenantId)
-    .eq('tab_type', 'manual');
-  if (!entries || entries.length === 0) return '';
-
-  const { data: values } = await supabase
-    .from('master_data_values')
-    .select('entry_id, value_text')
-    .in('entry_id', entries.map((e) => e.id));
-
-  const CAP = 25;
-  const total = new Map<string, number>();
-  const byEntry = new Map<string, string[]>();
-  (values || []).forEach((v) => {
-    total.set(v.entry_id, (total.get(v.entry_id) || 0) + 1);
-    if (!byEntry.has(v.entry_id)) byEntry.set(v.entry_id, []);
-    const list = byEntry.get(v.entry_id)!;
-    if (list.length < CAP && !list.includes(v.value_text)) list.push(v.value_text);
-  });
-
-  const byId = new Map(entries.map((e) => [e.id, e]));
-  const lines = entries.map((e) => {
-    const vals = byEntry.get(e.id) || [];
-    const parent = e.parent_id ? byId.get(e.parent_id) : null;
-    const rel = parent ? ` (choice depends on ${parent.key_name})` : '';
-    const desc = e.ai_description ? ` — ${e.ai_description}` : '';
-    const more = (total.get(e.id) || 0) > vals.length ? `, … (${total.get(e.id)} total)` : '';
-    const sample = vals.length ? `: ${vals.join(', ')}${more}` : '';
-    return `- ${e.key_name}${rel}${desc}${sample}`;
-  });
-
-  return `MASTER DATA (authoritative company facts — use these for any product, code, pricing, UOM or terms specifics; do not invent values):\n${lines.join('\n')}`;
-}
 
 /** Recent agent-authored replies across this tenant, used to mirror the team's habitual tone. */
 async function buildToneExamples(tenantId: string, excludeQuoteId?: string): Promise<string> {
