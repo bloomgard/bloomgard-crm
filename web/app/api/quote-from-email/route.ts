@@ -12,6 +12,81 @@ const pick = (obj: any, keys: string[]) => {
 };
 
 /**
+ * Deterministically fill a product row from the Master Data parent -> child
+ * chain. Given any one known value in the chain (e.g. item_code), fills the
+ * blank sibling fields (item_name, uom, item_rate, …) using parent_value_id.
+ */
+async function enrichRowsFromMasterData(tenantId: string, rows: any[]) {
+  if (!rows.length) return rows;
+  const { data: entries } = await supabase
+    .from('master_data_entries')
+    .select('id, key_name, parent_id')
+    .eq('tenant_id', tenantId)
+    .eq('tab_type', 'manual');
+  if (!entries || entries.length === 0) return rows;
+
+  const { data: values } = await supabase
+    .from('master_data_values')
+    .select('id, entry_id, value_text, parent_value_id')
+    .in('entry_id', entries.map((e) => e.id));
+  if (!values || values.length === 0) return rows;
+
+  // Ordered chain of entries (root first).
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  const roots = entries.filter((e) => !e.parent_id || !byId.has(e.parent_id));
+  const chain: any[] = [];
+  let node: any = roots[0];
+  const seen = new Set<string>();
+  while (node && !seen.has(node.id)) {
+    seen.add(node.id);
+    chain.push(node);
+    node = entries.find((e) => e.parent_id === node.id);
+  }
+  if (chain.length < 2) return rows;
+
+  const valsByEntry = new Map<string, any[]>();
+  values.forEach((v) => {
+    if (!valsByEntry.has(v.entry_id)) valsByEntry.set(v.entry_id, []);
+    valsByEntry.get(v.entry_id)!.push(v);
+  });
+  const norm = (s: any) => String(s || '').trim().toLowerCase();
+
+  return rows.map((row) => {
+    const out = { ...row };
+    // Find an anchor: the deepest chain level for which the row has a value that
+    // matches a known master-data value.
+    let anchorIdx = -1;
+    let anchorVal: any = null;
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const given = norm(out[chain[i].key_name]);
+      if (!given) continue;
+      const match = (valsByEntry.get(chain[i].id) || []).find((v) => norm(v.value_text) === given);
+      if (match) { anchorIdx = i; anchorVal = match; break; }
+    }
+    if (anchorIdx === -1) return out;
+
+    // Walk down: children get the single value linked to the current value.
+    let cur = anchorVal;
+    for (let i = anchorIdx + 1; i < chain.length; i++) {
+      const children = (valsByEntry.get(chain[i].id) || []).filter((v) => v.parent_value_id === cur.id);
+      if (children.length !== 1) break;
+      if (!out[chain[i].key_name]) out[chain[i].key_name] = children[0].value_text;
+      cur = children[0];
+    }
+    // Walk up: parents.
+    cur = anchorVal;
+    for (let i = anchorIdx - 1; i >= 0; i--) {
+      if (!cur.parent_value_id) break;
+      const parent = values.find((v) => v.id === cur.parent_value_id);
+      if (!parent) break;
+      if (!out[chain[i].key_name]) out[chain[i].key_name] = parent.value_text;
+      cur = parent;
+    }
+    return out;
+  });
+}
+
+/**
  * One-click: turn an analysed inbound inquiry email into a real quotation.
  * Body: { tenantId, emailId?, analysis: { lead_gen_quote, summary }, agentEmail? }
  */
@@ -28,7 +103,8 @@ export async function POST(request: Request) {
     const productSection = sections.find((s) => /product|item|line/i.test(s));
 
     const clientRow = clientSection ? (lgq[clientSection]?.[0] || {}) : {};
-    const productRows = productSection ? (lgq[productSection] || []) : [];
+    let productRows = productSection ? (lgq[productSection] || []) : [];
+    productRows = await enrichRowsFromMasterData(tenantId, productRows);
 
     // Inbound email (for sender fallback + linking)
     let inbound: any = null;
