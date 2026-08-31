@@ -25,18 +25,25 @@ async function buildMasterDataContext(tenantId: string): Promise<string> {
     .select('entry_id, value_text')
     .in('entry_id', entries.map((e) => e.id));
 
+  const CAP = 25;
+  const total = new Map<string, number>();
   const byEntry = new Map<string, string[]>();
   (values || []).forEach((v) => {
+    total.set(v.entry_id, (total.get(v.entry_id) || 0) + 1);
     if (!byEntry.has(v.entry_id)) byEntry.set(v.entry_id, []);
     const list = byEntry.get(v.entry_id)!;
-    if (list.length < 40 && !list.includes(v.value_text)) list.push(v.value_text);
+    if (list.length < CAP && !list.includes(v.value_text)) list.push(v.value_text);
   });
 
+  const byId = new Map(entries.map((e) => [e.id, e]));
   const lines = entries.map((e) => {
     const vals = byEntry.get(e.id) || [];
+    const parent = e.parent_id ? byId.get(e.parent_id) : null;
+    const rel = parent ? ` (choice depends on ${parent.key_name})` : '';
     const desc = e.ai_description ? ` — ${e.ai_description}` : '';
-    const sample = vals.length ? `: ${vals.join(', ')}${(byEntry.get(e.id)?.length || 0) >= 40 ? ', …' : ''}` : '';
-    return `- ${e.key_name}${desc}${sample}`;
+    const more = (total.get(e.id) || 0) > vals.length ? `, … (${total.get(e.id)} total)` : '';
+    const sample = vals.length ? `: ${vals.join(', ')}${more}` : '';
+    return `- ${e.key_name}${rel}${desc}${sample}`;
   });
 
   return `MASTER DATA (authoritative company facts — use these for any product, code, pricing, UOM or terms specifics; do not invent values):\n${lines.join('\n')}`;
@@ -180,6 +187,8 @@ RULES:
 - Match the team's habitual voice shown in the examples above.
 - Keep it under 2 short paragraphs.
 - Output ONLY the email body — no subject line, no "Here is the email:" preamble.`;
+
+    if (process.env.DEBUG_AI_PROMPT) console.log('--- AI REPLY SYSTEM PROMPT ---\n' + systemPrompt + '\n--- END ---');
 
     const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
