@@ -55,6 +55,23 @@ export async function POST(request: Request) {
       agentId = profile.id;
     }
 
+    // Second try: workspace-level routing (local-part matches a tenant routing id / slug)
+    if (!tenantId && parsedTenantId) {
+      const { data: routedTenant } = await supabase
+        .from('tenants')
+        .select('id')
+        .or(`inbound_routing_id.eq.${parsedTenantId},routing_slug.eq.${parsedTenantId}`)
+        .maybeSingle();
+      if (routedTenant) tenantId = routedTenant.id;
+    }
+
+    // Third try: local-part is a raw tenant UUID
+    if (!tenantId && /^[0-9a-f-]{36}$/i.test(parsedTenantId)) {
+      const { data: uuidTenant } = await supabase
+        .from('tenants').select('id').eq('id', parsedTenantId).maybeSingle();
+      if (uuidTenant) tenantId = uuidTenant.id;
+    }
+
     if (!tenantId) {
       console.error(`Tenant/Agent not found for email: ${exactEmail}`);
       return NextResponse.json({ error: 'Routing not found' }, { status: 400 });
@@ -66,6 +83,10 @@ export async function POST(request: Request) {
       .eq('id', tenantId)
       .single();
     tenant = tenantData;
+    if (!tenant) {
+      console.error(`Tenant row missing for id: ${tenantId}`);
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 200 });
+    }
 
     // 4. Fetch Full Email Body & Extract Threading Headers
     const emailId = payload.data?.email_id;
@@ -151,23 +172,41 @@ export async function POST(request: Request) {
            last_contact_date: new Date().toISOString() 
         }).eq('id', quote.id);
         
-        await supabase.from('status_logs').insert([{ 
-           quotation_id: quote.id, 
-           old_status: quote.status, 
-           new_status: quote.status, 
-           comments: `Client replied via Email. Logged to conversation history.` 
+        await supabase.from('status_logs').insert([{
+           quotation_id: quote.id,
+           old_status: quote.status,
+           new_status: quote.status,
+           comments: `Client replied via Email. Logged to conversation history.`
         }]);
-        
-        // TRIGGER ASYNCHRONOUS AI PROCESSING
-        const isAgentDispatched = quote.follow_up_status === 'Agent Dispatched' || quote.custom_metadata?.follow_up_status === 'Agent Dispatched';
-        
-        if (tenant.ai_enabled && isAgentDispatched) {
+
+        // Ensure a triage thread exists for this quote and mark it as needing attention.
+        let threadRowId: string | null = null;
+        const { data: existingThread } = await supabase
+          .from('email_threads').select('id').eq('quote_id', quote.id).maybeSingle();
+        if (existingThread) {
+          threadRowId = existingThread.id;
+          await supabase.from('email_threads')
+            .update({ triage_status: 'incoming', last_updated: new Date().toISOString() })
+            .eq('id', existingThread.id);
+        } else {
+          const { data: newThread } = await supabase.from('email_threads').insert({
+            tenant_id: tenant.id,
+            quote_id: quote.id,
+            agent_id: agentId,
+            triage_status: 'incoming',
+            last_updated: new Date().toISOString(),
+          }).select('id').single();
+          threadRowId = newThread?.id || null;
+        }
+
+        // Generate an AI draft reply for human review (never auto-sent).
+        if (tenant.ai_enabled) {
           const { processAiAutoReply } = require('@/lib/ai-reply');
           try {
-            const res = await processAiAutoReply(threadId, tenant.id, agentId);
-            console.log('Async AI Auto-Pilot finished:', res);
+            const res = await processAiAutoReply(threadId, tenant.id, agentId, quote.id, threadRowId);
+            console.log('AI draft generation finished:', res);
           } catch (err) {
-            console.error("Async AI Auto-Pilot trigger failed:", err);
+            console.error("AI draft generation failed:", err);
           }
         }
       }
