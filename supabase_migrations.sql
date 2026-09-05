@@ -144,3 +144,10 @@ CREATE INDEX IF NOT EXISTS idx_master_data_values_parent_value_id
 -- NULLS NOT DISTINCT keeps root-level values unique too (Postgres 15+).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_master_data_values_entry_text_parent
   ON master_data_values (entry_id, value_text, parent_value_id) NULLS NOT DISTINCT;
+
+-- ============================================================
+-- Agent profile fields the AI uses for its own identity/signature
+-- ============================================================
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS job_title TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS signature TEXT;

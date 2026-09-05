@@ -9,7 +9,7 @@ const corsHeaders = {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, blueprint } = body;
+    const { email, blueprint, agent, companyName } = body;
 
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -28,11 +28,20 @@ export async function POST(req: Request) {
       } catch (e) { console.error('master data context failed', e); }
     }
 
-    const systemPrompt = `You are an AI assistant processing an inbound sales email for a CRM.
+    const masterDataBlock = masterData
+      ? `${masterData}\n\nSTRICT RULE: For lead_gen_quote and auto_reply, only use products, codes, specs or prices that literally appear above. If the client names something not listed, leave those fields blank rather than inventing a code, spec or price.`
+      : `MASTER DATA: No product catalog is configured for this workspace.\n\nSTRICT RULE: Do NOT invent product names, codes, specifications or prices in lead_gen_quote or auto_reply. Leave those fields blank / say you will confirm details, rather than guessing.`;
+
+    const signOff = [agent?.name, agent?.title, companyName].filter(Boolean).join('\n') || (companyName || 'The Team');
+    const identityBlock = `YOUR IDENTITY (sign the auto_reply as this real person — never a placeholder like [Your Name] or [Your Position]; omit a line if it's blank rather than bracketing it):
+${[agent?.name && `Name: ${agent.name}`, agent?.title && `Title: ${agent.title}`, companyName && `Company: ${companyName}`, agent?.phone && `Phone: ${agent.phone}`].filter(Boolean).join('\n')}
+Sign-off block to use:\n${signOff}`;
+
+    const systemPrompt = `You are an AI assistant processing an inbound sales email for a CRM, drafting a reply on behalf of a real person — never reveal you are an AI.
 Return ONLY valid JSON (no markdown) matching:
 {
   "summary": "1-2 sentence summary of what the client wants",
-  "auto_reply": "professional reply drafted on behalf of the company, using the master data for any specifics",
+  "auto_reply": "professional reply drafted on behalf of the company, signed with YOUR IDENTITY below, using the master data for any specifics",
   "lead_gen_quote": {
     // keys = Blueprint Section Titles; values = arrays of row objects keyed by field name.
     // Always fill the client's email into the Client Information email field.
@@ -42,10 +51,16 @@ Return ONLY valid JSON (no markdown) matching:
   }
 }
 
+${identityBlock}
+
 CRM BLUEPRINT (targets for lead_gen_quote):
 ${JSON.stringify(blueprint)}
 
-${masterData || 'No master data configured for this workspace.'}
+${masterDataBlock}
+
+RULES for auto_reply:
+- Sign off using YOUR IDENTITY above, verbatim. Never leave a bracketed placeholder ([Your Name], [Your Position], [Your Company], etc.) in the output.
+- Keep it under 2 short paragraphs.
 
 Return ONLY valid JSON. No markdown wrappers.`;
 

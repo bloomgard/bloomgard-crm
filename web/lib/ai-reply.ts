@@ -8,6 +8,32 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const AI_MODEL = 'openai/gpt-4o-mini';
 
+/** The human identity the AI should write and sign as — never a bracket placeholder. */
+async function resolveAgentIdentity(agentId: string | null, tenant: any, fallbackEmail?: string | null) {
+  let name = '', title = '', phone = '', signature = '', email = tenant.custom_email_sender || '';
+  if (!agentId && fallbackEmail) {
+    const { data: byEmail } = await supabase
+      .from('profiles').select('id').eq('tenant_id', tenant.id).ilike('email', fallbackEmail).maybeSingle();
+    if (byEmail) agentId = byEmail.id;
+  }
+  if (agentId) {
+    const { data: agent } = await supabase
+      .from('profiles')
+      .select('full_name, job_title, phone, signature, email')
+      .eq('id', agentId)
+      .maybeSingle();
+    if (agent) {
+      name = agent.full_name || '';
+      title = agent.job_title || '';
+      phone = agent.phone || '';
+      signature = agent.signature || '';
+      email = agent.email || email;
+    }
+  }
+  const signOff = signature || [name, title, tenant.company_name].filter(Boolean).join('\n');
+  return { name, title, phone, email, signOff };
+}
+
 /** Recent agent-authored replies across this tenant, used to mirror the team's habitual tone. */
 async function buildToneExamples(tenantId: string, excludeQuoteId?: string): Promise<string> {
   const { data: quotes } = await supabase
@@ -106,10 +132,15 @@ export async function processAiAutoReply(
       ({ data: quote } = await supabase.from('quotations').select('*, quotation_items(*)').eq('tenant_id', tenant.id).eq('qn_number', qnMatch[0]).single());
     }
 
-    const [masterData, toneExamples] = await Promise.all([
+    const [masterData, toneExamples, identity] = await Promise.all([
       buildMasterDataContext(tenant.id),
       buildToneExamples(tenant.id, quote?.id),
+      resolveAgentIdentity(agentId, tenant, quote?.created_by_email),
     ]);
+
+    const masterDataBlock = masterData
+      ? `${masterData}\n\nSTRICT RULE: Only mention products, codes, specs or prices that literally appear above. If the client asks about something not listed, do NOT invent a name, spec or price — say you'll confirm and follow up.`
+      : `MASTER DATA: No product catalog is configured for this workspace.\n\nSTRICT RULE: Do NOT invent product names, specifications, model numbers or prices under any circumstances. If the client asks about specific products or pricing, say you will confirm the details internally and follow up shortly — never guess or make one up.`;
 
     let conversationHistory = 'CONVERSATION HISTORY:\n\n';
     emails.forEach((email: any) => {
@@ -127,23 +158,31 @@ export async function processAiAutoReply(
       ? `\nROUTING RULES (if the client's message matches, mention that you are forwarding to the right person):\n${emailRouting.map((r: any) => `- If about "${r.lookFor}" -> route to ${r.routeTo}${r.sendRouteMessage && r.routeMessage ? ` (say: ${r.routeMessage})` : ''}`).join('\n')}`
       : '';
 
-    const systemPrompt = `You are Bloomgard AI, replying to an inbound client email on behalf of ${tenant.company_name}.
+    const identityBlock = `YOUR IDENTITY (sign off using exactly this — never a placeholder like [Your Name] or [Your Position]; if a line below is blank, omit it entirely rather than inventing or bracketing it):
+${[identity.name && `Name: ${identity.name}`, identity.title && `Title: ${identity.title}`, `Company: ${tenant.company_name}`, identity.phone && `Phone: ${identity.phone}`].filter(Boolean).join('\n')}
+Sign-off block to use:\n${identity.signOff}`;
+
+    const systemPrompt = `You are an email assistant writing on behalf of a real person at ${tenant.company_name} — not a generic bot. Never reveal you are an AI.
 
 Personality & Style:
 - Tone: ${tone}
 - English Level: ${englishLevel}
 - Desperation Level: ${desperation}
 
+${identityBlock}
+
 ${instructions ? `COMPANY INSTRUCTIONS FOR YOU (follow strictly):\n${instructions}\n` : ''}
-${masterData ? masterData + '\n' : ''}
+${masterDataBlock}
+
 ${toneExamples ? toneExamples + '\n' : ''}
 ${quoteContext}${routingHint}
 
 ${conversationHistory}
 
 RULES:
-- Reply to the most recent CLIENT message using the master data for any specifics.
-- Match the team's habitual voice shown in the examples above.
+- Reply to the most recent CLIENT message. For any product, code, spec or price, use ONLY the Master Data above — never invent one.
+- Sign off using YOUR IDENTITY above, verbatim. Never leave a bracketed placeholder ([Your Name], [Your Position], [Your Company], etc.) in the output.
+- Match the team's habitual voice shown in the examples above, when given.
 - Keep it under 2 short paragraphs.
 - Output ONLY the email body — no subject line, no "Here is the email:" preamble.`;
 

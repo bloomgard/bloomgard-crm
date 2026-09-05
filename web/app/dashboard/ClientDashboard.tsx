@@ -73,6 +73,8 @@ export default function ClientDashboard() {
   const [userRoutingSlug, setUserRoutingSlug] = useState("");
   const [aiSettings, setAiSettings] = useState<{ tone: string, englishLevel: string, desperation: string, instructions?: string, emailRouting?: { lookFor: string, routeTo: string, sendRouteMessage: boolean, routeMessage: string }[] }>({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low', instructions: '', emailRouting: [] });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [profileForm, setProfileForm] = useState({ full_name: '', job_title: '', phone: '', signature: '' });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
   const [emailSenderPref, setEmailSenderPref] = useState<'personal' | 'common'>('personal');
 
@@ -113,10 +115,8 @@ export default function ClientDashboard() {
 
   const [quoteReplyTexts, setQuoteReplyTexts] = useState({});
   const [isSendingQuoteReply, setIsSendingQuoteReply] = useState<string | false>(false);
-  const [triageStatusFilters, setTriageStatusFilters] = useState<string[]>([]);
   const [triageDaysFilter, setTriageDaysFilter] = useState(3);
-  const [triageTempFilter, setTriageTempFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
-  const [triageTempSort, setTriageTempSort] = useState<'hot' | 'cold'>('hot');
+  const [triageSearch, setTriageSearch] = useState('');
 
   // User Onboarding State
   const [onboardEmail, setOnboardEmail] = useState("");
@@ -285,6 +285,32 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory, isThinking]);
+
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        full_name: user.full_name || '',
+        job_title: user.job_title || '',
+        phone: user.phone || '',
+        signature: user.signature || '',
+      });
+    }
+  }, [user?.id]);
+
+  const handleSaveProfile = async () => {
+    if (!user?.id) return;
+    setIsSavingProfile(true);
+    try {
+      const { error } = await supabase.from('profiles').update(profileForm).eq('id', user.id);
+      if (error) throw error;
+      setUser({ ...user, ...profileForm });
+      alert("Profile updated successfully!");
+    } catch (e: any) {
+      alert("Failed to save: " + e.message);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     async function initSystem() {
@@ -488,18 +514,11 @@ export default function ClientDashboard() {
 
   // DERIVED STATE: AI Alerts Triage
   const pendingAlerts = visibleRecords.filter(r => {
-    // 1. Status Filter Check
-    if (triageStatusFilters.length > 0) {
-      if (!r.status || !triageStatusFilters.includes(r.status)) return false;
-    }
-
     // Flag quotes that haven't been dispatched yet
     if (r.follow_up_status === 'Agent Dispatched' || r.custom_metadata?.follow_up_status === 'Agent Dispatched') return false;
 
-    // Don't flag quotes that are already Approved or Lost unless specified in filters
-    if (triageStatusFilters.length === 0) {
-      if (r.status === 'Approved' || r.status === 'Lost') return false;
-    }
+    // Don't flag quotes that are already Approved or Lost
+    if (r.status === 'Approved' || r.status === 'Lost') return false;
 
     const parseSafeDate = (dString: any) => {
       if (!dString) return new Date();
@@ -551,12 +570,14 @@ export default function ClientDashboard() {
     cold: { label: 'Cold', cls: 'bg-sky-100 text-sky-700 border-sky-200', rank: 2 },
   };
   const sortedPendingAlerts = [...pendingAlerts]
-    .filter(r => triageTempFilter === 'all' || quoteTemperature(r) === triageTempFilter)
-    .sort((a, b) => {
-      const t = TEMP_META[quoteTemperature(a)].rank - TEMP_META[quoteTemperature(b)].rank;
-      if (triageTempSort === 'cold') return -t || 0;
-      return t || 0;
-    });
+    .filter(r => {
+      const q = triageSearch.trim().toLowerCase();
+      if (!q) return true;
+      const client = extractValue(r, 'contact_person', 'Client Information') || '';
+      const company = extractValue(r, 'client_name', 'Client Information') || '';
+      return `${r.qn_number || r.qn || ''} ${getManifestTitle(r)} ${client} ${company}`.toLowerCase().includes(q);
+    })
+    .sort((a, b) => TEMP_META[quoteTemperature(a)].rank - TEMP_META[quoteTemperature(b)].rank);
 
   const extractMasterStatuses = () => {
     let options = new Set();
@@ -1428,7 +1449,10 @@ Command: ${dashCommand}`;
       const res = await fetch('/api/ai/analyze-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, blueprint })
+        body: JSON.stringify({
+          email, blueprint, companyName,
+          agent: { name: user?.full_name || '', title: user?.job_title || '', phone: user?.phone || '' }
+        })
       });
       const json = await res.json();
       if (json.data) {
@@ -1611,65 +1635,30 @@ Command: ${dashCommand}`;
 
                 {triageTab === 'due' && (
                   <>
-                    <div className="flex flex-wrap gap-4 mb-6 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                      <div className="flex-1 min-w-[200px]">
-                        <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Status Filters</label>
-                        <div className="flex flex-wrap gap-2">
-                          {allStatuses.map(status => (
-                            <button
-                              key={status as string}
-                              onClick={() => {
-                                setTriageStatusFilters(prev =>
-                                  prev.includes(status as string)
-                                    ? prev.filter(s => s !== status)
-                                    : [...prev, status as string]
-                                );
-                              }}
-                              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${triageStatusFilters.includes(status as string) ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-indigo-100 border border-gray-200'}`}
-                            >
-                              {status as string}
-                            </button>
-                          ))}
-                          {allStatuses.length === 0 && <span className="text-sm text-gray-500">No statuses found</span>}
-                        </div>
+                    <div className="flex flex-wrap items-center gap-3 mb-6 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <div className="relative flex-1 min-w-[180px]">
+                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={triageSearch}
+                          onChange={(e) => setTriageSearch(e.target.value)}
+                          placeholder="Search quote #, client…"
+                          className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 outline-none focus:border-indigo-500"
+                        />
                       </div>
-                      <div>
-                        <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Days Dormant</label>
-                        <select
-                          value={triageDaysFilter}
-                          onChange={(e) => setTriageDaysFilter(Number(e.target.value))}
-                          className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 outline-none focus:border-indigo-500"
-                        >
-                          <option value={0}>0 Days (Immediate)</option>
-                          <option value={1}>1 Day</option>
-                          <option value={2}>2 Days</option>
-                          <option value={3}>3 Days</option>
-                          <option value={5}>5 Days</option>
-                          <option value={7}>7 Days</option>
-                          <option value={14}>14+ Days</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Temperature</label>
-                        <div className="flex flex-wrap gap-2 items-center">
-                          {(['all', 'hot', 'warm', 'cold'] as const).map(t => (
-                            <button
-                              key={t}
-                              onClick={() => setTriageTempFilter(t)}
-                              className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all border ${triageTempFilter === t ? (t === 'all' ? 'bg-indigo-600 text-white border-indigo-600' : TEMP_META[t].cls + ' ring-2 ring-offset-1') : 'bg-white text-gray-600 hover:bg-gray-100 border-gray-200'}`}
-                            >
-                              {t}
-                            </button>
-                          ))}
-                          <button
-                            onClick={() => setTriageTempSort(s => s === 'hot' ? 'cold' : 'hot')}
-                            className="px-3 py-1 rounded-full text-xs font-semibold bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-                            title="Toggle sort order"
-                          >
-                            Sort: {triageTempSort === 'hot' ? 'Hottest first' : 'Coldest first'}
-                          </button>
-                        </div>
-                      </div>
+                      <select
+                        value={triageDaysFilter}
+                        onChange={(e) => setTriageDaysFilter(Number(e.target.value))}
+                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 outline-none focus:border-indigo-500"
+                      >
+                        <option value={0}>0 Days (Immediate)</option>
+                        <option value={1}>1 Day</option>
+                        <option value={2}>2 Days</option>
+                        <option value={3}>3 Days</option>
+                        <option value={5}>5 Days</option>
+                        <option value={7}>7 Days</option>
+                        <option value={14}>14+ Days</option>
+                      </select>
                     </div>
 
                     {sortedPendingAlerts.length === 0 ? (
@@ -1933,6 +1922,13 @@ Command: ${dashCommand}`;
 
             {settingsSubView === 'menu' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <button onClick={() => setSettingsSubView('profile')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
+                  <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-4">
+                    <ClipboardList className="w-5 h-5 text-violet-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Your Profile</h3>
+                  <p className="text-sm text-gray-500">Your name, title, and contact details — used by the AI to sign emails as you.</p>
+                </button>
                 {isManager && (
                   <>
                     <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
@@ -2097,6 +2093,80 @@ Command: ${dashCommand}`;
                   </div>
                 ))}
                 <button onClick={() => setBlueprint([...blueprint, { title: "New Section", fields: [], allow_multiple: false }])} className="w-full py-8 border-2 border-dashed border-gray-200 rounded-3xl text-gray-300 font-bold uppercase tracking-widest text-xs hover:border-black hover:text-black transition-all">+ Create New Module</button>
+              </div>
+            )}
+
+            {settingsSubView === 'profile' && (
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
+                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
+                  <ClipboardList className="w-6 h-6" />
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Your Profile</h3>
+                    <p className="text-xs text-gray-500 mt-1">This identity is what the AI signs emails as on your behalf — no more "[Your Name]" placeholders.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Full Name</label>
+                      <input
+                        type="text"
+                        value={profileForm.full_name}
+                        onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                        placeholder="e.g. Priya Sharma"
+                        className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Job Title</label>
+                      <input
+                        type="text"
+                        value={profileForm.job_title}
+                        onChange={e => setProfileForm({ ...profileForm, job_title: e.target.value })}
+                        placeholder="e.g. Sales Manager"
+                        className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Phone</label>
+                      <input
+                        type="text"
+                        value={profileForm.phone}
+                        onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                        placeholder="e.g. +91 98765 43210"
+                        className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Name</label>
+                      <input type="text" readOnly value={companyName || ''} className="w-full bg-gray-100 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
+                      <p className="text-[10px] text-gray-400 ml-1">Set by your workspace admin.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Sign-Off (optional)</label>
+                    <p className="text-xs text-gray-500 mb-1">Overrides the default Name / Title / Company sign-off with your own exact wording. Leave blank to use the fields above.</p>
+                    <textarea
+                      value={profileForm.signature}
+                      onChange={e => setProfileForm({ ...profileForm, signature: e.target.value })}
+                      placeholder={"e.g.\nWarm regards,\nPriya Sharma\nSales Manager, Acme Textiles\n+91 98765 43210"}
+                      rows={4}
+                      className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 resize-y"
+                    />
+                  </div>
+
+                  <div>
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={isSavingProfile}
+                      className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-indigo-400"
+                    >
+                      {isSavingProfile ? "Saving..." : "Save Profile"}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
