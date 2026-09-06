@@ -1,7 +1,7 @@
 
 // @ts-nocheck
 "use client";
-import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File } from 'lucide-react';
+import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useRef } from "react";
 import MasterDataUI from "@/components/MasterDataUI";
 import { supabase } from "@/utils/supabaseClient";
@@ -1921,71 +1921,35 @@ Command: ${dashCommand}`;
             </header>
 
             {settingsSubView === 'menu' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <button onClick={() => setSettingsSubView('profile')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                  <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-4">
-                    <ClipboardList className="w-5 h-5 text-violet-600" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Your Profile</h3>
-                  <p className="text-sm text-gray-500">Your name, title, and contact details — used by the AI to sign emails as you.</p>
-                </button>
-                {isManager && (
-                  <>
-                    <button onClick={() => setSettingsSubView('master-data')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                      <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-                        <Database className="w-5 h-5 text-blue-600" />
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mb-8 divide-y divide-gray-100">
+                {[
+                  { key: 'profile', icon: ClipboardList, bg: 'bg-violet-50', color: 'text-violet-600', title: 'Your Profile', desc: 'Your name, title, and contact details — used by the AI to sign emails as you.', managerOnly: false },
+                  { key: 'master-data', icon: Database, bg: 'bg-blue-50', color: 'text-blue-600', title: 'Master Data', desc: 'Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.', managerOnly: true },
+                  { key: 'users', icon: Users, bg: 'bg-indigo-50', color: 'text-indigo-600', title: 'User Access', desc: 'Onboard new agents, managers, and admins to this workspace.', managerOnly: true },
+                  { key: 'blueprint', icon: Wrench, bg: 'bg-gray-900', color: 'text-gray-200', title: 'Field Configurator', desc: 'Customize quote form fields and dynamic blueprint schemas.', managerOnly: true },
+                  { key: 'email', icon: Mail, bg: 'bg-emerald-50', color: 'text-emerald-600', title: 'Email Settings', desc: 'Configure workspace-wide and personal email routing.', managerOnly: false },
+                  { key: 'personalization', icon: Sparkles, bg: 'bg-pink-50', color: 'text-pink-600', title: 'Personalization', desc: 'Customize your workspace UI, theme, and wallpapers.', managerOnly: false },
+                  { key: 'ai-personality', icon: Bot, bg: 'bg-amber-50', color: 'text-amber-600', title: 'AI Settings', desc: 'Adjust the agent tone, style, instructions and routing rules.', managerOnly: true },
+                  { key: 'quote-template', icon: Palette, bg: 'bg-red-50', color: 'text-red-600', title: 'Quote Template', desc: 'Manage brand identity, logos, and HTML generation template.', managerOnly: true },
+                ].filter(item => !item.managerOnly || isManager).map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => setSettingsSubView(item.key)}
+                      className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors group"
+                    >
+                      <div className={`w-10 h-10 shrink-0 ${item.bg} rounded-xl flex items-center justify-center`}>
+                        <Icon className={`w-5 h-5 ${item.color}`} />
                       </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Master Data</h3>
-                      <p className="text-sm text-gray-500">Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.</p>
-                    </button>
-                    <button onClick={() => setSettingsSubView('users')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                      <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
-                        <Users className="w-5 h-5 text-indigo-600" />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-bold text-gray-900">{item.title}</h3>
+                        <p className="text-xs text-gray-500 truncate">{item.desc}</p>
                       </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">User Access</h3>
-                      <p className="text-sm text-gray-500">Onboard new agents, managers, and admins to this workspace.</p>
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
                     </button>
-                    <button onClick={() => setSettingsSubView('blueprint')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                      <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
-                        <Wrench className="w-5 h-5 text-gray-200" />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Field Configurator</h3>
-                      <p className="text-sm text-gray-500">Customize quote form fields and dynamic blueprint schemas.</p>
-                    </button>
-                  </>
-                )}
-                <button onClick={() => setSettingsSubView('email')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4">
-                    <Mail className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Email Settings</h3>
-                  <p className="text-sm text-gray-500">Configure workspace-wide and personal email routing.</p>
-                </button>
-                <button onClick={() => setSettingsSubView('personalization')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                  <div className="w-12 h-12 bg-pink-50 rounded-xl flex items-center justify-center mb-4">
-                    <Sparkles className="w-5 h-5 text-pink-600" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Personalization</h3>
-                  <p className="text-sm text-gray-500">Customize your workspace UI, theme, and wallpapers.</p>
-                </button>
-                {isManager && (
-                  <>
-                    <button onClick={() => setSettingsSubView('ai-personality')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                      <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mb-4">
-                        <Bot className="w-5 h-5 text-amber-600" />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">AI Settings</h3>
-                      <p className="text-sm text-gray-500">Adjust the agent tone, style, and desperation level.</p>
-                    </button>
-                    <button onClick={() => setSettingsSubView('quote-template')} className="text-left bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all hover:border-gray-300">
-                      <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center mb-4">
-                        <Palette className="w-5 h-5 text-red-600" />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Quote Template</h3>
-                      <p className="text-sm text-gray-500">Manage brand identity, logos, and HTML generation template.</p>
-                    </button>
-                  </>
-                )}
+                  );
+                })}
               </div>
             )}
 
