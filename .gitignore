@@ -13,6 +13,13 @@ node_modules/
 # testing
 /coverage
 
+# playwright
+/web/test-results/
+/web/playwright-report/
+/web/blob-report/
+/web/playwright/.cache/
+/web/e2e/.auth/
+
 # next.js
 .next/
 out/
