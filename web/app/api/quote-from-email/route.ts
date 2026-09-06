@@ -112,16 +112,28 @@ export async function POST(request: Request) {
       ({ data: inbound } = await supabase.from('inbound_emails').select('*').eq('id', emailId).single());
     }
 
-    const companyName = pick(clientRow, ['client_name', 'company_name', 'customer_name']) || 'Unknown Client';
     const clientEmail =
       pick(clientRow, ['email_id', 'email', 'email_address']) || inbound?.sender_email || '';
+
+    // Company name: LLM extraction first, else derive from the sender's email domain,
+    // else the sender's display name, else a last-resort placeholder.
+    const senderName = (inbound?.sender_email || '').match(/^"?([^"<]+?)"?\s*</)?.[1]?.trim();
+    const domain = clientEmail.split('@')[1] || '';
+    const domainName = domain
+      .replace(/\.(com|co|net|org|in|io|biz)(\.[a-z]{2})?$/i, '')
+      .split('.').pop();
+    const companyName =
+      pick(clientRow, ['client_name', 'company_name', 'customer_name']) ||
+      (domainName ? domainName.charAt(0).toUpperCase() + domainName.slice(1) : '') ||
+      senderName ||
+      'Unknown Client';
 
     // Upsert client
     let clientId: string | null = null;
     const clientPayload = {
       tenant_id: tenantId,
       company_name: companyName,
-      contact_person: pick(clientRow, ['contact_person', 'contact', 'person']),
+      contact_person: pick(clientRow, ['contact_person', 'contact', 'person']) || senderName || '',
       email_id: clientEmail,
       phone_number: pick(clientRow, ['phone_number', 'phone', 'mobile']),
       billing_address: pick(clientRow, ['billing_address', 'address']),
