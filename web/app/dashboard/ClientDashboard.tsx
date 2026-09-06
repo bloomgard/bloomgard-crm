@@ -573,9 +573,18 @@ export default function ClientDashboard() {
     .filter(r => {
       const q = triageSearch.trim().toLowerCase();
       if (!q) return true;
-      const client = extractValue(r, 'contact_person', 'Client Information') || '';
-      const company = extractValue(r, 'client_name', 'Client Information') || '';
-      return `${r.qn_number || r.qn || ''} ${getManifestTitle(r)} ${client} ${company}`.toLowerCase().includes(q);
+      // Raw fields only — helpers like extractValue/getManifestTitle are declared
+      // further down and would be in the temporal dead zone during a re-render.
+      let meta: any = r.custom_metadata;
+      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch { meta = {}; } }
+      const ci = meta?.['Client Information'] || {};
+      const hay = [
+        r.qn_number, r.qn,
+        r.clients?.company_name,
+        ci.client_name, ci.company_name, ci.contact_person,
+        meta?.client_name,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
     })
     .sort((a, b) => TEMP_META[quoteTemperature(a)].rank - TEMP_META[quoteTemperature(b)].rank);
 
