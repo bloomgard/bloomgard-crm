@@ -43,18 +43,25 @@ test('scene 02 — Smart quote form autofill', async ({ page }) => {
   const firstRow = page.locator('table tbody tr, [role="row"]').first();
   if (await firstRow.isVisible().catch(() => false)) {
     await firstRow.click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1800);
   }
-  await page.mouse.wheel(0, 1200);
+  // Walk down through the Products section — item name / UOM / GSM are filled
+  // from the linked Master Data record, not typed by hand.
+  const products = page.getByText('Products', { exact: false }).first();
+  if (await products.isVisible().catch(() => false)) {
+    await products.scrollIntoViewIfNeeded();
+  }
+  await page.waitForTimeout(1500);
+  await page.mouse.wheel(0, 500);
   await page.waitForTimeout(2000);
 });
 
 test('scene 03 — Your Profile', async ({ page }) => {
   await openSetting(page, 'Your Profile');
-  await expect(page.getByText('Your Profile')).toBeVisible();
-  await page.getByPlaceholder(/Priya Sharma/i).fill('Rohit Verma');
-  await page.getByPlaceholder(/Sales Manager/i).fill('Sales Executive');
-  await page.getByPlaceholder(/98765 43210/).fill('+91 99999 00000');
+  await expect(page.getByRole('heading', { name: 'Your Profile' })).toBeVisible();
+  await page.getByPlaceholder('e.g. Priya Sharma', { exact: true }).fill('Rohit Verma');
+  await page.getByPlaceholder('e.g. Sales Manager', { exact: true }).fill('Sales Executive');
+  await page.getByPlaceholder('e.g. +91 98765 43210', { exact: true }).fill('+91 99999 00000');
   await page.waitForTimeout(1500);
   // NOTE: uncomment to persist — writes to your profile row:
   // await page.getByRole('button', { name: 'Save Profile' }).click();
@@ -102,11 +109,14 @@ test('scene 07 — Generate AI Actions from an inquiry email', async ({ page }) 
 test('scene 08 — Follow-up triage tabs + search', async ({ page }) => {
   await nav(page, 'Follow ups');
   await page.waitForTimeout(1200);
-  await page.getByPlaceholder(/Search quote/i).fill('QN-2026');
-  await page.waitForTimeout(1200);
-  await page.getByPlaceholder(/Search quote/i).clear();
+  // Type into the search box (leave the text in — clearing mid-recording isn't needed).
+  const search = page.getByPlaceholder(/Search quote/i);
+  if (await search.isVisible().catch(() => false)) {
+    await search.pressSequentially('QN-2026', { delay: 90 });
+    await page.waitForTimeout(1500);
+  }
   for (const tab of ['Incoming', 'Outgoing', 'Pending Follow-ups']) {
-    await page.getByText(tab, { exact: false }).first().click();
+    await page.getByText(tab, { exact: false }).first().click().catch(() => {});
     await page.waitForTimeout(1500);
   }
 });

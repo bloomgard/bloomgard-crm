@@ -1690,7 +1690,7 @@ Command: ${dashCommand}`;
                                   />
                                   <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2 flex justify-between items-center">
                                     <span>Suggested Email Snippet • Waiting for Approval</span>
-                                    <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity"><div className="flex items-center gap-1"><Pen className="w-3 h-3" /> Edit</div></span>
+                                    <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1"><Pen className="w-3 h-3" /> Edit</span>
                                   </p>
                                 </div>
                               </div>

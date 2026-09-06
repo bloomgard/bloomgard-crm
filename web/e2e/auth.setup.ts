@@ -17,12 +17,15 @@ setup('authenticate', async ({ page }) => {
   }
 
   await page.goto('/login');
-  await page.getByLabel('Work Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
+  // The page shows a "Checking Session..." splash before the form mounts.
+  const emailInput = page.locator('input[type="email"]');
+  await emailInput.waitFor({ state: 'visible', timeout: 30_000 });
+  await emailInput.fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole('button', { name: /sign in/i }).click();
 
   // super_admin lands on /boss, everyone else on /dashboard
-  await page.waitForURL(/\/(dashboard|boss)/, { timeout: 30_000 });
+  await page.waitForURL(/\/(dashboard|boss)/, { timeout: 40_000 });
   await expect(page).not.toHaveURL(/\/login/);
 
   fs.mkdirSync('e2e/.auth', { recursive: true });

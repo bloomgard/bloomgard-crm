@@ -19,6 +19,7 @@ node_modules/
 /web/blob-report/
 /web/playwright/.cache/
 /web/e2e/.auth/
+/recordings/
 
 # next.js
 .next/
