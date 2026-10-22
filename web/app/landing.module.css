@@ -209,7 +209,7 @@
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
 }
 .brand { display: inline-flex; align-items: center; text-decoration: none; }
-.brandImg { height: 24px; width: auto; }
+.brandImg { height: 34px; width: auto; }
 .navLinks { display: none; gap: 4px; }
 .navLinks a {
   font-size: 13px; color: var(--ink-soft); text-decoration: none; padding: 8px 12px; border-radius: 9999px;
@@ -447,7 +447,7 @@
 }
 .footGrid { display: grid; grid-template-columns: 1fr; gap: 40px; position: relative; }
 @media (min-width: 900px) { .footGrid { grid-template-columns: minmax(0, 5fr) repeat(3, minmax(0, 2fr)); } }
-.footBrandImg { height: 26px; width: auto; }
+.footBrandImg { height: 38px; width: auto; }
 .footTag { margin-top: 16px; font-size: 14px; line-height: 1.6; color: #c3cbea; max-width: 34ch; }
 .footColTitle { font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #aab5de; margin-bottom: 14px; }
 .footLinks { display: flex; flex-direction: column; gap: 10px; }

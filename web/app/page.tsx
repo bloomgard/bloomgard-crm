@@ -12,7 +12,7 @@ const display = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["n
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
-const CONTACT_EMAIL = "bloomgarderp@gmail.com";
+const CONTACT_EMAIL = "support@bloomgard.co";
 const PREWRITTEN_BODY =
   "Hello%20Bloomgard%20Team%2C%0A%0AI%20am%20interested%20in%20upgrading%20my%20operational%20infrastructure.%20Please%20reach%20out%20to%20discuss%20implementation%20and%20details.%0A%0AThank%20you%2C%0A%5BYour%20Name%5D";
 
@@ -343,7 +343,7 @@ export default function BloomgardLanding() {
         <div className={styles.navInner}>
           <a href="#top" className={styles.brand} aria-label="Bloomgard, home">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={styles.brandImg} src={isDark ? "/brand/wordmark-kora.png" : "/brand/wordmark-kajal.png"} alt="Bloomgard" width={126} height={24} />
+            <img className={styles.brandImg} src={isDark ? "/brand/wordmark-kora.png" : "/brand/wordmark-kajal.png"} alt="Bloomgard" width={178} height={34} />
           </a>
           <nav className={styles.navLinks} aria-label="Sections">
             <a href="#platform">Platform</a>
@@ -652,7 +652,7 @@ export default function BloomgardLanding() {
           <div className={styles.footGrid}>
             <div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className={styles.footBrandImg} src="/brand/wordmark-kora.png" alt="Bloomgard" width={136} height={26} />
+              <img className={styles.footBrandImg} src="/brand/wordmark-kora.png" alt="Bloomgard" width={199} height={38} />
               <p className={styles.footTag}>Quotes, email and follow-ups for teams that quote for a living. Made in Mumbai.</p>
             </div>
             <div>
