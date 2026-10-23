@@ -1,0 +1,14 @@
+{
+  "title": "Bloomgard CRM",
+  "base": "bloomgard-crm",
+  "sections": [
+    { "title": "Introduction",   "pages": ["index", "getting-started"] },
+    { "title": "Sales",          "pages": ["quotes", "master-data", "follow-ups", "lead-gen"] },
+    { "title": "Email",          "pages": ["inbox", "email-setup"] },
+    { "title": "AI",             "pages": ["ai-assistant", "dashboard-and-copilot"] },
+    { "title": "Configuration",  "pages": ["settings"] },
+    { "title": "Administration", "pages": ["platform-admin"] },
+    { "title": "Developers",     "pages": ["api-reference", "data-model"] },
+    { "title": "Help",           "pages": ["faq-troubleshooting"] }
+  ]
+}
