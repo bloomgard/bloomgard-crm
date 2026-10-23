@@ -72,18 +72,21 @@ const HELP: Record<string, { text: string; href: string }> = {
   'settings:quote-template': { text: 'Set your company name and logo and edit the HTML used for quote PDFs. Use {{field_name}} to insert quote values and {{company_logo}} for your logo.', href: 'configuration/settings/#quote-template' },
 };
 
-function HelpHint({ view, sub, dark }: { view: string; sub: string; dark: boolean }) {
+function DocsLink({ view, sub }: { view: string; sub?: string }) {
   const key = view === 'settings' && sub && sub !== 'menu' ? `settings:${sub}` : view;
   const h = HELP[key];
   if (!h) return null;
   return (
-    <div data-testid="help-hint" className={`max-w-6xl mx-auto mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-xs ${dark ? 'bg-gray-900 border-gray-800 text-gray-300' : 'bg-white/70 border-gray-200 text-gray-600'}`}>
-      <BookOpen className="w-4 h-4 mt-0.5 shrink-0 text-indigo-500" />
-      <p className="flex-1 leading-relaxed">{h.text}</p>
-      <a href={DOCS_URL + h.href} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-1 font-bold text-indigo-600 hover:underline whitespace-nowrap">
-        Read the guide <ExternalLink className="w-3 h-3" />
-      </a>
-    </div>
+    <a
+      data-testid="help-hint"
+      href={DOCS_URL + h.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={h.text}
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-indigo-200 bg-indigo-50 text-[10px] font-bold uppercase tracking-widest text-indigo-600 hover:bg-indigo-100 transition-colors no-underline"
+    >
+      <BookOpen className="w-3 h-3" /> Docs <ExternalLink className="w-2.5 h-2.5" />
+    </a>
   );
 }
 
@@ -1687,12 +1690,10 @@ Command: ${dashCommand}`;
           </div>
         )}
 
-        <HelpHint view={currentView} sub={settingsSubView} dark={isDark} />
-
         {currentView === "alerts" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
             <header className="mb-10">
-              <h2 className="text-3xl font-bold text-gray-900">Follow ups</h2>
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Follow ups</h2><DocsLink view="alerts" /></div>
               <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">AI Follow-Up Triage</p>
             </header>
 
@@ -1999,7 +2000,7 @@ Command: ${dashCommand}`;
                   ← Back to Menu
                 </button>
               )}
-              <h2 className="text-3xl font-bold text-gray-900 pl-2">Workspace Settings</h2>
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900 pl-2">Workspace Settings</h2><DocsLink view="settings" sub={settingsSubView} /></div>
             </header>
 
             {settingsSubView === 'menu' && (
@@ -2624,7 +2625,7 @@ Command: ${dashCommand}`;
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-8">
             <header className="mb-8 flex justify-between items-end border-b border-gray-200 pb-8">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Bot className="w-8 h-8" /> Agent Fleet</h2>
+                <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Bot className="w-8 h-8" /> Agent Fleet</h2><DocsLink view="agents" /></div>
                 <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">Manage Autonomous Follow-up Agents</p>
               </div>
               <div className="flex items-center gap-3">
@@ -2935,7 +2936,7 @@ Command: ${dashCommand}`;
         {currentView === "dashboard" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-12">
             <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-gray-200 pb-8">
-              <div><h2 className="text-4xl font-bold tracking-tight text-gray-900">Intelligence</h2><p className="text-sm font-medium text-gray-500 mt-2"></p></div>
+              <div><div className="flex items-center gap-3 flex-wrap"><h2 className="text-4xl font-bold tracking-tight text-gray-900">Intelligence</h2><DocsLink view="dashboard" /></div><p className="text-sm font-medium text-gray-500 mt-2"></p></div>
             </header>
 
 
@@ -3022,7 +3023,7 @@ Command: ${dashCommand}`;
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-6xl mx-auto">
             <div className="flex flex-col gap-4 mb-6">
               <div className="flex items-center justify-start gap-6">
-                <h2 className="text-3xl font-bold text-gray-900">{currentView === "leadgen" ? "Lead Generation" : "Quotes"}</h2>
+                <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{currentView === "leadgen" ? "Lead Generation" : "Quotes"}</h2><DocsLink view={currentView} /></div>
                 {currentView !== "leadgen" && (
                   <button
                     onClick={() => {
@@ -3116,7 +3117,7 @@ Command: ${dashCommand}`;
             <div className="w-1/3 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
               <header className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-black text-lg text-gray-900 dark:text-white uppercase tracking-wider">Inbox</h3>
+                  <div className="flex items-center gap-3 flex-wrap"><h3 className="font-black text-lg text-gray-900 dark:text-white uppercase tracking-wider">Inbox</h3><DocsLink view="inbox" /></div>
                   <div className="flex gap-2">
                     <button onClick={() => { setEmailDraft({ to: '', subject: '', message: '', attachmentBase64: '', filename: '' }); setShowEmailModal(true); }} className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-sm">Compose</button>
                     <button onClick={() => fetchInboxLogs()} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider shadow-sm">Refresh</button>
@@ -3279,7 +3280,7 @@ Command: ${dashCommand}`;
 
         {currentView === "docs" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
-            <header className="mb-10"><h2 className="text-3xl font-bold text-gray-900">Document Library</h2></header>
+            <header className="mb-10"><div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Document Library</h2><DocsLink view="docs" /></div></header>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {docsRecords.length > 0 ? docsRecords.map((r, i) => (
                 <div key={r.id || i} className="relative bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md transition-all group flex flex-col">
@@ -3305,7 +3306,7 @@ Command: ${dashCommand}`;
           <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-gray-100 pb-6">
               <div className="flex flex-col gap-1">
-                <h2 className="text-3xl font-bold text-gray-900">{editingId ? "Revise Entry" : "Create Entry"}</h2>
+                <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{editingId ? "Revise Entry" : "Create Entry"}</h2><DocsLink view="new_entry" /></div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Quote ID:</span>
                   <input type="text" value={qn} onChange={(e) => setQn(e.target.value)} className="bg-transparent border-b border-dashed border-gray-300 hover:border-gray-500 focus:border-indigo-500 text-xs font-bold text-gray-700 outline-none w-48 transition-colors" placeholder="Auto-generated on Save" />
@@ -3593,7 +3594,7 @@ Command: ${dashCommand}`;
 
         {currentView === "copilot" && (
           <div className="flex flex-col h-[calc(100vh-6rem)] animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
-            <header className="mb-6"><h2 className="text-3xl font-bold text-gray-900">Bloomgard AI</h2><p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">Deep Data Analysis</p></header>
+            <header className="mb-6"><div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Bloomgard AI</h2><DocsLink view="copilot" /></div><p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">Deep Data Analysis</p></header>
             <div className="flex-1 bg-white border border-gray-200 rounded-[2rem] shadow-sm flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 bg-gray-50/30">
                 {chatHistory.length === 0 ? (

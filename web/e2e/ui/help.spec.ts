@@ -7,13 +7,13 @@ test.describe('In-app help', () => {
   test('Settings has a Docs row that points at the docs site', async ({ page }) => {
     await openApp(page);
     await go(page, 'Settings');
-    const row = page.getByRole('link', { name: /^Docs/ });
+    const row = page.getByRole('link', { name: /^Docs Guides/ });
     await expect(row).toBeVisible();
     await expect(row).toHaveAttribute('href', DOCS);
     await expect(row).toHaveAttribute('target', '_blank');
   });
 
-  test('every view and every settings screen shows a usage hint with its guide link', async ({ page }) => {
+  test('every view and every settings screen has a Docs link to its own guide', async ({ page }) => {
     const errors = pageErrors(page);
     await openApp(page);
     const views: Array<[string, string]> = [
@@ -25,7 +25,7 @@ test.describe('In-app help', () => {
       await go(page, view);
       const hint = page.getByTestId('help-hint');
       await expect(hint, `${view} has no help hint`).toBeVisible();
-      await expect(hint.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', DOCS + href);
+      await expect(hint).toHaveAttribute('href', DOCS + href);
     }
     const screens: Array<[string, string]> = [
       ['Your Profile', 'configuration/settings/#your-profile'], ['Master Data', 'sales/master-data/'],
@@ -37,10 +37,10 @@ test.describe('In-app help', () => {
       await openSetting(page, title);
       const hint = page.getByTestId('help-hint');
       await expect(hint, `${title} has no help hint`).toBeVisible();
-      await expect(hint.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', DOCS + href);
+      await expect(hint).toHaveAttribute('href', DOCS + href);
     }
     await page.locator('nav').getByText('Bloomgard AI').click();
-    await expect(page.getByTestId('help-hint').getByRole('link')).toHaveAttribute('href', DOCS + 'ai/dashboard-and-copilot/#bloomgard-ai-chat-assistant');
+    await expect(page.getByTestId('help-hint')).toHaveAttribute('href', DOCS + 'ai/dashboard-and-copilot/#bloomgard-ai-chat-assistant');
     expect(errors, errors.join('\n')).toEqual([]);
   });
 
