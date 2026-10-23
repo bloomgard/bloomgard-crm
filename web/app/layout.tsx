@@ -1,4 +1,10 @@
 import "./globals.css"; // <--- THIS LINE IS MANDATORY
+import { Instrument_Serif, Geist, Geist_Mono } from "next/font/google";
+
+// Jaali design-system typography, exposed as CSS variables for the whole app.
+const display = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-display" });
+const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata = {
   title: "Bloomgard CRM",
@@ -11,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className="antialiased bg-white text-black">
         {children}
       </body>

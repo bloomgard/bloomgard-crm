@@ -94,3 +94,59 @@ input:-webkit-autofill:active {
 .glass-mode input:-webkit-autofill {
   -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.1) inset !important;
 }
+
+/* ------------------------------------------------------------------
+   Bloomgard Jaali design system applied to the workspace UI.
+   Tailwind v4 reads its palette from CSS variables, so remapping them
+   on .jaali re-skins every existing utility class (bg-gray-*, text-indigo-*,
+   border-*, rounded-*) without touching markup.
+   Kora (paper) / Kajal (ink) / Sindoor (vermilion) / Neelam (blue) / Marigold.
+   ------------------------------------------------------------------ */
+.jaali {
+  --kora: #fbfaf7; --kora-line: #e6e3dc; --kajal: #15120e; --sindoor: #ea5420; --neelam: #2747d8; --marigold: #e5a03a;
+
+  --color-gray-50: #fbfaf7;  --color-gray-100: #f4f1ea; --color-gray-200: #e6e3dc; --color-gray-300: #d3cec3;
+  --color-gray-400: #8c8478; --color-gray-500: #6f685d; --color-gray-600: #5a534a; --color-gray-700: #3e3830;
+  --color-gray-800: #2a251f; --color-gray-900: #15120e; --color-gray-950: #0e0c09;
+  --color-slate-50: #fbfaf7; --color-slate-100: #f4f1ea; --color-slate-200: #e6e3dc; --color-slate-500: #6f685d; --color-slate-900: #15120e;
+
+  --color-indigo-50: #e8eeff;  --color-indigo-100: #d6e0ff; --color-indigo-200: #b7c6fb; --color-indigo-300: #8da4f1;
+  --color-indigo-400: #5f7de6; --color-indigo-500: #3c5ede; --color-indigo-600: #2747d8; --color-indigo-700: #1f39ad;
+  --color-indigo-800: #18214a; --color-indigo-900: #0e1430;
+  --color-blue-50: #e8eeff; --color-blue-100: #d6e0ff; --color-blue-500: #3c5ede; --color-blue-600: #2747d8; --color-blue-700: #1f39ad;
+  --color-sky-50: #e8eeff; --color-sky-100: #d6e0ff; --color-sky-200: #b7c6fb; --color-sky-600: #2747d8; --color-sky-700: #1f39ad;
+  --color-violet-50: #e8eeff; --color-violet-600: #2747d8; --color-purple-50: #e8eeff; --color-purple-600: #2747d8;
+
+  --color-red-50: #fde4d8; --color-red-100: #fbd3c2; --color-red-200: #f5b49b; --color-red-500: #ea5420;
+  --color-red-600: #d4430f; --color-red-700: #b83a0e; --color-red-800: #8f2c09;
+  --color-rose-50: #fde4d8; --color-rose-500: #ea5420; --color-rose-600: #d4430f;
+  --color-orange-50: #fde4d8; --color-orange-500: #ea5420; --color-orange-600: #d4430f;
+
+  --color-amber-50: #fbf1dc; --color-amber-100: #f7e7c8; --color-amber-200: #efd093; --color-amber-500: #e5a03a;
+  --color-amber-600: #c98820; --color-amber-700: #8a5300; --color-amber-800: #6f4300; --color-amber-900: #523200;
+  --color-yellow-50: #fbf1dc; --color-yellow-500: #e5a03a;
+
+  --color-green-50: #e6f3ee; --color-green-100: #dcefe7; --color-green-200: #b5dccf; --color-green-500: #1f9a7d;
+  --color-green-600: #0e6b57; --color-green-700: #0b5646;
+  --color-emerald-50: #e6f3ee; --color-emerald-100: #dcefe7; --color-emerald-500: #1f9a7d; --color-emerald-600: #0e6b57; --color-emerald-700: #0b5646;
+  --color-teal-50: #e6f3ee; --color-teal-600: #0e6b57;
+  --color-pink-50: #fde4d8; --color-pink-600: #d4430f;
+
+  --radius-lg: 10px; --radius-xl: 12px; --radius-2xl: 16px; --radius-3xl: 24px;
+  --shadow-sm: 0 1px 2px rgba(21, 18, 14, 0.06);
+  --shadow-md: 0 1px 2px rgba(21, 18, 14, 0.06), 0 8px 20px -8px rgba(21, 18, 14, 0.14);
+  --shadow-lg: 0 1px 2px rgba(21, 18, 14, 0.06), 0 12px 32px -8px rgba(21, 18, 14, 0.18);
+  --shadow-2xl: 0 1px 2px rgba(21, 18, 14, 0.06), 0 24px 56px -12px rgba(21, 18, 14, 0.28);
+
+  background-color: var(--kora);
+  color: var(--kajal);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+/* Editorial display type for page titles; mono for the small caps labels. */
+.jaali h2 { font-family: var(--font-display), Georgia, "Times New Roman", serif; font-weight: 400 !important; letter-spacing: -0.01em; }
+.jaali h2.text-3xl { font-size: 2.6rem; line-height: 1.05; }
+.jaali h2.text-4xl { font-size: 3rem; line-height: 1.02; }
+.jaali .tracking-widest, .jaali .tracking-wider { font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace; }
+.jaali :focus-visible { outline: 2px solid var(--neelam); outline-offset: 2px; }
+.jaali ::selection { background: #fde4d8; color: var(--kajal); }

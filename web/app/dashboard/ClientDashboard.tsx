@@ -50,6 +50,7 @@ const ALIASES = {
   file_path: ['filepath', 'url', 'link', 'attachment']
 };
 
+const JAALI_UI = true;
 const DOCS_URL = 'https://docs.bloomgard.co/crm/';
 const HELP: Record<string, { text: string; href: string }> = {
   dashboard: { text: 'Your pipeline at a glance: totals, your contribution and recent activity. Type a request such as "revenue by agent" to build an AI chart.', href: 'ai/dashboard-and-copilot/' },
@@ -1624,11 +1625,12 @@ Command: ${dashCommand}`;
     </div>
   );
 
-  const isGlass = userPreferences.wallpaper !== 'legacy';
+  // Jaali test skin: solid Kora canvas instead of photo wallpapers. Flip JAALI_UI to false to restore glass mode.
+  const isGlass = !JAALI_UI && userPreferences.wallpaper !== 'legacy';
   const isDark = userPreferences.theme === 'dark';
 
   return (
-    <div className={`flex min-h-screen font-sans transition-colors duration-500 ${isDark ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode !bg-transparent' : 'bg-gray-50 dark:bg-[#030712]'}`}>
+    <div className={`${JAALI_UI ? 'jaali' : ''} flex min-h-screen font-sans transition-colors duration-500 ${isDark ? 'dark text-gray-100' : 'text-gray-800'} ${isGlass ? 'glass-mode !bg-transparent' : 'bg-gray-50 dark:bg-[#030712]'}`}>
       {!isMobileMenuOpen && !selectedRecord && !viewingDoc && !showEmailModal && (
         <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-md active:scale-95 transition-transform"><Menu className="w-5 h-5" /></button>
       )}
