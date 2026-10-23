@@ -150,3 +150,78 @@ input:-webkit-autofill:active {
 .jaali .tracking-widest, .jaali .tracking-wider { font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace; }
 .jaali :focus-visible { outline: 2px solid var(--neelam); outline-offset: 2px; }
 .jaali ::selection { background: #fde4d8; color: var(--kajal); }
+
+
+/* ---- Jaali motifs: lattice, mandala and the quatrefoil ornament ---- */
+.jaali { isolation: isolate; position: relative;
+  --motif-ink: var(--kajal);
+  --lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32' fill='none' stroke='black' stroke-width='0.8'%3E%3Ccircle cx='0' cy='0' r='16'/%3E%3Ccircle cx='32' cy='0' r='16'/%3E%3Ccircle cx='0' cy='32' r='16'/%3E%3Ccircle cx='32' cy='32' r='16'/%3E%3Ccircle cx='16' cy='16' r='16'/%3E%3C/svg%3E");
+  --quatrefoil: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='8' cy='12' r='5'/%3E%3Ccircle cx='16' cy='12' r='5'/%3E%3Ccircle cx='12' cy='8' r='5'/%3E%3Ccircle cx='12' cy='16' r='5'/%3E%3C/svg%3E");
+}
+/* Large, faint mandala watermark in the top-right of the canvas */
+.jaali::before {
+  content: ""; position: fixed; z-index: -1; pointer-events: none; right: -260px; top: -260px; width: 760px; height: 760px;
+  background: var(--motif-ink); opacity: 0.05;
+  -webkit-mask: url("/brand/mandala.svg") center / contain no-repeat; mask: url("/brand/mandala.svg") center / contain no-repeat;
+}
+/* Jaali lattice breathing through the sidebar, fading out towards the middle */
+.jaali aside::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--motif-ink); opacity: 0.09;
+  -webkit-mask-image: var(--lattice), linear-gradient(to bottom, transparent 55%, #000 100%);
+  mask-image: var(--lattice), linear-gradient(to bottom, transparent 55%, #000 100%);
+  -webkit-mask-size: 32px 32px, 100% 100%; mask-size: 32px 32px, 100% 100%;
+  -webkit-mask-composite: source-in; mask-composite: intersect;
+}
+/* Quatrefoil ornament before every page title */
+.jaali h2::before {
+  content: ""; display: inline-block; width: 0.34em; height: 0.34em; margin-right: 0.3em; vertical-align: 0.16em;
+  background: var(--sindoor);
+  -webkit-mask: var(--quatrefoil) center / contain no-repeat; mask: var(--quatrefoil) center / contain no-repeat;
+}
+/* Empty states get a small mandala */
+.jaali .border-dashed { background-image: none; }
+
+/* ------------------------------------------------------------------
+   Raat: the Jaali dark theme (deep blue), same tokens as the landing page.
+   ------------------------------------------------------------------ */
+.jaali.dark {
+  --motif-ink: #f3ede1;
+  --color-white: #121628;
+  --color-gray-50: #121628;  --color-gray-100: #1a1f35; --color-gray-200: #262c47; --color-gray-300: #3a4166;
+  --color-gray-400: #8d8778; --color-gray-500: #a39c8d; --color-gray-600: #bdb5a6; --color-gray-700: #d1c9ba;
+  --color-gray-800: #e6dfd1; --color-gray-900: #f3ede1; --color-gray-950: #0b0e1a;
+  --color-indigo-50: #1b2550; --color-indigo-100: #232e63; --color-indigo-200: #33407f; --color-indigo-300: #5568b8;
+  --color-indigo-400: #7f9bff; --color-indigo-500: #7f9bff; --color-indigo-600: #7f9bff; --color-indigo-700: #93a9ff;
+  --color-indigo-800: #b3c2ff; --color-indigo-900: #d3dcff;
+  --color-blue-50: #1b2550; --color-blue-100: #232e63; --color-blue-500: #7f9bff; --color-blue-600: #7f9bff; --color-blue-700: #93a9ff;
+  --color-sky-50: #1b2550; --color-sky-100: #232e63; --color-sky-200: #33407f; --color-sky-600: #7f9bff; --color-sky-700: #93a9ff;
+  --color-violet-50: #1b2550; --color-violet-600: #7f9bff; --color-purple-50: #1b2550; --color-purple-600: #7f9bff;
+  --color-red-50: #3a1d14; --color-red-100: #4a2418; --color-red-200: #6a321f; --color-red-500: #ec6a3f; --color-red-600: #ec6a3f; --color-red-700: #f08a62; --color-red-800: #f5a583;
+  --color-rose-50: #3a1d14; --color-rose-500: #ec6a3f; --color-rose-600: #ec6a3f;
+  --color-orange-50: #3a1d14; --color-orange-500: #ec6a3f; --color-orange-600: #ec6a3f;
+  --color-pink-50: #3a1d14; --color-pink-600: #ec6a3f;
+  --color-amber-50: #352711; --color-amber-100: #44320f; --color-amber-200: #6b4d17; --color-amber-500: #f0b45a; --color-amber-600: #f0b45a; --color-amber-700: #f0b45a; --color-amber-800: #f4c680; --color-amber-900: #f8d9a6;
+  --color-yellow-50: #352711; --color-yellow-500: #f0b45a;
+  --color-green-50: #10302a; --color-green-100: #15403a; --color-green-200: #1d5a4e; --color-green-500: #4cc4a4; --color-green-600: #4cc4a4; --color-green-700: #6fd4b8;
+  --color-emerald-50: #10302a; --color-emerald-100: #15403a; --color-emerald-500: #4cc4a4; --color-emerald-600: #4cc4a4; --color-emerald-700: #6fd4b8;
+  --color-teal-50: #10302a; --color-teal-600: #4cc4a4;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 20px -8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -8px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 1px 2px rgba(0, 0, 0, 0.4), 0 28px 60px -12px rgba(0, 0, 0, 0.7);
+  background-color: #0b0e1a !important;
+  color: #f3ede1;
+  color-scheme: dark;
+}
+.jaali.dark::before { opacity: 0.05; }
+.jaali.dark aside::before { opacity: 0.12; }
+html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
+/* The old dark rules hard-code greys with !important; point them at the Raat palette instead. */
+.jaali.dark .text-gray-900, .jaali.dark .text-gray-800, .jaali.dark .text-gray-700 { color: var(--color-gray-900) !important; }
+.jaali.dark .text-gray-600, .jaali.dark .text-gray-500 { color: var(--color-gray-600) !important; }
+.jaali.dark .border-gray-200, .jaali.dark .border-gray-100, .jaali.dark .border-white\/50 { border-color: #262c47 !important; }
+.jaali.dark .bg-gray-50, .jaali.dark .bg-white { background-color: #121628 !important; }
+.jaali.dark .bg-gray-100 { background-color: #1a1f35 !important; }
+.jaali.dark input:-webkit-autofill { -webkit-box-shadow: 0 0 0px 1000px #1a1f35 inset !important; -webkit-text-fill-color: #f3ede1 !important; }
+.jaali.dark ::selection { background: #3a1d14; color: #f3ede1; }

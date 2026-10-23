@@ -17,7 +17,7 @@ use back to return to the list. Some screens are for Managers/Admins only.
 | User Access | Managers/Admins | Add users, set roles, reset passwords. |
 | Field Configurator | Managers/Admins | Design the quote form. |
 | Email Settings | Everyone | Personal and workspace email addresses; forwarding. |
-| Personalization | Everyone | Theme and wallpaper. |
+| Personalization | Everyone | Light or dark theme. |
 | AI Settings | Managers/Admins | Tone and instructions ([AI](./ai-assistant.md)). |
 | Quote Template | Managers/Admins | The PDF layout. |
 
@@ -48,9 +48,7 @@ Your personal email, your unique forwarding address, and the common workspace em
 
 ## Personalization
 
-**UI & Personalization**: Light or Dark mode, Legacy UI (solid background) or glass UI,
-and a **Workspace Wallpaper** (several built-in options) plus **Brand Identity**: **Company Name**
-and **Company Logo URL**.
+**UI & Personalization**: choose **Light Mode** (Kora, warm paper) or **Dark Mode** (Raat, deep blue).
 
 ## AI Settings
 

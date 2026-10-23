@@ -202,7 +202,7 @@ const FEATURES = [
       "Invite teammates from Settings",
       "Workspace data isolated by row-level security",
       "Dashboard with charts across the pipeline",
-      "Light and dark themes, wallpapers and layouts",
+      "Light and dark Jaali themes",
     ],
   },
 ];
@@ -219,7 +219,7 @@ const STANDARD = [
   "Master Data grid and Excel import",
   "Inbox with inbound capture",
   "Dashboards for managers and agents",
-  "Light, dark and wallpaper themes",
+  "Light and dark Jaali themes",
 ];
 
 const WITH_AI = [

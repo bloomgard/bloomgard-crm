@@ -84,8 +84,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 glass-mode relative z-10 transition-all duration-500">
-      <div className="fixed inset-0 z-[-1] bg-cover bg-center" style={{ backgroundImage: "url('/wallpapers/login_bg.png')" }}></div>
+    <div className="jaali min-h-screen flex items-center justify-center p-4 relative z-10 transition-all duration-500">
       
       <div className="w-full max-w-md bg-white rounded-[2rem] p-10 border border-white/40 relative overflow-hidden">
         
@@ -110,7 +109,7 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white/40 backdrop-blur-sm border border-white/40 rounded-xl px-4 py-3 text-sm focus:bg-white/70 focus:border-gray-300 focus:ring-0 outline-none transition-all placeholder-gray-500"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:border-indigo-400 focus:ring-0 outline-none transition-all placeholder-gray-500"
               placeholder="name@company.com"
             />
           </div>
@@ -123,7 +122,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white/40 backdrop-blur-sm border border-white/40 rounded-xl px-4 py-3 text-sm focus:bg-white/70 focus:border-gray-300 focus:ring-0 outline-none transition-all pr-16 placeholder-gray-500"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:border-indigo-400 focus:ring-0 outline-none transition-all pr-16 placeholder-gray-500"
                 placeholder="••••••••"
               />
               <button

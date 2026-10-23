@@ -68,7 +68,7 @@ const HELP: Record<string, { text: string; href: string }> = {
   'settings:users': { text: 'Add teammates as Agent, Manager or Admin, change roles and reset passwords. Agents only see their own quotes.', href: 'configuration/settings/#user-access' },
   'settings:blueprint': { text: 'Design the quote form: sections and fields (text, number, dropdown, paragraph, attachment, formula). Save the blueprint to apply it.', href: 'configuration/settings/#field-configurator' },
   'settings:email': { text: 'Set your personal address and your forwarding address, then forward client mail from Gmail or Outlook so it reaches the Inbox.', href: 'email/email-setup/' },
-  'settings:personalization': { text: 'Choose light or dark mode, the interface style and a workspace wallpaper.', href: 'configuration/settings/#personalization' },
+  'settings:personalization': { text: 'Switch between the light (Kora) and dark (Raat) themes.', href: 'configuration/settings/#personalization' },
   'settings:ai-personality': { text: 'Set tone, English level, how eager the replies sound, and your own instructions. Add routing rules to forward certain mail to a teammate.', href: 'ai/ai-assistant/#ai-settings-managersadmins' },
   'settings:quote-template': { text: 'Set your company name and logo and edit the HTML used for quote PDFs. Use {{field_name}} to insert quote values and {{company_logo}} for your logo.', href: 'configuration/settings/#quote-template' },
 };
@@ -167,7 +167,7 @@ export default function ClientDashboard() {
   const [dynamicData, setDynamicData] = useState({});
   const [statusFilter, setStatusFilter] = useState("");
   const [editedSnippets, setEditedSnippets] = useState({});
-  const [userPreferences, setUserPreferences] = useState({ theme: 'light', wallpaper: 'legacy' });
+  const [userPreferences, setUserPreferences] = useState({ theme: 'light' });
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [agentQuoteSearch, setAgentQuoteSearch] = useState("");
@@ -401,7 +401,7 @@ export default function ClientDashboard() {
         if (fullUser.inbound_email) setUserRoutingSlug(fullUser.inbound_email.split('@')[0]);
         setAuthState('authed');
 
-        let prefs = { theme: 'light', wallpaper: 'legacy' };
+        let prefs = { theme: 'light' };
         if (profile.custom_metadata?.preferences) {
           prefs = profile.custom_metadata.preferences;
         } else {
@@ -1625,8 +1625,7 @@ Command: ${dashCommand}`;
     </div>
   );
 
-  // Jaali test skin: solid Kora canvas instead of photo wallpapers. Flip JAALI_UI to false to restore glass mode.
-  const isGlass = !JAALI_UI && userPreferences.wallpaper !== 'legacy';
+  const isGlass = false; // photo wallpapers / glass mode were removed with the Jaali skin
   const isDark = userPreferences.theme === 'dark';
 
   return (
@@ -1638,7 +1637,7 @@ Command: ${dashCommand}`;
 
       <aside className={`fixed z-[100] w-64 flex flex-col shadow-2xl md:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-in-out overflow-hidden
         ${isMobileMenuOpen ? 'inset-y-0 left-0 translate-x-0 rounded-none border-r' : 'top-4 bottom-4 left-4 -translate-x-[120%] md:translate-x-0 rounded-3xl'} 
-        ${isGlass ? 'glass-sidebar bg-white/80 dark:bg-black/60 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200')}`}>
+        ${isGlass ? 'glass-sidebar bg-white/80 dark:bg-gray-50 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-[#121628] border border-[#262c47]' : 'bg-white border border-gray-200')}`}>
         <div className="p-8 pb-4">
           <h1 className="text-4xl font-bold tracking-tighter text-gray-900">Bloomgard.</h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
@@ -1659,11 +1658,11 @@ Command: ${dashCommand}`;
           ))}
           <div onClick={() => { setCurrentView('copilot'); setIsMobileMenuOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm mt-2 ${currentView === 'copilot' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}><Bot className="w-4 h-4 inline mr-2" /> Bloomgard AI</div>
         </nav>
-        <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-black/40 border-white/30' : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800'}`}>
+        <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-gray-50/60 border-white/30' : 'bg-gray-50/50 dark:bg-gray-50/50 border-gray-100 dark:border-gray-200'}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center text-gray-700 text-xs font-bold uppercase border border-gray-300">{user?.email?.charAt(0) || 'O'}</div>
             <div className="overflow-hidden">
-              <p className="text-[11px] font-semibold truncate text-gray-900 dark:text-gray-100">{user?.email || 'Operator'}</p>
+              <p className="text-[11px] font-semibold truncate text-gray-900 dark:text-gray-900">{user?.email || 'Operator'}</p>
               <p className="text-[9px] text-gray-500 uppercase font-medium tracking-widest mt-0.5">{user?.role || "Operator"}</p>
             </div>
           </div>
@@ -1676,7 +1675,6 @@ Command: ${dashCommand}`;
       >
         {isGlass && (
           <>
-            <div className="fixed inset-0 z-[-2] bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url('/wallpapers/${userPreferences.wallpaper}.jpg')` }}></div>
             {isDark && <div className="fixed inset-0 z-[-1] bg-black/30 transition-opacity duration-700"></div>}
             {!isDark && <div className="fixed inset-0 z-[-1] bg-white/10 transition-opacity duration-700"></div>}
           </>
@@ -1996,13 +1994,13 @@ Command: ${dashCommand}`;
 
         {currentView === "settings" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-8">
-            <header className="mb-8 flex items-center gap-4">
+            <header className="mb-8 flex flex-col items-start gap-3">
               {settingsSubView !== 'menu' && (
                 <button onClick={() => setSettingsSubView('menu')} className="text-gray-500 hover:text-gray-900 text-sm font-semibold">
                   ← Back to Menu
                 </button>
               )}
-              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900 pl-2">Workspace Settings</h2><DocsLink view="settings" sub={settingsSubView} /></div>
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Workspace Settings</h2><DocsLink view="settings" sub={settingsSubView} /></div>
             </header>
 
             {settingsSubView === 'menu' && (
@@ -2013,7 +2011,7 @@ Command: ${dashCommand}`;
                   { key: 'users', icon: Users, bg: 'bg-indigo-50', color: 'text-indigo-600', title: 'User Access', desc: 'Onboard new agents, managers, and admins to this workspace.', managerOnly: true },
                   { key: 'blueprint', icon: Wrench, bg: 'bg-gray-900', color: 'text-gray-200', title: 'Field Configurator', desc: 'Customize quote form fields and dynamic blueprint schemas.', managerOnly: true },
                   { key: 'email', icon: Mail, bg: 'bg-emerald-50', color: 'text-emerald-600', title: 'Email Settings', desc: 'Configure workspace-wide and personal email routing.', managerOnly: false },
-                  { key: 'personalization', icon: Sparkles, bg: 'bg-pink-50', color: 'text-pink-600', title: 'Personalization', desc: 'Customize your workspace UI, theme, and wallpapers.', managerOnly: false },
+                  { key: 'personalization', icon: Sparkles, bg: 'bg-pink-50', color: 'text-pink-600', title: 'Personalization', desc: 'Switch between the light and dark Jaali themes.', managerOnly: false },
                   { key: 'ai-personality', icon: Bot, bg: 'bg-amber-50', color: 'text-amber-600', title: 'AI Settings', desc: 'Adjust the agent tone, style, instructions and routing rules.', managerOnly: true },
                   { key: 'quote-template', icon: Palette, bg: 'bg-red-50', color: 'text-red-600', title: 'Quote Template', desc: 'Manage brand identity, logos, and HTML generation template.', managerOnly: true },
                 ].filter(item => !item.managerOnly || isManager).map(item => {
@@ -2344,27 +2342,13 @@ Command: ${dashCommand}`;
                 </div>
 
                 <div className="space-y-6 mb-12">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
                     <div>
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Theme Mode</label>
                       <div className="flex bg-gray-100/50 p-1 rounded-xl w-full border border-gray-200/50">
                         <button onClick={() => setUserPreferences({ ...userPreferences, theme: 'light' })} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'light' ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-700'}`}>Light Mode</button>
                         <button onClick={() => setUserPreferences({ ...userPreferences, theme: 'dark' })} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userPreferences.theme === 'dark' ? 'bg-gray-900 shadow-sm text-white' : 'text-gray-500 hover:text-gray-700'}`}>Dark Mode</button>
                       </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-2">Workspace Wallpaper</label>
-                      <select
-                        value={userPreferences.wallpaper}
-                        onChange={e => setUserPreferences({ ...userPreferences, wallpaper: e.target.value })}
-                        className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors cursor-pointer"
-                      >
-                        <option value="legacy">Legacy UI (Solid Background)</option>
-                        <option value="wp1">Abstract - Midnight Blue</option>
-                        <option value="wp2">Abstract - Pastel Frost</option>
-                        <option value="wp3">Nature - Sunset Ocean</option>
-                        <option value="wp4">Nature - Misty Forest</option>
-                      </select>
                     </div>
                   </div>
                   <button
@@ -3116,8 +3100,8 @@ Command: ${dashCommand}`;
 
         {currentView === "inbox" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-[calc(100vh-140px)] flex gap-6">
-            <div className="w-1/3 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
-              <header className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-3">
+            <div className="w-1/3 bg-white/80 dark:bg-gray-50 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-200 flex flex-col overflow-hidden">
+              <header className="p-4 border-b border-gray-100 dark:border-gray-200 flex flex-col gap-3">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3 flex-wrap"><h3 className="font-black text-lg text-gray-900 dark:text-white uppercase tracking-wider">Inbox</h3><DocsLink view="inbox" /></div>
                   <div className="flex gap-2">
@@ -3132,7 +3116,7 @@ Command: ${dashCommand}`;
                     placeholder="Search emails..."
                     value={inboxSearch}
                     onChange={(e) => setInboxSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-50 border border-gray-200 dark:border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                   />
                 </div>
               </header>
@@ -3141,14 +3125,14 @@ Command: ${dashCommand}`;
                   .filter(log => !log.is_deleted)
                   .filter(log => log.subject?.toLowerCase().includes(inboxSearch.toLowerCase()) || log.sender_email?.toLowerCase().includes(inboxSearch.toLowerCase()))
                   .map((log) => (
-                    <div key={log.id} onClick={() => { setSelectedInboxEmail(log); if (!log.is_read) handleInboxAction(log.id, 'is_read', true); }} className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-indigo-50/50 dark:bg-indigo-900/20 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50 dark:hover:bg-gray-900/50 border-l-4 border-l-transparent'}`}>
+                    <div key={log.id} onClick={() => { setSelectedInboxEmail(log); if (!log.is_read) handleInboxAction(log.id, 'is_read', true); }} className={`p-4 border-b border-gray-100 dark:border-gray-200 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-indigo-50/50 dark:bg-indigo-900/20 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50 dark:hover:bg-gray-900/50 border-l-4 border-l-transparent'}`}>
                       <div className="flex justify-between items-start mb-1">
                         <span className={`text-sm ${log.is_read ? 'font-semibold text-gray-700' : 'font-black text-gray-900'} dark:text-white truncate pr-2`}>{log.sender_email}</span>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-gray-500 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
-                      <div className={`text-xs ${log.is_read ? 'font-medium text-gray-600' : 'font-bold text-gray-800'} dark:text-gray-300 truncate mb-1`}>{log.subject || 'No Subject'}</div>
+                      <div className={`text-xs ${log.is_read ? 'font-medium text-gray-600' : 'font-bold text-gray-800'} dark:text-gray-700 truncate mb-1`}>{log.subject || 'No Subject'}</div>
                       <div className="text-xs text-gray-500 truncate flex items-center justify-between">
                         <span className="truncate pr-4">{log.body_text?.substring(0, 50)}...</span>
                         <button
@@ -3166,14 +3150,14 @@ Command: ${dashCommand}`;
               </div>
             </div>
 
-            <div className="w-2/3 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden relative">
+            <div className="w-2/3 bg-white/80 dark:bg-gray-50 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-200 flex flex-col overflow-hidden relative">
               {selectedInboxEmail ? (
                 <div className="flex-1 overflow-y-auto p-6 flex flex-col">
-                  <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-start">
+                  <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-200 flex justify-between items-start">
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{selectedInboxEmail.subject}</h2>
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedInboxEmail.sender_email}</span>
+                        <span className="font-semibold text-gray-800 dark:text-gray-800">{selectedInboxEmail.sender_email}</span>
                         <span>•</span>
                         <span>{new Date(selectedInboxEmail.created_at).toLocaleString()}</span>
                       </div>
@@ -3188,11 +3172,11 @@ Command: ${dashCommand}`;
                     </div>
                   </div>
 
-                  <div className="text-sm text-gray-800 dark:text-gray-300 whitespace-pre-wrap mb-8 bg-gray-50 dark:bg-gray-900/50 p-6 rounded-xl border border-gray-100 dark:border-gray-800 flex-1">
+                  <div className="text-sm text-gray-800 dark:text-gray-700 whitespace-pre-wrap mb-8 bg-gray-50 dark:bg-gray-50/50 p-6 rounded-xl border border-gray-100 dark:border-gray-200 flex-1">
                     {selectedInboxEmail.body_text || selectedInboxEmail.body_html || "No Content"}
                   </div>
 
-                  <div className="mb-8 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white shadow-sm">
+                  <div className="mb-8 border border-gray-200 dark:border-gray-300 rounded-xl overflow-hidden bg-white shadow-sm">
                     <textarea
                       value={inboxReplyText}
                       onChange={(e) => setInboxReplyText(e.target.value)}
@@ -3213,7 +3197,7 @@ Command: ${dashCommand}`;
                     </div>
                   </div>
 
-                  <div className="mt-4 border-t border-gray-200 dark:border-gray-800 pt-6">
+                  <div className="mt-4 border-t border-gray-200 dark:border-gray-200 pt-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 flex items-center gap-2">
                         <div className="flex items-center gap-2"><Bot className="w-4 h-4 text-indigo-600" /> <span className="font-bold text-indigo-600">Bloomgard AI Analysis</span></div>
@@ -3229,7 +3213,7 @@ Command: ${dashCommand}`;
                       <div className="grid grid-cols-1 gap-4">
                         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
                           <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-2">Summary</h4>
-                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">{emailAiAnalysis[selectedInboxEmail.id].summary}</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-700 mb-4">{emailAiAnalysis[selectedInboxEmail.id].summary}</p>
                           <button onClick={() => alert("Summary marked as reviewed!")} className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 text-[10px] font-bold rounded-lg hover:bg-indigo-50 transition-all uppercase tracking-wider">Approve Summary</button>
                         </div>
                         <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800">
@@ -3255,7 +3239,7 @@ Command: ${dashCommand}`;
                         </div>
                         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
                           <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Drafted Auto-Reply</h4>
-                          <div className="text-sm text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap bg-white/50 p-3 rounded">{emailAiAnalysis[selectedInboxEmail.id].auto_reply}</div>
+                          <div className="text-sm text-gray-700 dark:text-gray-700 mb-4 whitespace-pre-wrap bg-white/50 p-3 rounded">{emailAiAnalysis[selectedInboxEmail.id].auto_reply}</div>
                           <button onClick={() => {
                             setEmailDraft({
                               to: selectedInboxEmail.sender_email,
