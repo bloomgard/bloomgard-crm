@@ -6,7 +6,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const AI_MODEL = 'openai/gpt-3.5-turbo';
+const AI_MODEL = 'openai/gpt-4o-mini';
 
 export async function POST(request: Request) {
   try {
@@ -94,20 +94,31 @@ export async function POST(request: Request) {
     - Keep it under 3 paragraphs.
     - Output ONLY the email body. Do not include subject lines or conversational filler.`;
 
-    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${AI_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://bloomgard.vercel.app",
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [{ role: "system", content: systemPrompt }]
-      })
-    });
+    // OpenRouter occasionally answers 429/5xx under load; retry those briefly before giving up.
+    let aiResponse: Response | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${AI_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://bloomgard.vercel.app",
+        },
+        body: JSON.stringify({
+          model: AI_MODEL,
+          messages: [{ role: "system", content: systemPrompt }]
+        })
+      });
+      if (aiResponse.ok || (aiResponse.status < 500 && aiResponse.status !== 429)) break;
+      console.error(`trigger-agent: OpenRouter ${aiResponse.status} (attempt ${attempt})`);
+      await new Promise((r) => setTimeout(r, attempt * 1500));
+    }
 
-    if (!aiResponse.ok) throw new Error('AI Generation failed');
+    if (!aiResponse || !aiResponse.ok) {
+      const detail = aiResponse ? `${aiResponse.status} ${(await aiResponse.text()).slice(0, 200)}` : 'no response';
+      console.error('trigger-agent: AI generation failed:', detail);
+      throw new Error(`AI Generation failed (${detail})`);
+    }
     const aiData = await aiResponse.json();
     
     if (aiData.usage) {

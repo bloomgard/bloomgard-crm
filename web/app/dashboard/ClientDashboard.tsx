@@ -1,7 +1,7 @@
 
 // @ts-nocheck
 "use client";
-import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File, ChevronRight, BookOpen, ExternalLink } from 'lucide-react';
 import { useState, useEffect, useRef } from "react";
 import MasterDataUI from "@/components/MasterDataUI";
 import { supabase } from "@/utils/supabaseClient";
@@ -49,6 +49,43 @@ const ALIASES = {
   file_name: ['filename', 'name', 'title'],
   file_path: ['filepath', 'url', 'link', 'attachment']
 };
+
+const DOCS_URL = 'https://docs.bloomgard.co/crm/';
+const HELP: Record<string, { text: string; href: string }> = {
+  dashboard: { text: 'Your pipeline at a glance: totals, your contribution and recent activity. Type a request such as "revenue by agent" to build an AI chart.', href: 'ai/dashboard-and-copilot/' },
+  pipeline: { text: 'All quotations with their status. Search, change status, import or export, and open a quote to preview the PDF or email it to the client.', href: 'sales/quotes/' },
+  new_entry: { text: 'Fill the form top to bottom. Choosing a catalogue value (such as an item code) fills the linked fields automatically. The quote number is assigned when you save.', href: 'sales/quotes/#creating-a-quote' },
+  inbox: { text: 'Client emails land here. Open one, then use Generate AI Actions for a summary, an extracted quote and a drafted reply. Nothing is sent until you send it.', href: 'email/inbox/' },
+  alerts: { text: 'Quotes that have gone quiet, scored Hot, Warm or Cold. Review the AI suggested follow-up, edit it if needed, then approve to send.', href: 'sales/follow-ups/' },
+  agents: { text: 'Follow-up agents chase quotes for you on a schedule. Set their instructions, importance and frequency, then assign quotes to them.', href: 'sales/follow-ups/#follow-up-agents' },
+  leadgen: { text: 'Enquiries that are not quotes yet. Generate AI Actions on the email, then Create Quote Now to turn it into a quotation.', href: 'sales/lead-gen/' },
+  docs: { text: 'Every generated quote PDF. View or download a document again, or delete it.', href: 'sales/quotes/#pdf-export-and-the-document-library' },
+  copilot: { text: 'Ask questions about your pipeline, inbox, follow-ups and catalogue in plain language. Answers use only your workspace data.', href: 'ai/dashboard-and-copilot/#bloomgard-ai-chat-assistant' },
+  settings: { text: 'Pick a screen to configure your profile, catalogue, team, quote form, email, look and feel, AI behaviour and quote template.', href: 'configuration/settings/' },
+  'settings:profile': { text: 'Your name, job title and phone. The AI signs emails with these, so there are no placeholder names in drafts.', href: 'configuration/settings/#your-profile' },
+  'settings:master-data': { text: 'Your product catalogue. Type or import from Excel, and link columns parent to child (code, name, unit, rate) so one choice fills the rest.', href: 'sales/master-data/' },
+  'settings:users': { text: 'Add teammates as Agent, Manager or Admin, change roles and reset passwords. Agents only see their own quotes.', href: 'configuration/settings/#user-access' },
+  'settings:blueprint': { text: 'Design the quote form: sections and fields (text, number, dropdown, paragraph, attachment, formula). Save the blueprint to apply it.', href: 'configuration/settings/#field-configurator' },
+  'settings:email': { text: 'Set your personal address and your forwarding address, then forward client mail from Gmail or Outlook so it reaches the Inbox.', href: 'email/email-setup/' },
+  'settings:personalization': { text: 'Choose light or dark mode, the interface style and a workspace wallpaper.', href: 'configuration/settings/#personalization' },
+  'settings:ai-personality': { text: 'Set tone, English level, how eager the replies sound, and your own instructions. Add routing rules to forward certain mail to a teammate.', href: 'ai/ai-assistant/#ai-settings-managersadmins' },
+  'settings:quote-template': { text: 'Set your company name and logo and edit the HTML used for quote PDFs. Use {{field_name}} to insert quote values and {{company_logo}} for your logo.', href: 'configuration/settings/#quote-template' },
+};
+
+function HelpHint({ view, sub, dark }: { view: string; sub: string; dark: boolean }) {
+  const key = view === 'settings' && sub && sub !== 'menu' ? `settings:${sub}` : view;
+  const h = HELP[key];
+  if (!h) return null;
+  return (
+    <div data-testid="help-hint" className={`max-w-6xl mx-auto mb-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-xs ${dark ? 'bg-gray-900 border-gray-800 text-gray-300' : 'bg-white/70 border-gray-200 text-gray-600'}`}>
+      <BookOpen className="w-4 h-4 mt-0.5 shrink-0 text-indigo-500" />
+      <p className="flex-1 leading-relaxed">{h.text}</p>
+      <a href={DOCS_URL + h.href} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-1 font-bold text-indigo-600 hover:underline whitespace-nowrap">
+        Read the guide <ExternalLink className="w-3 h-3" />
+      </a>
+    </div>
+  );
+}
 
 export default function ClientDashboard() {
   const fileInputRef = useRef(null);
@@ -1650,6 +1687,8 @@ Command: ${dashCommand}`;
           </div>
         )}
 
+        <HelpHint view={currentView} sub={settingsSubView} dark={isDark} />
+
         {currentView === "alerts" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
             <header className="mb-10">
@@ -1993,6 +2032,21 @@ Command: ${dashCommand}`;
                     </button>
                   );
                 })}
+                <a
+                  href={DOCS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-10 h-10 shrink-0 bg-sky-50 rounded-xl flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 text-sky-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-bold text-gray-900">Docs</h3>
+                    <p className="text-xs text-gray-500 truncate">Guides for every feature, setup steps and troubleshooting at docs.bloomgard.co.</p>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
+                </a>
               </div>
             )}
 

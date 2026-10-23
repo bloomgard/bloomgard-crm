@@ -69,7 +69,7 @@ test.describe.serial('AI features', () => {
     const reply: string = (await res.json()).data.auto_reply;
     const prices = [...reply.matchAll(/(?:₹|rs\.?|inr|\$)\s?([\d,]+(?:\.\d+)?)/gi)].map((m) => Number(m[1].replace(/,/g, '')));
     expect(prices.filter((p) => p !== 41.25)).toEqual([]);                  // no made-up price (only a real catalogue rate may appear)
-    expect(reply).toMatch(/confirm|check|follow|get back|let you know|not (currently )?(list|available|stock)|do not (sell|offer|manufacture)/i);
+    expect(reply).toMatch(/confirm|check|follow|get back|let you know|not (currently )?(list|available|stock)|not in our|do not (sell|offer|manufacture|have|carry)/i);
   });
 
   test('a drafted reply is grounded, signed as the agent and not sent', async ({ request }) => {

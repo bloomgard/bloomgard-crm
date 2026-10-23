@@ -6,7 +6,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const AI_MODEL = 'openai/gpt-3.5-turbo'; 
+const AI_MODEL = 'openai/gpt-4o-mini'; 
 
 export async function POST(request: Request) {
   try {
