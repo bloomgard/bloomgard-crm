@@ -133,7 +133,7 @@ export async function processAiAutoReply(
     }
 
     const [masterData, toneExamples, identity] = await Promise.all([
-      buildMasterDataContext(tenant.id),
+      buildMasterDataContext(tenant.id, `${lastEmail.subject || ''}\n${lastEmail.body_text || ''}\n${quote ? JSON.stringify((quote.quotation_items || []).map((i: any) => [i.item_code, i.item_name])) : ''}`),
       buildToneExamples(tenant.id, quote?.id),
       resolveAgentIdentity(agentId, tenant, quote?.created_by_email),
     ]);

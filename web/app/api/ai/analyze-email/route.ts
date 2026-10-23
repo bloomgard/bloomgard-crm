@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     if (email.tenant_id) {
       try {
         const { buildMasterDataContext } = await import('@/lib/masterDataContext');
-        masterData = await buildMasterDataContext(email.tenant_id);
+        masterData = await buildMasterDataContext(email.tenant_id, `${email.subject || ''}\n${email.body_text || email.body || email.text || ''}`);
       } catch (e) { console.error('master data context failed', e); }
     }
 

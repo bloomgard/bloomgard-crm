@@ -67,7 +67,8 @@ test.describe.serial('AI features', () => {
     });
     expect(res.status()).toBe(200);
     const reply: string = (await res.json()).data.auto_reply;
-    expect(reply).not.toMatch(/(₹|rs\.?|inr|\$)\s?\d/i);                    // no made-up price
+    const prices = [...reply.matchAll(/(?:₹|rs\.?|inr|\$)\s?([\d,]+(?:\.\d+)?)/gi)].map((m) => Number(m[1].replace(/,/g, '')));
+    expect(prices.filter((p) => p !== 41.25)).toEqual([]);                  // no made-up price (only a real catalogue rate may appear)
     expect(reply).toMatch(/confirm|check|follow|get back|let you know|not (currently )?(list|available|stock)|do not (sell|offer|manufacture)/i);
   });
 

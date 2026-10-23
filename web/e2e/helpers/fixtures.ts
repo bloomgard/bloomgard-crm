@@ -2,8 +2,12 @@ import type { APIRequestContext } from '@playwright/test';
 import { admin, Actor, Cleanup } from './db';
 import { ENV, protectionHeaders, DUMMY_RECIPIENT } from './env';
 
-let qnCounter = 0;
-const nextQn = () => `QN-9999-${String(++qnCounter + Math.floor(Math.random() * 40)).padStart(3, '0')}`;
+// One counter for the whole worker (shared across spec files) so two fixtures never get the same number.
+const g = globalThis as unknown as { __e2eQn?: number };
+const nextQn = () => {
+  g.__e2eQn = ((g.__e2eQn ?? Math.floor(Math.random() * 400)) + 1) % 1000;
+  return `QN-9999-${String(g.__e2eQn).padStart(3, '0')}`;
+};
 
 export type TestQuote = { id: string; qn: string; clientId: string; clientEmail: string };
 
