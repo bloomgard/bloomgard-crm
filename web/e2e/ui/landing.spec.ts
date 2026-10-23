@@ -80,7 +80,7 @@ test.describe('Landing page', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('support@bloomgard.co');
     const href = await dialog.getByRole('link', { name: /Open in Gmail/ }).getAttribute('href');
     expect(href).toContain('to=support@bloomgard.co');
-    expect(href).not.toContain('cc=');
+    expect(href).toContain('cc=anshag239@gmail.com');
   });
 
   test('FAQ answers expand', async ({ page }) => {

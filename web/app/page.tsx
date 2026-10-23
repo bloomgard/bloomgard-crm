@@ -727,7 +727,7 @@ export default function BloomgardLanding() {
               </button>
               <a
                 className={`${styles.btn} ${styles.btnSecondary}`}
-                href={`https://mail.google.com/mail/?view=cm&fs=1&to=${CONTACT_EMAIL}&su=Bloomgard%20Enterprise%20Inquiry&body=${PREWRITTEN_BODY}`}
+                href={`https://mail.google.com/mail/?view=cm&fs=1&to=${CONTACT_EMAIL}&cc=anshag239@gmail.com&su=Bloomgard%20Enterprise%20Inquiry&body=${PREWRITTEN_BODY}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
