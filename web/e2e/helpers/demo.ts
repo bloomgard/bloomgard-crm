@@ -1,9 +1,9 @@
 import { Page, expect } from '@playwright/test';
 
-export const DEPLOY = 'https://bloomgard-crm-git-deployment-bloomgard.vercel.app';
-export const BYPASS = process.env.VERCEL_PROTECTION_BYPASS || 'kmK2uhwYl9NU8ytZDg2q1ppFHh2WBNsB';
-export const TENANT = 'fa4f1252-36e2-4b4c-8926-c0434953518c';
-export const INBOUND = 'bloomgard890@inbound.bloomgard.co';
+import { ENV, protectionHeaders } from './env';
+import { resolveActor } from './db';
+
+export const DEPLOY = ENV.baseUrl;
 
 /** Lower-third caption overlay so the recording explains itself. */
 export async function caption(page: Page, text: string, holdMs = 3800) {
@@ -47,9 +47,11 @@ export async function clearCaption(page: Page) {
 export async function receiveEmail(opts: {
   from: string; subject: string; text: string; messageId: string;
 }) {
-  const res = await fetch(`${DEPLOY}/api/inbound-email?x-vercel-protection-bypass=${BYPASS}`, {
+  const actor = await resolveActor();
+  const INBOUND = `${actor.tenant.inbound_routing_id}@inbound.bloomgard.co`;
+  const res = await fetch(`${DEPLOY}/api/inbound-email`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...protectionHeaders() },
     body: JSON.stringify({
       type: 'email.received',
       data: {

@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { boot, nav, caption, clearCaption, receiveEmail } from '../demo-helpers';
+import { boot, nav, caption, clearCaption, receiveEmail } from '../helpers/demo';
 
 // ── DEMO 2 ─────────────────────────────────────────────────────────────
 // "Follow-ups — AI triage, urgency sorting, and a drafted reply on every inbound"

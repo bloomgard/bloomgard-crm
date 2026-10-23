@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { boot, nav, caption, clearCaption, receiveEmail } from '../demo-helpers';
+import { boot, nav, caption, clearCaption, receiveEmail } from '../helpers/demo';
 
 // ── DEMO 3 ─────────────────────────────────────────────────────────────
 // "Lead generation — a cold inquiry email becomes a ready quotation in one click"

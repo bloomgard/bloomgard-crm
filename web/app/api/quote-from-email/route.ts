@@ -11,6 +11,21 @@ const pick = (obj: any, keys: string[]) => {
   return '';
 };
 
+
+const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'ac', 'gov', 'edu', 'nic']);
+/** "buyer@mail.acme-steel.co.in" -> "Acme Steel". Returns '' when there is nothing sensible to show. */
+function companyFromEmail(address: string): string {
+  const m = String(address || '').match(/@([a-z0-9.-]+)/i);
+  if (!m) return '';
+  const labels = m[1].toLowerCase().split('.').filter(Boolean);
+  if (labels.length < 2) return '';
+  labels.pop(); // top-level domain
+  if (labels.length > 1 && SECOND_LEVEL.has(labels[labels.length - 1]) ) labels.pop(); // co.in, com.au ...
+  const name = labels[labels.length - 1] || '';
+  if (['gmail', 'yahoo', 'outlook', 'hotmail', 'icloud', 'proton', 'rediffmail'].includes(name)) return '';
+  return name.split(/[-_]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
 /**
  * Deterministically fill a product row from the Master Data parent -> child
  * chain. Given any one known value in the chain (e.g. item_code), fills the
@@ -53,34 +68,44 @@ async function enrichRowsFromMasterData(tenantId: string, rows: any[]) {
 
   return rows.map((row) => {
     const out = { ...row };
-    // Find an anchor: the deepest chain level for which the row has a value that
-    // matches a known master-data value.
-    let anchorIdx = -1;
-    let anchorVal: any = null;
-    for (let i = chain.length - 1; i >= 0; i--) {
-      const given = norm(out[chain[i].key_name]);
-      if (!given) continue;
-      const match = (valsByEntry.get(chain[i].id) || []).find((v) => norm(v.value_text) === given);
-      if (match) { anchorIdx = i; anchorVal = match; break; }
+    // Walk the chain from the root, narrowing the candidate values at each level by what the
+    // row already says AND by the previous level's choice, so a repeated unit like "PCS" resolves
+    // to the one that belongs to this product. Never guess: stop when the text is unknown.
+    let prev: string[] | null = null;
+    const chosen: any[] = [];
+    for (let i = 0; i < chain.length; i++) {
+      const key = chain[i].key_name;
+      const levelVals = valsByEntry.get(chain[i].id) || [];
+      const given = norm(out[key]);
+      let cands: any[] = prev ? levelVals.filter((v: any) => prev!.includes(v.parent_value_id)) : levelVals;
+      if (given) {
+        const matches = cands.filter((v: any) => norm(v.value_text) === given);
+        if (matches.length === 0) {
+          if (prev) break;            // not under the chosen parent: do not guess further down
+          chosen.push(null);          // unknown at the top: later levels may still anchor the row
+          continue;
+        }
+        cands = matches;
+      } else if (prev) {
+        if (cands.length !== 1) break; // several options: leave it for a person
+        out[key] = cands[0].value_text;
+      } else {
+        chosen.push(null);
+        continue;
+      }
+      prev = cands.map((v: any) => v.id);
+      chosen.push(cands.length === 1 ? cands[0] : null);
     }
-    if (anchorIdx === -1) return out;
-
-    // Walk down: children get the single value linked to the current value.
-    let cur = anchorVal;
-    for (let i = anchorIdx + 1; i < chain.length; i++) {
-      const children = (valsByEntry.get(chain[i].id) || []).filter((v) => v.parent_value_id === cur.id);
-      if (children.length !== 1) break;
-      if (!out[chain[i].key_name]) out[chain[i].key_name] = children[0].value_text;
-      cur = children[0];
-    }
-    // Walk up: parents.
-    cur = anchorVal;
-    for (let i = anchorIdx - 1; i >= 0; i--) {
-      if (!cur.parent_value_id) break;
-      const parent = values.find((v) => v.id === cur.parent_value_id);
-      if (!parent) break;
-      if (!out[chain[i].key_name]) out[chain[i].key_name] = parent.value_text;
-      cur = parent;
+    // Fill blank ancestors above the first level that resolved to a single value.
+    const firstIdx = chosen.findIndex(Boolean);
+    if (firstIdx > 0) {
+      let cur = chosen[firstIdx];
+      for (let i = firstIdx - 1; i >= 0 && cur?.parent_value_id; i--) {
+        const parent = values.find((v: any) => v.id === cur.parent_value_id);
+        if (!parent) break;
+        if (!out[chain[i].key_name]) out[chain[i].key_name] = parent.value_text;
+        cur = parent;
+      }
     }
     return out;
   });
@@ -115,16 +140,12 @@ export async function POST(request: Request) {
     const clientEmail =
       pick(clientRow, ['email_id', 'email', 'email_address']) || inbound?.sender_email || '';
 
-    // Company name: LLM extraction first, else derive from the sender's email domain,
-    // else the sender's display name, else a last-resort placeholder.
+    // Company name: LLM extraction first, else derived from the sender's email domain
+    // (mail.acme-steel.co.in -> "Acme Steel"), else the sender's display name, else a placeholder.
     const senderName = (inbound?.sender_email || '').match(/^"?([^"<]+?)"?\s*</)?.[1]?.trim();
-    const domain = clientEmail.split('@')[1] || '';
-    const domainName = domain
-      .replace(/\.(com|co|net|org|in|io|biz)(\.[a-z]{2})?$/i, '')
-      .split('.').pop();
     const companyName =
       pick(clientRow, ['client_name', 'company_name', 'customer_name']) ||
-      (domainName ? domainName.charAt(0).toUpperCase() + domainName.slice(1) : '') ||
+      companyFromEmail(clientEmail) ||
       senderName ||
       'Unknown Client';
 

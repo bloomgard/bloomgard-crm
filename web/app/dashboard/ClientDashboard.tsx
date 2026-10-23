@@ -22,6 +22,16 @@ const formatValue = (val, isMoney = false) => {
 };
 
 const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// A real v4 UUID (the database columns are uuid): crypto.randomUUID where available,
+// otherwise a Math.random-based v4 so saving never throws on older WebViews.
+const safeUUID = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      });
 const ALIASES = {
   client_name: ['company_name', 'client', 'customer_name'],
   contact_person: ['contact', 'person'],
@@ -61,6 +71,30 @@ export default function ClientDashboard() {
   const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint' | 'email'>('menu');
   const { masterTree, findAllEntriesByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
   const { masterTree: autoMasterTree, findAllEntriesByKey: findAllAutoEntriesByKey } = useMasterDataFields(tenantId || undefined, 'auto');
+
+  // ── Master Data cascade ────────────────────────────────────────────────
+  // The same text (e.g. "PCS") can exist under many parents, so a selected value is
+  // identified by walking the chain from the root, never by text alone.
+  const resolveSelectedValueIds = (entry, getVal) => {
+    const text = getVal(entry.key_name);
+    if (!text) return [];
+    let candidates = (entry.values || []).filter(v => v.value_text === text);
+    if (entry.parent_id) {
+      const parent = findEntryById(entry.parent_id);
+      const parentIds = parent ? resolveSelectedValueIds(parent, getVal) : [];
+      if (parentIds.length) candidates = candidates.filter(v => !v.parent_value_id || parentIds.includes(v.parent_value_id));
+    }
+    return candidates.map(v => v.id);
+  };
+  // Options a field may offer: every value of a root key, or only the values linked to the
+  // parent's currently selected value (values with no link stay unconditional).
+  const cascadeValues = (entry, getVal) => {
+    const vals = entry.values || [];
+    if (!entry.parent_id) return vals;
+    const parent = findEntryById(entry.parent_id);
+    const parentIds = parent ? resolveSelectedValueIds(parent, getVal) : [];
+    return vals.filter(v => !v.parent_value_id || parentIds.includes(v.parent_value_id));
+  };
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -3269,13 +3303,7 @@ Command: ${dashCommand}`;
                             // Value-level cascade: for a child key, keep only the values
                             // linked (parent_value_id) to the parent's currently-selected value.
                             // Values with no parent_value_id stay unconditional (back-compat).
-                            const manualValues = activeEntries.flatMap(entry => {
-                              const vals = entry.values || [];
-                              if (!entry.parent_id) return vals;
-                              const parentEntry = findEntryById(entry.parent_id);
-                              const parentValObj = parentEntry?.values?.find(v => v.value_text === row[parentEntry.key_name]);
-                              return vals.filter(v => !v.parent_value_id || (parentValObj && v.parent_value_id === parentValObj.id));
-                            });
+                            const manualValues = activeEntries.flatMap(entry => cascadeValues(entry, name => row[name]));
                             const activeValues = [...manualValues];
 
                             // Check for Auto-Captured keys from DB
@@ -3349,7 +3377,7 @@ Command: ${dashCommand}`;
                                       readOnly={f.type === "calculated"}
                                       onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: rIdx })}
                                       onBlur={() => setTimeout(() => setFocusedField(null), 200)}
-                                      onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
+                                      onChange={e => { updateDynamicDataField(section.title, f.name, e.target.value, rIdx); if (hasMasterValues) setFocusedField({ section: section.title, field: f.name, rowIdx: rIdx }); }}
                                       className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${hasMasterValues ? 'border-indigo-200 text-indigo-700' : ''}`}
                                       placeholder={hasMasterValues ? "Select or type..." : "..."}
                                       autoComplete="off"
@@ -3397,13 +3425,7 @@ Command: ${dashCommand}`;
                         });
 
                         // Value-level cascade (see multi-row block above for rationale).
-                        const manualValues = activeEntries.flatMap(entry => {
-                          const vals = entry.values || [];
-                          if (!entry.parent_id) return vals;
-                          const parentEntry = findEntryById(entry.parent_id);
-                          const parentValObj = parentEntry?.values?.find(v => v.value_text === dynamicData[section.title]?.[parentEntry.key_name]);
-                          return vals.filter(v => !v.parent_value_id || (parentValObj && v.parent_value_id === parentValObj.id));
-                        });
+                        const manualValues = activeEntries.flatMap(entry => cascadeValues(entry, name => dynamicData[section.title]?.[name]));
                         const activeValues = [...manualValues];
 
                         // Check for Auto-Captured keys from DB
@@ -3477,7 +3499,7 @@ Command: ${dashCommand}`;
                                   readOnly={f.type === "calculated"}
                                   onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: 'single' })}
                                   onBlur={() => setTimeout(() => setFocusedField(null), 200)}
-                                  onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
+                                  onChange={e => { updateDynamicDataField(section.title, f.name, e.target.value); if (hasMasterValues) setFocusedField({ section: section.title, field: f.name, rowIdx: 'single' }); }}
                                   className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : hasMasterValues ? 'bg-indigo-50 hover:bg-white focus:bg-white text-indigo-700 border-indigo-200 focus:border-indigo-400' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
                                   placeholder={hasMasterValues ? "Select or type..." : "..."}
                                   autoComplete="off"

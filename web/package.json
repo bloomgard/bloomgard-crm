@@ -7,8 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "e2e": "playwright test",
-    "e2e:walkthrough": "playwright test walkthrough",
+    "e2e": "playwright test --project=setup --project=api --project=ui",
+    "e2e:api": "playwright test --project=setup --project=api",
+    "e2e:ui": "playwright test --project=setup --project=ui",
+    "e2e:walkthrough": "playwright test --project=setup --project=demo walkthrough",
     "e2e:report": "playwright show-report"
   },
   "dependencies": {

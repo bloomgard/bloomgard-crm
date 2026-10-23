@@ -151,16 +151,28 @@ export async function POST(request: Request) {
       const subjectLine = payload.data.subject || '';
       const qnMatch = subjectLine.match(/QN-\d{4}-\d{3}(?:-Rev-\d+)?/);
   
-      let quoteQuery = supabase.from('quotations').select('*').eq('tenant_id', tenant.id);
-      
+      // 1) The QN number in the subject is the strongest signal.
+      // 2) Otherwise match the sender to a known client and use that client's latest quote.
+      // 3) Otherwise this is a new enquiry: keep it in the inbox, attach it to nothing.
+      let quote: any = null;
       if (qnMatch) {
-        quoteQuery = quoteQuery.eq('qn_number', qnMatch[0]);
+        const { data } = await supabase.from('quotations').select('*')
+          .eq('tenant_id', tenant.id).eq('qn_number', qnMatch[0]).limit(1);
+        quote = data?.[0] || null;
       } else {
-        quoteQuery = quoteQuery.order('created_at', { ascending: false });
+        const senderAddress = (String(clientEmail).match(/[^\s<>"']+@[^\s<>"']+/)?.[0] || '').toLowerCase();
+        if (senderAddress) {
+          const { data: clients } = await supabase.from('clients').select('id')
+            .eq('tenant_id', tenant.id).ilike('email_id', `%${senderAddress}%`);
+          if (clients && clients.length > 0) {
+            const { data } = await supabase.from('quotations').select('*')
+              .eq('tenant_id', tenant.id).in('client_id', clients.map((c: any) => c.id))
+              .order('created_at', { ascending: false }).limit(1);
+            quote = data?.[0] || null;
+          }
+        }
       }
-  
-      const { data: quote } = await quoteQuery.limit(1).single();
-  
+
       if (quote) {
         let customMetadata = quote.custom_metadata || {};
         let conversations = customMetadata.agent_conversations || [];
@@ -186,7 +198,7 @@ export async function POST(request: Request) {
         if (existingThread) {
           threadRowId = existingThread.id;
           await supabase.from('email_threads')
-            .update({ triage_status: 'incoming', last_updated: new Date().toISOString() })
+            .update({ triage_status: 'incoming', ai_draft_text: null, last_updated: new Date().toISOString() })
             .eq('id', existingThread.id);
         } else {
           const { data: newThread } = await supabase.from('email_threads').insert({

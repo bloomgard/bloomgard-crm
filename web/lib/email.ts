@@ -76,12 +76,21 @@ export const sendEmail = async (mailOptions: {
         fallbackOptions.replyTo = originalEmail;
       }
       
+      // Resend's shared sandbox sender can only deliver to addresses you own, so this
+      // fallback is opt-in: set RESEND_FALLBACK_TO (comma-separated) in the environment.
+      // Without it we surface the error instead of silently redirecting client mail.
+      const fallbackTo = (process.env.RESEND_FALLBACK_TO || '')
+        .split(',').map((a) => a.trim()).filter(Boolean);
+      if (fallbackTo.length === 0) {
+        throw new Error(
+          `Sender domain is not verified in Resend (${originalEmail || mailOptions.from}). ` +
+          'Verify the domain in Resend, or set RESEND_FALLBACK_TO for sandbox testing. ' +
+          `Original error: ${error.message}`
+        );
+      }
       fallbackOptions.from = 'onboarding@resend.dev';
-      
-      // Resend testing requires sending to the registered owner email. 
-      // Hardcode to the known owner email for testing environments.
-      fallbackOptions.to = ['anshag239@gmail.com'];
-      
+      fallbackOptions.to = fallbackTo;
+
       const response = await resend.emails.send({
         from: fallbackOptions.from,
         to: fallbackOptions.to,

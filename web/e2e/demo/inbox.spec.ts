@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { boot, nav, caption, clearCaption, receiveEmail } from '../demo-helpers';
+import { boot, nav, caption, clearCaption, receiveEmail } from '../helpers/demo';
 
 // ── DEMO 1 ─────────────────────────────────────────────────────────────
 // "Inbox — client emails captured automatically and read by the AI"

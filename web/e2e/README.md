@@ -50,3 +50,15 @@ throwaway workspace.
 - `playwright.config.ts` — config (video on, single worker, local dev server)
 - `e2e/auth.setup.ts` — logs in once, saves the session to `e2e/.auth/user.json`
 - `e2e/walkthrough.spec.ts` — one test per feature scene
+
+
+## Test suites
+
+| command | what it covers |
+|---|---|
+| `npm run e2e:api` | Email routing/receiving/sending, Master Data API, quote-from-email, AI endpoints, real Resend chain. No browser. |
+| `npm run e2e:ui` | Landing, auth, workspace, settings, Master Data grid + Excel import, quote form cascade, inbox, follow-ups, inbox AI actions. |
+| `npm run e2e` | Both of the above. Demo videos (`--project=demo`) are separate. |
+
+Secrets (`RESEND_API_KEY`, `OPENROUTER_API_KEY`, Supabase keys, `E2E_*`) are read from the gitignored `web/.env.local`; never put them in code.
+AI tests need a valid `OPENROUTER_API_KEY`; the preflight spec fails fast if it is not. Test emails go to `delivered@resend.dev` and all fixtures are removed afterwards.

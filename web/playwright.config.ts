@@ -1,19 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
-import { config as loadEnv } from 'dotenv';
+import { ENV, protectionHeaders } from './e2e/helpers/env';
 
-// Pull Supabase keys + E2E_* creds from .env.local so tests and the dev server agree.
-loadEnv({ path: '.env.local' });
-
-// Use a dedicated port so we never collide with another project on :3000.
-const PORT = process.env.E2E_PORT || '3010';
-const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}`;
-const BYPASS = process.env.VERCEL_PROTECTION_BYPASS; // set when running against a Vercel preview
+// All secrets and targets come from web/.env.local (see .env.example).
+const BASE_URL = ENV.baseUrl;
+const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE_URL);
+const PORT = new URL(BASE_URL).port || '3011';
+const AUTH_FILE = 'e2e/.auth/user.json';
 
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   workers: 1,
-  timeout: 90_000,
+  timeout: 120_000,
   expect: { timeout: 15_000 },
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
@@ -21,34 +19,32 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     viewport: { width: 1440, height: 900 },
-    video: 'on',                 // every test produces a .webm — this is the walkthrough deliverable
+    video: process.env.E2E_VIDEO === 'off' ? 'off' : 'retain-on-failure',
     screenshot: 'only-on-failure',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     actionTimeout: 15_000,
-    ...(BYPASS
-      ? { extraHTTPHeaders: { 'x-vercel-protection-bypass': BYPASS, 'x-vercel-set-bypass-cookie': 'true' } }
-      : {}),
-    launchOptions: {
-      slowMo: Number(process.env.E2E_SLOWMO || 0), // e.g. 250 for calmer recordings
-    },
+    extraHTTPHeaders: protectionHeaders(),
+    launchOptions: { slowMo: Number(process.env.E2E_SLOWMO || 0) },
   },
 
   projects: [
-    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    { name: 'setup', testDir: './e2e/setup', testMatch: /auth\.setup\.ts/ },
+    // Backend: email in/out, AI drafts, master data, quote creation. No browser.
+    { name: 'api', testDir: './e2e/api' },
+    // Browser flows, signed in as the E2E account.
     {
-      name: 'chromium',
-      dependencies: ['setup'],
-      use: { ...devices['Desktop Chrome'], storageState: 'e2e/.auth/user.json' },
+      name: 'ui', testDir: './e2e/ui', dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: AUTH_FILE },
+    },
+    // Narrated client demos and the recorded walkthrough (always record video).
+    {
+      name: 'demo', testDir: './e2e/demo', dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: AUTH_FILE, video: 'on' },
     },
   ],
 
-  // Only spin up a local dev server when targeting localhost.
-  webServer: process.env.E2E_BASE_URL
-    ? undefined
-    : {
-        command: `npm run dev -- -p ${PORT}`,
-        url: `http://localhost:${PORT}`,
-        timeout: 120_000,
-        reuseExistingServer: !process.env.CI,
-      },
+  // Serve the production build locally unless pointed at a deployed URL.
+  webServer: isLocal
+    ? { command: `npx next start -p ${PORT}`, url: BASE_URL, timeout: 120_000, reuseExistingServer: true }
+    : undefined,
 });
