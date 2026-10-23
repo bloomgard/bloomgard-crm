@@ -83,9 +83,9 @@ function DocsLink({ view, sub }: { view: string; sub?: string }) {
       target="_blank"
       rel="noopener noreferrer"
       title={h.text}
-      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-indigo-200 bg-indigo-50 text-[10px] font-bold uppercase tracking-widest text-indigo-600 hover:bg-indigo-100 transition-colors no-underline"
+      className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 underline underline-offset-2 hover:text-indigo-600 transition-colors"
     >
-      <BookOpen className="w-3 h-3" /> Docs <ExternalLink className="w-2.5 h-2.5" />
+      Docs <ExternalLink className="w-3 h-3" />
     </a>
   );
 }
