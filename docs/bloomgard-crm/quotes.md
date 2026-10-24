@@ -58,6 +58,6 @@ status **Transition** control and the audit log. **Save Edits** stores changes.
 
 **Deploy Email** opens the send dialog: choose **Send As** (your personal address or the
 workspace address), recipient, optional CC/BCC, subject, message body, and an attachment
-(the quote PDF or another CRM document). The email goes out through Resend; replies come
+(the quote PDF or another CMA document). The email goes out through Resend; replies come
 back to the matching inbound address and appear in the [Inbox](./inbox.md), logged on the
 quote's conversation. Sent mail is recorded and counted for usage.

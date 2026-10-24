@@ -8,6 +8,7 @@ import { supabase } from "@/utils/supabaseClient";
 import { useMasterDataFields, MasterDataEntry } from "@/hooks/useMasterDataFields";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line, AreaChart, Area, CartesianGrid } from "recharts";
 import Handlebars from "handlebars";
+import BrandLockup from '@/components/BrandLockup';
 
 // BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
@@ -1639,7 +1640,7 @@ Command: ${dashCommand}`;
         ${isMobileMenuOpen ? 'inset-y-0 left-0 translate-x-0 rounded-none border-r' : 'top-4 bottom-4 left-4 -translate-x-[120%] md:translate-x-0 rounded-3xl'} 
         ${isGlass ? 'glass-sidebar bg-white/80 dark:bg-gray-50 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-[#121628] border border-[#262c47]' : 'bg-white border border-gray-200')}`}>
         <div className="p-8 pb-4">
-          <h1 className="text-4xl font-bold tracking-tighter text-gray-900">Bloomgard.</h1>
+          <h1 className="text-gray-900"><BrandLockup height={20} /></h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto scrollbar-hide">
@@ -3913,7 +3914,7 @@ Command: ${dashCommand}`;
                           e.target.value = ""; // reset
                         }}
                       >
-                        <option value="">Select CRM Document...</option>
+                        <option value="">Select CMA Document...</option>
                         {docsRecords.map(r => (
                           <option key={r.id} value={r.id}>{r.qn_number} - {getManifestTitle(r)}</option>
                         ))}

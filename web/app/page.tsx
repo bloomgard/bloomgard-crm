@@ -7,6 +7,7 @@ import {
   Inbox, Magnet, Mail, Moon, Sun, X,
 } from "lucide-react";
 import styles from "./landing.module.css";
+import BrandLockup from '@/components/BrandLockup';
 
 const display = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-display" });
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
@@ -342,8 +343,7 @@ export default function BloomgardLanding() {
       <header className={`${styles.nav} ${scrolled ? styles.navScrolled : ""}`}>
         <div className={styles.navInner}>
           <a href="#top" className={styles.brand} aria-label="Bloomgard, home">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={styles.brandImg} src={isDark ? "/brand/wordmark-kora.png" : "/brand/wordmark-kajal.png"} alt="Bloomgard" width={178} height={34} />
+            <BrandLockup height={30} tone={isDark ? "onDark" : "onLight"} style={{ color: "var(--ink)" }} />
           </a>
           <nav className={styles.navLinks} aria-label="Sections">
             <a href="#platform">Platform</a>
@@ -377,7 +377,7 @@ export default function BloomgardLanding() {
             <div className={styles.heroGrid}>
               <div className={styles.heroCopy}>
                 <div className={`${styles.heroEyebrow} ${styles.heroIn}`}>
-                  <span className={styles.eyebrow}>(01) Bloomgard CRM</span>
+                  <span className={styles.eyebrow}>(01) Bloomgard CMA</span>
                 </div>
                 <h1 className={`${styles.display} ${styles.h1} ${styles.heroIn} ${styles.d1}`}>
                   From first email to signed quote, <em>without re-typing.</em>
@@ -651,8 +651,7 @@ export default function BloomgardLanding() {
         <div className={styles.wrap}>
           <div className={styles.footGrid}>
             <div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className={styles.footBrandImg} src="/brand/wordmark-kora.png" alt="Bloomgard" width={199} height={38} />
+              <BrandLockup height={34} tone="onDark" style={{ color: "var(--ink-inverse)" }} />
               <p className={styles.footTag}>Quotes, email and follow-ups for teams that quote for a living. Made in Mumbai.</p>
             </div>
             <div>

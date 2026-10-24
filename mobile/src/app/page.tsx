@@ -65,7 +65,7 @@ export default function BloomgardLanding() {
             Engineered <br /> for Impact.
           </h2>
           <p className="max-w-3xl mx-auto text-white/80 font-medium text-xl md:text-3xl mb-16 leading-relaxed">
-            The next-generation CRM infrastructure. Minimalist design. <br className="hidden md:block" /> 
+            The next-generation CMA infrastructure. Minimalist design. <br className="hidden md:block" /> 
             Powered by <span className="text-white font-bold">Bloomgard AI.</span>
           </p>
           <div className="flex flex-col md:flex-row gap-6 justify-center items-center">

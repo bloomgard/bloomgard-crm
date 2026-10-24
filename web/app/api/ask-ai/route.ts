@@ -34,7 +34,7 @@ Format:
 }`;
       userPrompt = query;
     } else {
-      systemPrompt = `You are Bloomgard AI, the central executive AI Assistant & Business Intelligence Engine for Bloomgard CRM.
+      systemPrompt = `You are Bloomgard AI, the central executive AI Assistant & Business Intelligence Engine for Bloomgard CMA.
 You have real-time visibility into the company's operational database across 4 key areas:
 1. QUOTES & CLIENT FOLLOW-UPS: Full status of all quotations, client follow-up trajectories (Voice Call Dispatched, Email Dispatched, Agent Dispatched, Pending, etc.), last contact date, assigned agent, financial value, and transition status logs.
 2. INBOX & EMAILS: Inbound emails received from clients, AI sentiment analysis, extracted intents, urgency scores, and email body snippets.

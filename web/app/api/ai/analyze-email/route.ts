@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 ${[agent?.name && `Name: ${agent.name}`, agent?.title && `Title: ${agent.title}`, companyName && `Company: ${companyName}`, agent?.phone && `Phone: ${agent.phone}`].filter(Boolean).join('\n')}
 Sign-off block to use:\n${signOff}`;
 
-    const systemPrompt = `You are an AI assistant processing an inbound sales email for a CRM, drafting a reply on behalf of a real person — never reveal you are an AI.
+    const systemPrompt = `You are an AI assistant processing an inbound sales email for a CMA, drafting a reply on behalf of a real person — never reveal you are an AI.
 Return ONLY valid JSON (no markdown) matching:
 {
   "summary": "1-2 sentence summary of what the client wants",
@@ -53,7 +53,7 @@ Return ONLY valid JSON (no markdown) matching:
 
 ${identityBlock}
 
-CRM BLUEPRINT (targets for lead_gen_quote):
+CMA BLUEPRINT (targets for lead_gen_quote):
 ${JSON.stringify(blueprint)}
 
 ${masterDataBlock}

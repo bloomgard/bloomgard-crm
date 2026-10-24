@@ -1,13 +1,13 @@
 ---
-title: Bloomgard CRM overview
-description: What Bloomgard CRM is, who it is for, and everything it can do.
+title: Bloomgard CMA overview
+description: What Bloomgard CMA is, who it is for, and everything it can do.
 order: 1
 section: Introduction
 ---
 
-# Bloomgard CRM
+# Bloomgard CMA
 
-Bloomgard CRM is a quotation-led sales workspace for B2B teams. It turns incoming
+Bloomgard CMA is a quotation-led sales workspace for B2B teams. It turns incoming
 client email into quotations, keeps every conversation attached to the right quote,
 drafts replies with AI (always for a human to approve), and chases quiet leads so
 nothing goes cold.

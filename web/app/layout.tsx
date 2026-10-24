@@ -7,7 +7,7 @@ const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata = {
-  title: "Bloomgard CRM",
+  title: "Bloomgard CMA",
   description: "Quotations, inbox and follow-ups in one workspace. The AI reads every client email and drafts the reply from your own catalogue.",
 };
 

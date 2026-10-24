@@ -9,7 +9,7 @@ test.describe('Landing page', () => {
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto('/');
-    await expect(page).toHaveTitle(/Bloomgard CRM/);
+    await expect(page).toHaveTitle(/Bloomgard CMA/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('without re-typing');
     for (const id of ['platform', 'email', 'features', 'pricing', 'faq']) {
       await expect(page.locator(`#${id}`)).toBeAttached();

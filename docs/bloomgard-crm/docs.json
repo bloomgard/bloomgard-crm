@@ -1,5 +1,5 @@
 {
-  "title": "Bloomgard CRM",
+  "title": "Bloomgard CMA",
   "base": "bloomgard-crm",
   "sections": [
     { "title": "Introduction",   "pages": ["index", "getting-started"] },

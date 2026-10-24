@@ -20,20 +20,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing email content" }, { status: 400, headers: corsHeaders });
     }
 
-    const systemPrompt = `You are an AI assistant helping to process inbound emails for a CRM platform. 
+    const systemPrompt = `You are an AI assistant helping to process inbound emails for a CMA platform. 
     Analyze the following email and generate a JSON response strictly matching this schema:
     {
       "summary": "A 1-2 sentence summary of what the client wants",
       "auto_reply": "A professional, polite response drafted on behalf of the company addressing the email",
       "lead_gen_quote": {
-        // Extract relevant information mapping to the provided CRM Blueprint fields.
+        // Extract relevant information mapping to the provided CMA Blueprint fields.
         // Each key should be a Section Title from the blueprint.
         // The value should be an array of objects representing rows, where keys are field names.
         // E.g., "Client Information": [{ "email_id": "sender@email.com", "company_name": "Acme Corp" }]
       }
     }
     
-    Here is the CRM Blueprint structure to guide your extraction for lead_gen_quote:
+    Here is the CMA Blueprint structure to guide your extraction for lead_gen_quote:
     ${JSON.stringify(blueprint)}
     
     Return ONLY valid JSON. No markdown wrappers.`;

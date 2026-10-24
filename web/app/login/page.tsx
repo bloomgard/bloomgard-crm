@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Search } from 'lucide-react';
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation"; 
+import BrandLockup from '@/components/BrandLockup';
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -89,7 +90,7 @@ export default function Login() {
       <div className="w-full max-w-md bg-white rounded-[2rem] p-10 border border-white/40 relative overflow-hidden">
         
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold tracking-tighter text-gray-900 mb-2">Bloomgard.</h1>
+          <h1 className="text-gray-900 mb-3 flex justify-center"><BrandLockup height={30} tone="onLight" /></h1>
           <p className="text-sm text-gray-500">
             {isSignUp ? "Create a new workspace for your company." : "Log in to your workspace."}
           </p>

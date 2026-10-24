@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
+import BrandLockup from '@/components/BrandLockup';
 
 export default function BossLogin() {
   const [email, setEmail] = useState("");
@@ -42,7 +43,7 @@ export default function BossLogin() {
         
         {/* LOGO AREA */}
         <div className="text-center mb-12">
-          <h1 className="text-3xl font-black tracking-lighter text-white">Bloomgard.</h1>
+          <h1 className="text-white flex justify-center"><BrandLockup height={28} tone="onDark" /></h1>
           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.4em] mt-2">CLIENT</p>
           
         </div>

@@ -1,4 +1,4 @@
-# Bloomgard CRM docs (for docs.bloomgard.co)
+# Bloomgard CMA docs (for docs.bloomgard.co)
 
 Plain Markdown, one page per file, each with YAML frontmatter:
 

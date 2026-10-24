@@ -3,6 +3,7 @@
 import { Flame, Check, Building2, X } from 'lucide-react';
 import { useState, useEffect } from "react";
 import { supabase } from "@/utils/supabaseClient";
+import BrandLockup from '@/components/BrandLockup';
 
 // <Flame className="w-5 h-5 inline text-orange-500" /> REFINED SCHEMA: Master Status and Attachments are now native components
 const DEFAULT_SCHEMA = [
@@ -266,7 +267,7 @@ export default function BossDashboard() {
   return (
     <div className="flex min-h-screen bg-[#FBFBFB] font-sans text-black">
       <aside className="w-80 border-r bg-white fixed h-full z-50 flex flex-col shadow-sm">
-        <div className="p-8 pb-4"><h1 className="text-4xl font-bold tracking-tighter">Bloomgard.</h1><p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mt-1">Boss Command</p></div>
+        <div className="p-8 pb-4"><h1 className="text-gray-900"><BrandLockup height={22} tone="onLight" /></h1><p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mt-1">Boss Command</p></div>
         <div className="p-6 space-y-4">
           <button onClick={() => setShowCreateModal(true)} className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm shadow-md hover:scale-[1.02] transition-transform">+ New Workspace</button>
           <input placeholder="Search records..." className="w-full bg-gray-50 border border-transparent focus:border-gray-200 px-4 py-3 rounded-xl text-sm outline-none" onChange={(e) => setSearchTerm(e.target.value)} />
