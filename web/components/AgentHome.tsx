@@ -23,7 +23,7 @@ type Msg = {
 };
 type Overview = {
   user: { name: string; email: string; role: string }; company: string;
-  stats: { total: number; totalValue: number; byStatus: Record<string, number>; mine: number; myValue: number; weeks: number[] };
+  stats: { total: number; totalValue: number; byStatus: Record<string, number>; valueByStatus?: Record<string, number>; mine: number; myValue: number; weeks: number[] };
   inbox: { unread: number; waiting: number }; followups: { hot: number; warm: number; cold: number };
   latest: Array<{ qn: string; status: string; client: string; value: number; date: string; items: number }>;
   chips: Array<{ label: string; prompt: string; icon: string }>;
@@ -335,6 +335,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [copied, setCopied] = useState("");
+  const [statusPick, setStatusPick] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -467,6 +468,9 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const share = ov && ov.stats.total ? Math.round((ov.stats.mine / ov.stats.total) * 100) : 0;
   const name = ov?.user.name || userEmail.split("@")[0];
   const topChips = (ov?.chips || []).slice(0, 3);
+  const pickedStatus = statusPick && ov?.stats.byStatus[statusPick] != null ? statusPick : statusEntries[0]?.[0] || "";
+  const pickedCount = pickedStatus ? ov?.stats.byStatus[pickedStatus] || 0 : 0;
+  const pickedShare = ov && ov.stats.total ? Math.round((pickedCount / ov.stats.total) * 100) : 0;
 
   // the drop-up under the command bar: the remaining live chips, then the standing question list
   const suggestions: Suggestion[] = useMemo(() => {
@@ -501,14 +505,23 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
         </div>
         <div className="agent-stat">
           <span className="agent-label">Per status</span>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {statusEntries.length === 0 && <span className="text-xs text-gray-400">No quotes yet</span>}
-            {statusEntries.map(([st, n]) => (
-              <button key={st} onClick={() => send(`Show my ${st} quotes`)} className="agent-chip-sm" title={`Ask about ${st} quotes`}>
-                <i style={{ background: STATUS_DOT[st] || "#8c8478" }} />{st}<b>{n}</b>
-              </button>
-            ))}
+          <div className="flex items-end justify-between gap-2">
+            <button onClick={() => pickedStatus && send(`Show my ${pickedStatus} quotes`)} className="agent-num text-left" title={pickedStatus ? `Ask about ${pickedStatus} quotes` : ""}>
+              {ov ? pickedCount : "–"}
+            </button>
+            {statusEntries.length > 0 && (
+              <label className="agent-select">
+                <i style={{ background: STATUS_DOT[pickedStatus] || "#8c8478" }} aria-hidden />
+                <select value={pickedStatus} onChange={(e) => setStatusPick(e.target.value)} aria-label="Status">
+                  {statusEntries.map(([st, n]) => <option key={st} value={st}>{st} ({n})</option>)}
+                </select>
+                <ChevronRight className="w-3.5 h-3.5 rotate-90" aria-hidden />
+              </label>
+            )}
           </div>
+          <span className="text-xs text-gray-500">
+            {!ov ? " " : statusEntries.length === 0 ? "No quotes yet" : `${pickedShare}% of quotes · ${inr(ov.stats.valueByStatus?.[pickedStatus] || 0)}`}
+          </span>
         </div>
         <div className="agent-stat">
           <span className="agent-label">My contribution</span>

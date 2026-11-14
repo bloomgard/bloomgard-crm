@@ -99,7 +99,12 @@ export const quoteCard = (q: any) => ({
 export async function buildOverview(ctx: AgentCtx) {
   const quotes = (await visibleQuotes(ctx)).filter((q: any) => q.status !== 'Lead');
   const byStatus: Record<string, number> = {};
-  quotes.forEach((q: any) => { byStatus[q.status || 'Unknown'] = (byStatus[q.status || 'Unknown'] || 0) + 1; });
+  const valueByStatus: Record<string, number> = {};
+  quotes.forEach((q: any) => {
+    const st = q.status || 'Unknown';
+    byStatus[st] = (byStatus[st] || 0) + 1;
+    valueByStatus[st] = Math.round((valueByStatus[st] || 0) + quoteValue(q));
+  });
 
   const mine = quotes.filter((q: any) => q.created_by_email === ctx.email);
   const totalValue = quotes.reduce((s: number, q: any) => s + quoteValue(q), 0);
@@ -142,7 +147,7 @@ export async function buildOverview(ctx: AgentCtx) {
     user: { name: ctx.profile.full_name || ctx.email.split('@')[0], email: ctx.email, role: ctx.role },
     company: ctx.tenant.company_name,
     stats: {
-      total: quotes.length, totalValue: Math.round(totalValue), byStatus,
+      total: quotes.length, totalValue: Math.round(totalValue), byStatus, valueByStatus,
       mine: mine.length, myValue: Math.round(myValue), weeks,
     },
     inbox: { unread: unread || 0, waiting },
