@@ -1,10 +1,25 @@
 import { Page, expect } from '@playwright/test';
+import { ENV } from '../helpers/env';
 
 export const VIEWS = ['Home', 'Dashboard', 'Quotes', 'Inbox', 'Follow ups', 'Lead Gen', 'Docs', 'Settings'] as const;
 
 /** Open the dashboard and wait for the workspace to finish initialising. */
 export async function openApp(page: Page) {
   await page.goto('/dashboard');
+  await expect(page.getByText('Initializing Workspace...')).toBeHidden({ timeout: 45_000 });
+  await expect(page.locator('nav').getByText('Follow ups', { exact: true })).toBeVisible();
+}
+
+/**
+ * Sign in with a brand-new session. Use it for anything that calls the server with the user's token
+ * (the AI agent): the saved storage state can be revoked by the Sign Out test, which signs out globally.
+ */
+export async function openAppFresh(page: Page) {
+  await page.goto('/login');
+  await page.locator('input[type="email"]').fill(ENV.email);
+  await page.locator('input[type="password"]').fill(ENV.password);
+  await page.getByRole('button', { name: /sign in/i }).click();
+  await page.waitForURL(/\/dashboard/, { timeout: 40_000 });
   await expect(page.getByText('Initializing Workspace...')).toBeHidden({ timeout: 45_000 });
   await expect(page.locator('nav').getByText('Follow ups', { exact: true })).toBeVisible();
 }

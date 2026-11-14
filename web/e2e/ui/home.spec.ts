@@ -2,10 +2,11 @@ import { test, expect } from '@playwright/test';
 import { admin, resolveActor, Actor, Cleanup } from '../helpers/db';
 import { runTag } from '../helpers/env';
 import { makeQuote, TestQuote } from '../helpers/fixtures';
-import { openApp, go, pageErrors } from './_app';
+import { openAppFresh as openApp, go, pageErrors } from './_app';
 
 /** The AI home: the first thing a user sees. Stats, latest quotes, chips, and the chat that can act. */
 test.describe('Bloomgard AI home', () => {
+  test.use({ storageState: { cookies: [], origins: [] } }); // own session: see openAppFresh
   let actor: Actor; let tag: string; let q: TestQuote;
   const cleanup = new Cleanup();
   const input = (page: any) => page.getByLabel('Message Bloomgard AI');
