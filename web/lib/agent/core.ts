@@ -22,10 +22,13 @@ export async function authenticate(request: Request): Promise<AgentCtx | null> {
   if (!token) return null;
   const { data: auth, error } = await db.auth.getUser(token);
   if (error || !auth?.user) return null;
-  const { data: profile } = await db.from('profiles').select('*').eq('id', auth.user.id).maybeSingle();
+  let { data: profile, error: joinErr } = await db.from('profiles').select('*, tenant:tenants(*)').eq('id', auth.user.id).maybeSingle();
+  if (joinErr) ({ data: profile } = await db.from('profiles').select('*').eq('id', auth.user.id).maybeSingle());
   if (!profile?.tenant_id) return null;
-  const { data: tenant } = await db.from('tenants').select('*').eq('id', profile.tenant_id).maybeSingle();
+  let tenant: any = Array.isArray(profile.tenant) ? profile.tenant[0] : profile.tenant;
+  if (!tenant) ({ data: tenant } = await db.from('tenants').select('*').eq('id', profile.tenant_id).maybeSingle());
   if (!tenant) return null;
+  delete profile.tenant;
   const role = String(profile.role || '').toLowerCase();
   return {
     userId: auth.user.id,
@@ -63,17 +66,68 @@ export function quoteValue(q: any): number {
 export const clientName = (q: any) =>
   q.clients?.company_name || q.custom_metadata?.['Client Information']?.client_name || '';
 
-/** Quotes the caller may see: everything for managers/admins, their own otherwise. */
-export async function visibleQuotes(ctx: AgentCtx, limit = 1000) {
-  let query = db.from('quotations')
-    .select('id, qn_number, status, date, created_at, created_by_email, last_contact_date, follow_up_due_date, custom_metadata, client_id, clients(company_name, email_id, contact_person), quotation_items(item_code, item_name, quantity, uom, item_rate)')
-    .eq('tenant_id', ctx.tenantId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+/*
+ * A quote's form data (custom_metadata) can be huge: attachments are stored inline as base64, so one quote
+ * can weigh megabytes. Never pull the whole column for lists. The tenant's form blueprint tells us which
+ * sections exist and which field holds the amount; select just those parts as JSON paths.
+ */
+type MetaPlan = { money: Array<[string, string]>; sections: string[] };
+const planCache = new Map<string, { at: number; plan: MetaPlan }>();
+const safeKey = (k: string) => String(k).replace(/["\\]/g, '');
+
+export async function metaPlan(tenantId: string): Promise<MetaPlan> {
+  const hit = planCache.get(tenantId);
+  if (hit && Date.now() - hit.at < 60_000) return hit.plan;
+  const { data } = await db.from('tenant_schemas').select('schema_config').eq('tenant_id', tenantId).maybeSingle();
+  const sections = (Array.isArray(data?.schema_config) ? data!.schema_config : []).filter((x: any) => x?.title && Array.isArray(x.fields));
+  const money: Array<[string, string]> = [];
+  const keep: string[] = [];
+  for (const sec of sections) {
+    const fields = sec.fields || [];
+    const heavy = /attach|file|document|image|logo/i.test(sec.title) || fields.some((f: any) => /attach|file|image/i.test(String(f.type || '')));
+    if (!heavy) keep.push(sec.title);
+    for (const f of fields) if (MONEY_KEYS.includes(norm(f.name))) money.push([sec.title, f.name]);
+  }
+  const plan: MetaPlan = {
+    money: money.length ? money : [['Quote Details', 'subtotal']],
+    sections: keep.length ? keep : ['Client Information', 'Quote Details', 'Products'],
+  };
+  planCache.set(tenantId, { at: Date.now(), plan });
+  return plan;
+}
+
+/**
+ * Quotes the caller may see: everything for managers/admins, their own otherwise.
+ * lean: just enough for stats (amount, client name, item totals); otherwise the readable form sections
+ * plus the conversation, but never attachments.
+ */
+export async function visibleQuotes(ctx: AgentCtx, limit = 1000, lean = false) {
+  const plan = await metaPlan(ctx.tenantId);
+  const moneySel = plan.money.map(([sec, f], i) => `m${i}:custom_metadata->"${safeKey(sec)}"->>"${safeKey(f)}"`);
+  const select = lean
+    ? ['id, qn_number, status, date, created_at, created_by_email, last_contact_date, clients(company_name), quotation_items(quantity, item_rate)',
+       'cn:custom_metadata->"Client Information"->>client_name', ...moneySel].join(', ')
+    : ['id, qn_number, status, date, created_at, created_by_email, last_contact_date, follow_up_due_date, client_id, clients(company_name, email_id, contact_person), quotation_items(item_code, item_name, quantity, uom, item_rate)',
+       'ac:custom_metadata->agent_conversations', ...plan.sections.map((t, i) => `s${i}:custom_metadata->"${safeKey(t)}"`)].join(', ');
+  let query = db.from('quotations').select(select).eq('tenant_id', ctx.tenantId).order('created_at', { ascending: false }).limit(limit);
   if (!ctx.isManager) query = query.eq('created_by_email', ctx.email);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data || []) as any[];
+  // rebuild a slim custom_metadata so quoteValue / clientName work the same on every shape
+  return ((data || []) as any[]).map((q) => {
+    const meta: any = {};
+    if (lean) {
+      plan.money.forEach(([sec, f], i) => { if (q[`m${i}`] != null) (meta[sec] ||= {})[f] = q[`m${i}`]; delete q[`m${i}`]; });
+      if (q.cn) meta['Client Information'] = { client_name: q.cn };
+      delete q.cn;
+    } else {
+      plan.sections.forEach((t, i) => { if (q[`s${i}`] != null) meta[t] = q[`s${i}`]; delete q[`s${i}`]; });
+      if (q.ac) meta.agent_conversations = q.ac;
+      delete q.ac;
+    }
+    q.custom_metadata = meta;
+    return q;
+  });
 }
 
 export const daysSince = (iso?: string | null) => (iso ? (Date.now() - new Date(iso).getTime()) / 86400000 : 999);
@@ -97,7 +151,7 @@ export const quoteCard = (q: any) => ({
 });
 
 export async function buildOverview(ctx: AgentCtx) {
-  const quotes = (await visibleQuotes(ctx)).filter((q: any) => q.status !== 'Lead');
+  const quotes = (await visibleQuotes(ctx, 1000, true)).filter((q: any) => q.status !== 'Lead');
   const byStatus: Record<string, number> = {};
   const valueByStatus: Record<string, number> = {};
   quotes.forEach((q: any) => {

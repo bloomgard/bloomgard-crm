@@ -201,6 +201,52 @@ function ChartBlock({ b }: { b: any }) {
   );
 }
 
+/**
+ * Status picker for the stats strip. Statuses can be long free text and there can be dozens, so the button
+ * stays compact (truncated) and the list is a fixed-size, scrollable, searchable popover sorted by count.
+ */
+function StatusPicker({ entries, value, onChange }: { entries: Array<[string, number]>; value: string; onChange: (s: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const shown = entries.filter(([st]) => st.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <div ref={ref} className="relative min-w-0">
+      <button type="button" onClick={() => { setOpen((o) => !o); setQ(""); }} className="agent-select" aria-haspopup="listbox" aria-expanded={open} aria-label="Status" title={value}>
+        <i style={{ background: STATUS_DOT[value] || "#8c8478" }} aria-hidden />
+        <span className="truncate max-w-[9.5rem]">{value}</span>
+        <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "-rotate-90" : "rotate-90"}`} aria-hidden />
+      </button>
+      {open && (
+        <div className="agent-picker" role="listbox" aria-label="Statuses">
+          {entries.length > 8 && (
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${entries.length} statuses…`} className="agent-picker__search" />
+          )}
+          <div className="agent-picker__list">
+            {shown.map(([st, n]) => (
+              <button key={st} type="button" role="option" aria-selected={st === value} title={st}
+                onClick={() => { onChange(st); setOpen(false); }}
+                className={`agent-picker__item ${st === value ? "agent-picker__item--on" : ""}`}>
+                <i style={{ background: STATUS_DOT[st] || "#8c8478" }} aria-hidden />
+                <span className="truncate flex-1 text-left">{st}</span>
+                <b>{n}</b>
+              </button>
+            ))}
+            {shown.length === 0 && <p className="px-3 py-2 text-xs text-gray-500">No status matches “{q}”.</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatusPill({ s }: { s: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-gray-200 bg-white/60">
@@ -342,15 +388,22 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const storeKey = `cma_agent_chat_${userEmail}`;
   const hydrated = useRef(false);
 
+  // Show the last known numbers instantly, then refresh them in the background.
+  const ovKey = `cma_overview_${userEmail}`;
   const loadOverview = useCallback(async () => {
     try {
       const res = await agentFetch("/api/agent/overview");
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
-      setOv(await res.json()); setOvError("");
+      const fresh = await res.json();
+      setOv(fresh); setOvError("");
+      try { localStorage.setItem(ovKey, JSON.stringify(fresh)); } catch { /* storage full or blocked */ }
     } catch (e: any) { setOvError(e.message || "Could not load"); }
-  }, []);
+  }, [ovKey]);
 
-  useEffect(() => { loadOverview(); }, [loadOverview]);
+  useEffect(() => {
+    try { const cached = localStorage.getItem(ovKey); if (cached) setOv(JSON.parse(cached)); } catch { /* ignore */ }
+    loadOverview();
+  }, [loadOverview, ovKey]);
 
   // conversation memory (per user, this browser)
   useEffect(() => {
@@ -509,15 +562,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
             <button onClick={() => pickedStatus && send(`Show my ${pickedStatus} quotes`)} className="agent-num text-left" title={pickedStatus ? `Ask about ${pickedStatus} quotes` : ""}>
               {ov ? pickedCount : "–"}
             </button>
-            {statusEntries.length > 0 && (
-              <label className="agent-select">
-                <i style={{ background: STATUS_DOT[pickedStatus] || "#8c8478" }} aria-hidden />
-                <select value={pickedStatus} onChange={(e) => setStatusPick(e.target.value)} aria-label="Status">
-                  {statusEntries.map(([st, n]) => <option key={st} value={st}>{st} ({n})</option>)}
-                </select>
-                <ChevronRight className="w-3.5 h-3.5 rotate-90" aria-hidden />
-              </label>
-            )}
+            {statusEntries.length > 0 && <StatusPicker entries={statusEntries} value={pickedStatus} onChange={setStatusPick} />}
           </div>
           <span className="text-xs text-gray-500">
             {!ov ? " " : statusEntries.length === 0 ? "No quotes yet" : `${pickedShare}% of quotes · ${inr(ov.stats.valueByStatus?.[pickedStatus] || 0)}`}

@@ -1,4 +1,4 @@
-import { db, AgentCtx, buildOverview, visibleQuotes, quoteCard, quoteValue, clientName, temperature, daysSince } from './core';
+import { db, AgentCtx, buildOverview, visibleQuotes, quoteCard, quoteValue, clientName, temperature, daysSince, metaPlan } from './core';
 import { sendEmail } from '@/lib/email';
 import { logEmailSent } from '@/utils/usageLogger';
 
@@ -171,6 +171,13 @@ async function runQuery(ctx: AgentCtx, a: any) {
   if (!spec) throw new Error(`Table "${a.table}" is not available.`);
   const limit = Math.min(Math.max(Number(a.limit) || 20, 1), 50);
   let cols = SAFE_COLUMNS[a.table] || (a.columns && String(a.columns).trim()) || '*';
+  if (a.table === 'quotations' && (cols === '*' || /custom_metadata/.test(cols))) {
+    // the form data can hold megabytes of inline attachments: read only the amount and client name
+    const plan = await metaPlan(ctx.tenantId);
+    cols = ['id, qn_number, status, date, created_at, created_by_email, last_contact_date, follow_up_due_date, client_id',
+      'cn:custom_metadata->"Client Information"->>client_name',
+      ...plan.money.map(([sec, f], i) => `m${i}:custom_metadata->"${sec.replace(/"/g, '')}"->>"${f.replace(/"/g, '')}"`)].join(', ');
+  }
   if (spec.drop && cols === '*') cols = '*'; // body_html is removed from the result below
   let q: any = db.from(a.table).select(cols, a.count_only ? { count: 'exact', head: true } : undefined);
 
@@ -213,7 +220,12 @@ async function runQuery(ctx: AgentCtx, a: any) {
     (spec.drop || []).forEach((k) => delete o[k]);
     (spec.clip || []).forEach((k) => { if (o[k]) o[k] = clip(o[k], 700); });
     // amounts live inside the quote's form data, not in a column: expose the computed value
-    if (a.table === 'quotations' && 'custom_metadata' in r) o.value = Math.round(quoteValue(r));
+    if (a.table === 'quotations') {
+      const m = Object.keys(o).filter((k) => /^m\d+$/.test(k)).map((k) => parseFloat(String(o[k]).replace(/[^0-9.]/g, ''))).find((n) => n > 0);
+      if (m != null || Object.keys(o).some((k) => /^m\d+$/.test(k))) o.value = Math.round(m || 0);
+      Object.keys(o).filter((k) => /^m\d+$/.test(k)).forEach((k) => delete o[k]);
+      if (o.cn !== undefined) { o.client_name = o.cn; delete o.cn; }
+    }
     if (o.custom_metadata) o.custom_metadata = clip(JSON.stringify(o.custom_metadata), 800);
     return o;
   });
@@ -221,7 +233,7 @@ async function runQuery(ctx: AgentCtx, a: any) {
 }
 
 async function chartData(ctx: AgentCtx, metric: string, dimension: string) {
-  const quotes = (await visibleQuotes(ctx)).filter((q: any) => q.status !== 'Lead');
+  const quotes = (await visibleQuotes(ctx, 1000, true)).filter((q: any) => q.status !== 'Lead');
   const acc = new Map<string, number>();
   const monthKey = (iso: string) => String(iso || '').slice(0, 7) || 'unknown';
   quotes.forEach((q: any) => {
@@ -331,7 +343,7 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
       };
     }
     case 'get_followups': {
-      const quotes = (await visibleQuotes(ctx)).filter((q: any) => !['Approved', 'Lost', 'Rejected', 'Lead'].includes(q.status));
+      const quotes = (await visibleQuotes(ctx, 1000, true)).filter((q: any) => !['Approved', 'Lost', 'Rejected', 'Lead'].includes(q.status));
       const { data: threads } = await db.from('email_threads').select('quote_id').eq('tenant_id', ctx.tenantId).eq('triage_status', 'incoming');
       const incoming = new Set<string>((threads || []).map((t: any) => t.quote_id));
       const min = Number(a.min_days) || 0;
