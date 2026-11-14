@@ -29,8 +29,8 @@ The chart is computed from your own visible quotes; the AI only chooses the shap
 
 ## Bloomgard AI (chat assistant)
 
-**Bloomgard AI** in the sidebar is a chat assistant that can read your pipeline in real
-time, your inbox, and your Master Data setup. Try:
+**Bloomgard AI** now lives on the [Home](./ai-home.md) screen. It is a chat assistant that can read your pipeline in real
+time, your inbox, and your Master Data setup, and can prepare changes for your confirmation. Try:
 
 - "Most sold products"
 - "Where are clients in follow-ups?"

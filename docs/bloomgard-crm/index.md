@@ -22,6 +22,7 @@ users, catalogue (Master Data), email addresses, AI behaviour and quote template
 | [Quotes](./quotes.md) | Build quotations from a configurable form, fill line items from your catalogue, move them through a status pipeline, export a PDF, and email it to the client. |
 | [Master Data](./master-data.md) | Maintain your product catalogue in an Excel-style grid, import it from Excel, and link columns parent → child (code → name → unit → rate) so one choice fills the rest. |
 | [Inbox](./inbox.md) | Receive client email (via forwarding), read, search, star, reply and compose. Every message is filed against the right quote. |
+| [Home: Bloomgard AI](./ai-home.md) | The first screen is an AI command centre: ask questions, search and explain quotes, send email, edit the catalogue, change settings and build charts, all in plain language. Changes wait for your confirmation. |
 | [AI actions](./ai-assistant.md) | One click summarises an enquiry, extracts a draft quote, and writes a reply grounded in your catalogue. Replies are drafts; nothing is auto-sent. |
 | [Follow-ups](./follow-ups.md) | See quotes that have gone quiet, scored Hot / Warm / Cold, with AI-suggested follow-up emails waiting for approval. Optional autonomous follow-up agents. |
 | [Lead generation](./lead-gen.md) | Turn inbound enquiries from people you do not know yet into leads, then into quotes. |

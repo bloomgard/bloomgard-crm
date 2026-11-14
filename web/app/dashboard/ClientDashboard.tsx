@@ -9,6 +9,7 @@ import { useMasterDataFields, MasterDataEntry } from "@/hooks/useMasterDataField
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line, AreaChart, Area, CartesianGrid } from "recharts";
 import Handlebars from "handlebars";
 import BrandLockup from '@/components/BrandLockup';
+import AgentHome from '@/components/AgentHome';
 
 // BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
@@ -54,6 +55,7 @@ const ALIASES = {
 const JAALI_UI = true;
 const DOCS_URL = 'https://docs.bloomgard.co/crm/';
 const HELP: Record<string, { text: string; href: string }> = {
+  home: { text: 'Talk to Bloomgard AI: ask questions, search quotes, send email, edit the catalogue, change settings or build charts. Changes wait for your confirmation.', href: 'getting-started/' },
   dashboard: { text: 'Your pipeline at a glance: totals, your contribution and recent activity. Type a request such as "revenue by agent" to build an AI chart.', href: 'ai/dashboard-and-copilot/' },
   pipeline: { text: 'All quotations with their status. Search, change status, import or export, and open a quote to preview the PDF or email it to the client.', href: 'sales/quotes/' },
   new_entry: { text: 'Fill the form top to bottom. Choosing a catalogue value (such as an item code) fills the linked fields automatically. The quote number is assigned when you save.', href: 'sales/quotes/#creating-a-quote' },
@@ -109,7 +111,7 @@ export default function ClientDashboard() {
   const [isSavingAgent, setIsSavingAgent] = useState(false);
   const [isRunningCoordinator, setIsRunningCoordinator] = useState(false);
   const [records, setRecords] = useState([]);
-  const [currentView, setCurrentView] = useState("dashboard"); // Default to Alerts for testing
+  const [currentView, setCurrentView] = useState("home"); // the AI command centre is the landing view
   const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint' | 'email'>('menu');
   const { masterTree, findAllEntriesByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
   const { masterTree: autoMasterTree, findAllEntriesByKey: findAllAutoEntriesByKey } = useMasterDataFields(tenantId || undefined, 'auto');
@@ -1645,6 +1647,7 @@ Command: ${dashCommand}`;
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto scrollbar-hide">
           {[
+            ['home', <div key='home' className='flex items-center gap-2'><Sparkles className='w-4 h-4' /> Home</div>],
             ['dashboard', <div key='dashboard' className='flex items-center gap-2'><LayoutDashboard className='w-4 h-4' /> Dashboard</div>],
             ['pipeline', <div key='pipeline' className='flex items-center gap-2'><Rocket className='w-4 h-4' /> Quotes</div>],
             ['inbox', <div key='inbox' className='flex items-center gap-2'><Inbox className='w-4 h-4' /> Inbox</div>],
@@ -1657,7 +1660,7 @@ Command: ${dashCommand}`;
               <span>{label}</span>
             </div>
           ))}
-          <div onClick={() => { setCurrentView('copilot'); setIsMobileMenuOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm mt-2 ${currentView === 'copilot' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/50'}`}><Bot className="w-4 h-4 inline mr-2" /> Bloomgard AI</div>
+          {/* The old standalone 'Bloomgard AI' link is gone: Home is the assistant now. */}
         </nav>
         <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-gray-50/60 border-white/30' : 'bg-gray-50/50 dark:bg-gray-50/50 border-gray-100 dark:border-gray-200'}`}>
           <div className="flex items-center gap-3">
@@ -1689,6 +1692,25 @@ Command: ${dashCommand}`;
               <p className="text-xs text-amber-800 mt-1">This client account does not have a <code>tenant_id</code> assigned in the database. Quotes and AI features cannot load until this is fixed. Please update their profile in Supabase.</p>
             </div>
           </div>
+        )}
+
+        {currentView === "home" && (
+          <AgentHome
+            userEmail={user?.email || ''}
+            docsLink={<DocsLink view="home" />}
+            onNewQuote={() => {
+              setEditingId(null);
+              setQn("");
+              setDynamicData(blueprint.reduce((acc, s) => ({ ...acc, [s.title]: s.allow_multiple ? [{}] : {} }), {}));
+              setCurrentView('new_entry');
+            }}
+            onOpenQuote={(qnNumber: string) => {
+              const rec = records.find((r: any) => (r.qn_number || r.qn) === qnNumber);
+              if (rec) setSelectedRecord(rec); else setCurrentView('pipeline');
+            }}
+            onNavigate={(v: string) => setCurrentView(v)}
+            onChanged={() => { if (tenantId) fetchRecords(tenantId); fetchInboxLogs(); }}
+          />
         )}
 
         {currentView === "alerts" && (

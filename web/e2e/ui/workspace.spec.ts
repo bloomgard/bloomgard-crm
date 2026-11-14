@@ -9,7 +9,7 @@ test.describe('Workspace shell', () => {
       await go(page, v);
       await expect(page.getByText(/couldn.t load/i)).toHaveCount(0);
     }
-    await page.locator('nav').getByText('Bloomgard AI').click();
+    await go(page, 'Home');
     await expect(page.getByText(/couldn.t load/i)).toHaveCount(0);
     expect(errors, errors.join('\n')).toEqual([]);
   });

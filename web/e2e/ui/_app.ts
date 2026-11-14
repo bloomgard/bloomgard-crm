@@ -1,6 +1,6 @@
 import { Page, expect } from '@playwright/test';
 
-export const VIEWS = ['Dashboard', 'Quotes', 'Inbox', 'Follow ups', 'Lead Gen', 'Docs', 'Settings'] as const;
+export const VIEWS = ['Home', 'Dashboard', 'Quotes', 'Inbox', 'Follow ups', 'Lead Gen', 'Docs', 'Settings'] as const;
 
 /** Open the dashboard and wait for the workspace to finish initialising. */
 export async function openApp(page: Page) {

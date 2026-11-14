@@ -1,0 +1,153 @@
+import { createClient } from '@supabase/supabase-js';
+
+/** Service-role client. Every query made through it MUST be scoped to ctx.tenantId. */
+export const db = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
+export type AgentCtx = {
+  userId: string;
+  email: string;
+  tenantId: string;
+  role: string;
+  isManager: boolean;
+  profile: any;
+  tenant: any;
+};
+
+/** Resolve the caller from their Supabase access token. Never trust ids sent in the body. */
+export async function authenticate(request: Request): Promise<AgentCtx | null> {
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  const { data: auth, error } = await db.auth.getUser(token);
+  if (error || !auth?.user) return null;
+  const { data: profile } = await db.from('profiles').select('*').eq('id', auth.user.id).maybeSingle();
+  if (!profile?.tenant_id) return null;
+  const { data: tenant } = await db.from('tenants').select('*').eq('id', profile.tenant_id).maybeSingle();
+  if (!tenant) return null;
+  const role = String(profile.role || '').toLowerCase();
+  return {
+    userId: auth.user.id,
+    email: auth.user.email || profile.email || '',
+    tenantId: profile.tenant_id,
+    role,
+    isManager: role === 'manager' || role === 'admin',
+    profile,
+    tenant,
+  };
+}
+
+const MONEY_KEYS = ['subtotal', 'total', 'grandtotal', 'amount'];
+const norm = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** The headline amount of a quote: a subtotal/total field in its form data, else the sum of its line items. */
+export function quoteValue(q: any): number {
+  const dfs = (o: any): number => {
+    if (!o || typeof o !== 'object') return 0;
+    if (Array.isArray(o)) { for (const x of o) { const v = dfs(x); if (v) return v; } return 0; }
+    for (const [k, v] of Object.entries(o)) {
+      if (MONEY_KEYS.includes(norm(k))) {
+        const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+        if (n > 0) return n;
+      }
+    }
+    for (const v of Object.values(o)) { const r = dfs(v); if (r) return r; }
+    return 0;
+  };
+  const fromMeta = dfs(q.custom_metadata);
+  if (fromMeta) return fromMeta;
+  return (q.quotation_items || []).reduce((s: number, i: any) => s + Number(i.quantity || 0) * Number(i.item_rate || 0), 0);
+}
+
+export const clientName = (q: any) =>
+  q.clients?.company_name || q.custom_metadata?.['Client Information']?.client_name || '';
+
+/** Quotes the caller may see: everything for managers/admins, their own otherwise. */
+export async function visibleQuotes(ctx: AgentCtx, limit = 1000) {
+  let query = db.from('quotations')
+    .select('id, qn_number, status, date, created_at, created_by_email, last_contact_date, follow_up_due_date, custom_metadata, client_id, clients(company_name, email_id, contact_person), quotation_items(item_code, item_name, quantity, uom, item_rate)')
+    .eq('tenant_id', ctx.tenantId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (!ctx.isManager) query = query.eq('created_by_email', ctx.email);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data || []) as any[];
+}
+
+export const daysSince = (iso?: string | null) => (iso ? (Date.now() - new Date(iso).getTime()) / 86400000 : 999);
+
+export function temperature(q: any, incomingQuoteIds: Set<string>): 'hot' | 'warm' | 'cold' {
+  if (incomingQuoteIds.has(q.id)) return 'hot';
+  const d = daysSince(q.last_contact_date || q.date || q.created_at);
+  return d <= 3 ? 'hot' : d <= 10 ? 'warm' : 'cold';
+}
+
+export const quoteCard = (q: any) => ({
+  qn: q.qn_number,
+  status: q.status,
+  client: clientName(q),
+  email: q.clients?.email_id || '',
+  value: Math.round(quoteValue(q)),
+  date: q.date,
+  created_by: q.created_by_email,
+  last_contact: q.last_contact_date,
+  items: (q.quotation_items || []).length,
+});
+
+export async function buildOverview(ctx: AgentCtx) {
+  const quotes = (await visibleQuotes(ctx)).filter((q: any) => q.status !== 'Lead');
+  const byStatus: Record<string, number> = {};
+  quotes.forEach((q: any) => { byStatus[q.status || 'Unknown'] = (byStatus[q.status || 'Unknown'] || 0) + 1; });
+
+  const mine = quotes.filter((q: any) => q.created_by_email === ctx.email);
+  const totalValue = quotes.reduce((s: number, q: any) => s + quoteValue(q), 0);
+  const myValue = mine.reduce((s: number, q: any) => s + quoteValue(q), 0);
+
+  // quotes created per month (last 8), oldest first, for the sparkline
+  const weeks: number[] = Array(8).fill(0);
+  quotes.forEach((q: any) => {
+    const m = Math.floor(daysSince(q.created_at) / 30);
+    if (m >= 0 && m < 8) weeks[7 - m] += 1;
+  });
+
+  const [{ count: unread }, { data: threads }] = await Promise.all([
+    db.from('inbound_emails').select('id', { count: 'exact', head: true })
+      .eq('tenant_id', ctx.tenantId).eq('is_deleted', false).eq('is_read', false),
+    db.from('email_threads').select('quote_id').eq('tenant_id', ctx.tenantId).eq('triage_status', 'incoming'),
+  ]);
+  const incoming = new Set<string>((threads || []).map((t: any) => t.quote_id).filter(Boolean));
+
+  const open = quotes.filter((q: any) => q.status !== 'Approved' && q.status !== 'Lost' && q.status !== 'Rejected');
+  const temps = { hot: 0, warm: 0, cold: 0 };
+  open.forEach((q: any) => { temps[temperature(q, incoming)] += 1; });
+  const waiting = open.filter((q: any) => incoming.has(q.id)).length;
+
+  const latest = quotes.slice(0, 3).map(quoteCard);
+
+  const chips: Array<{ label: string; prompt: string; icon: string }> = [];
+  if ((unread || 0) > 0) chips.push({ icon: 'mail', label: `Summarize ${unread} unread email${unread === 1 ? '' : 's'}`, prompt: 'Summarize my unread emails and tell me which ones need a reply first.' });
+  if (waiting > 0) chips.push({ icon: 'reply', label: `Reply to ${waiting} waiting client${waiting === 1 ? '' : 's'}`, prompt: 'Which clients are waiting on a reply from us? Draft the replies for me to confirm.' });
+  if (temps.cold > 0) chips.push({ icon: 'bell', label: `Chase ${temps.cold} cold quote${temps.cold === 1 ? '' : 's'}`, prompt: 'List my cold quotes and draft a short follow-up for the most valuable one.' });
+  chips.push(
+    { icon: 'plus', label: 'Create a quote from an enquiry', prompt: 'Look at my latest enquiry emails and create a quote from the best one.' },
+    { icon: 'chart', label: 'Revenue by status', prompt: 'Show a chart of quote value by status.' },
+    { icon: 'sparkle', label: 'What changed this week?', prompt: 'Give me a briefing: what changed in the last 7 days across quotes, emails and follow-ups?' },
+    { icon: 'db', label: 'Review catalogue', prompt: 'Review my Master Data catalogue and point out anything that looks inconsistent or incomplete.' },
+    { icon: 'settings', label: 'Explain my email setup', prompt: 'Explain how my email settings are configured and whether anything looks wrong.' },
+  );
+
+  return {
+    user: { name: ctx.profile.full_name || ctx.email.split('@')[0], email: ctx.email, role: ctx.role },
+    company: ctx.tenant.company_name,
+    stats: {
+      total: quotes.length, totalValue: Math.round(totalValue), byStatus,
+      mine: mine.length, myValue: Math.round(myValue), weeks,
+    },
+    inbox: { unread: unread || 0, waiting },
+    followups: temps,
+    latest,
+    chips: chips.slice(0, 8),
+  };
+}

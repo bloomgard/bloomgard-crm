@@ -1,0 +1,586 @@
+"use client";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowUp, BarChart3, Bell, Check, ChevronRight, CornerUpLeft, Database, Loader2, Mail, Mic, PenLine,
+  Plus, RotateCcw, Settings as SettingsIcon, Sparkles, X,
+} from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { supabase } from "@/utils/supabaseClient";
+
+/* ------------------------------------------------------------------ */
+/* Types                                                                */
+/* ------------------------------------------------------------------ */
+
+type Step = { id: string; name: string; label: string; write?: boolean; status: "running" | "done" | "error"; ms?: number; note?: string };
+type Action = {
+  id: string; kind: string; title: string; summary: string; risk: string;
+  details: Array<[string, string]>; preview?: string; payload: any;
+  state?: "pending" | "running" | "done" | "failed" | "dismissed"; result?: string;
+};
+type Msg = {
+  id: string; role: "user" | "ai"; text: string; steps?: Step[]; blocks?: any[]; actions?: Action[];
+  error?: string; live?: boolean; typing?: boolean;
+};
+type Overview = {
+  user: { name: string; email: string; role: string }; company: string;
+  stats: { total: number; totalValue: number; byStatus: Record<string, number>; mine: number; myValue: number; weeks: number[] };
+  inbox: { unread: number; waiting: number }; followups: { hot: number; warm: number; cold: number };
+  latest: Array<{ qn: string; status: string; client: string; value: number; date: string; items: number }>;
+  chips: Array<{ label: string; prompt: string; icon: string }>;
+};
+
+export type AgentHomeProps = {
+  userEmail: string;
+  onOpenQuote: (qn: string) => void;
+  onNewQuote: () => void;
+  onNavigate: (view: string) => void;
+  onChanged: (kinds: string[]) => void;
+  docsLink?: React.ReactNode;
+};
+
+/* ------------------------------------------------------------------ */
+/* Small helpers                                                        */
+/* ------------------------------------------------------------------ */
+
+const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
+const uid = () => Math.random().toString(36).slice(2, 10);
+const PALETTE = ["#2747d8", "#ea5420", "#e5a03a", "#0e6b57", "#7f9bff", "#b83a0e", "#18214a", "#8c8478"];
+const STATUS_DOT: Record<string, string> = {
+  Approved: "#0e6b57", Pending: "#e5a03a", Inquiry: "#2747d8", Draft: "#8c8478", Rejected: "#b83a0e", Lost: "#a3192b", Lead: "#ea5420",
+};
+const CHIP_ICONS: Record<string, any> = { mail: Mail, reply: CornerUpLeft, bell: Bell, plus: Plus, chart: BarChart3, sparkle: Sparkles, db: Database, settings: SettingsIcon };
+
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+};
+
+const ago = (iso?: string) => {
+  if (!iso) return "";
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
+};
+
+async function authHeaders() {
+  const { data } = await supabase.auth.getSession();
+  return { Authorization: `Bearer ${data.session?.access_token || ""}`, "Content-Type": "application/json" };
+}
+
+/** Tiny markdown: **bold**, `code`, bullets, numbered lists, headings, paragraphs. */
+function inline(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean).map((p, i) =>
+    p.startsWith("**") ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : p.startsWith("`") ? <code key={i} className="px-1 py-0.5 rounded bg-gray-100 text-[0.85em] font-mono">{p.slice(1, -1)}</code>
+        : <React.Fragment key={i}>{p}</React.Fragment>);
+}
+function Markdown({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const out: React.ReactNode[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+  const flush = () => {
+    if (!list) return;
+    const L = list; list = null;
+    const Tag: any = L.ordered ? "ol" : "ul";
+    out.push(<Tag key={out.length} className={`my-2 pl-5 space-y-1 ${L.ordered ? "list-decimal" : "list-disc"} marker:text-[var(--sindoor)]`}>{L.items.map((t, i) => <li key={i}>{inline(t)}</li>)}</Tag>);
+  };
+  lines.forEach((raw) => {
+    const line = raw.trimEnd();
+    const b = line.match(/^\s*[-*•]\s+(.*)$/); const n = line.match(/^\s*\d+[.)]\s+(.*)$/); const h = line.match(/^#{1,4}\s+(.*)$/);
+    if (b) { if (!list || list.ordered) { flush(); list = { ordered: false, items: [] }; } list.items.push(b[1]); }
+    else if (n) { if (!list || !list.ordered) { flush(); list = { ordered: true, items: [] }; } list.items.push(n[1]); }
+    else { flush(); if (h) out.push(<p key={out.length} className="mt-3 mb-1 font-semibold">{inline(h[1])}</p>); else if (line.trim()) out.push(<p key={out.length} className="my-1.5">{inline(line)}</p>); }
+  });
+  flush();
+  return <div className="leading-relaxed">{out}</div>;
+}
+
+/* ------------------------------------------------------------------ */
+/* Visual blocks                                                        */
+/* ------------------------------------------------------------------ */
+
+function Sparkline({ data }: { data: number[] }) {
+  const max = Math.max(1, ...data);
+  const pts = data.map((v, i) => `${(i / Math.max(1, data.length - 1)) * 100},${28 - (v / max) * 24}`).join(" ");
+  return (
+    <svg viewBox="0 0 100 30" className="w-24 h-8 overflow-visible" preserveAspectRatio="none" aria-hidden>
+      <polyline points={pts} fill="none" stroke="var(--neelam)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      {data.length > 0 && <circle cx="100" cy={28 - (data[data.length - 1] / max) * 24} r="2.2" fill="var(--sindoor)" />}
+    </svg>
+  );
+}
+
+function ChartBlock({ b }: { b: any }) {
+  const money = b.metric === "value";
+  const fmt = (v: number) => (money ? inr(v) : String(v));
+  const total = (b.data || []).reduce((s: number, d: any) => s + d.value, 0);
+  return (
+    <div className="agent-block">
+      <div className="flex items-baseline justify-between mb-3">
+        <h4 className="font-semibold text-sm">{b.title}</h4>
+        <span className="agent-label">{b.dimension} · {money ? "value" : "count"}</span>
+      </div>
+      {b.chart === "metric" ? (
+        <div className="py-2"><div className="text-4xl font-semibold tracking-tight">{fmt(total)}</div></div>
+      ) : (
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            {b.chart === "pie" ? (
+              <PieChart>
+                <Pie data={b.data} dataKey="value" nameKey="name" innerRadius="52%" outerRadius="82%" paddingAngle={2} stroke="none">
+                  {b.data.map((_: any, i: number) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v: any) => fmt(Number(v))} contentStyle={{ borderRadius: 10, border: "1px solid var(--kora-line)", fontSize: 12 }} />
+              </PieChart>
+            ) : b.chart === "line" ? (
+              <LineChart data={b.data} margin={{ left: -12, right: 8, top: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--kora-line)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#8c8478" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "#8c8478" }} axisLine={false} tickLine={false} tickFormatter={(v) => (money ? `${Math.round(v / 1000)}k` : v)} />
+                <Tooltip formatter={(v: any) => fmt(Number(v))} contentStyle={{ borderRadius: 10, border: "1px solid var(--kora-line)", fontSize: 12 }} />
+                <Line type="monotone" dataKey="value" stroke="#2747d8" strokeWidth={2.4} dot={{ r: 3, fill: "#ea5420", strokeWidth: 0 }} />
+              </LineChart>
+            ) : (
+              <BarChart data={b.data} margin={{ left: -12, right: 8, top: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--kora-line)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#8c8478" }} axisLine={false} tickLine={false} interval={0} />
+                <YAxis tick={{ fontSize: 11, fill: "#8c8478" }} axisLine={false} tickLine={false} tickFormatter={(v) => (money ? `${Math.round(v / 1000)}k` : v)} />
+                <Tooltip cursor={{ fill: "rgba(39,71,216,0.06)" }} formatter={(v: any) => fmt(Number(v))} contentStyle={{ borderRadius: 10, border: "1px solid var(--kora-line)", fontSize: 12 }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>{b.data.map((_: any, i: number) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}</Bar>
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
+      {b.chart === "pie" && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+          {b.data.map((d: any, i: number) => (
+            <span key={i} className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+              <i className="w-2 h-2 rounded-full" style={{ background: PALETTE[i % PALETTE.length] }} />{d.name} <b className="text-gray-900">{fmt(d.value)}</b>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusPill({ s }: { s: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-gray-200 bg-white/60">
+      <i className="w-1.5 h-1.5 rounded-full" style={{ background: STATUS_DOT[s] || "#8c8478" }} />{s}
+    </span>
+  );
+}
+
+function QuotesBlock({ b, onOpen }: { b: any; onOpen: (qn: string) => void }) {
+  return (
+    <div className="agent-block !p-0 overflow-hidden">
+      <div className="px-4 pt-3 pb-2 agent-label">{b.title} · {b.quotes.length}</div>
+      <div className="divide-y divide-gray-100">
+        {b.quotes.map((q: any) => (
+          <button key={q.qn} onClick={() => onOpen(q.qn)} className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors group">
+            <span className="font-mono text-xs text-gray-500 w-28 shrink-0">{q.qn}</span>
+            <span className="flex-1 min-w-0 truncate text-sm font-medium">{q.client || "—"}</span>
+            {q.temperature && <span className={`agent-temp agent-temp--${q.temperature}`}>{q.temperature}</span>}
+            <StatusPill s={q.status} />
+            <span className="text-sm font-semibold w-24 text-right tabular-nums">{q.value ? inr(q.value) : "—"}</span>
+            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600 transition-colors" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmailsBlock({ b, onOpen }: { b: any; onOpen: () => void }) {
+  return (
+    <div className="agent-block !p-0 overflow-hidden">
+      <div className="px-4 pt-3 pb-2 agent-label">{b.title} · {b.emails.length}</div>
+      <div className="divide-y divide-gray-100">
+        {b.emails.map((e: any) => (
+          <button key={e.id} onClick={onOpen} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-2">
+              {e.unread && <i className="w-1.5 h-1.5 rounded-full bg-[var(--sindoor)]" />}
+              <span className="text-sm font-medium truncate flex-1">{e.from}</span>
+              <span className="text-[11px] text-gray-400">{ago(e.at)}</span>
+            </div>
+            <div className="text-xs text-gray-700 truncate">{e.subject}</div>
+            <div className="text-xs text-gray-400 truncate">{e.snippet}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TableBlock({ b }: { b: any }) {
+  const cols = Object.keys(b.rows[0] || {});
+  return (
+    <div className="agent-block !p-0 overflow-x-auto">
+      <div className="px-4 pt-3 pb-2 agent-label">{b.title} · {b.rows.length}</div>
+      <table className="w-full text-sm">
+        <thead><tr>{cols.map((c) => <th key={c} className="text-left px-4 py-1.5 agent-label font-normal">{c}</th>)}</tr></thead>
+        <tbody className="divide-y divide-gray-100">
+          {b.rows.map((r: any, i: number) => <tr key={i}>{cols.map((c) => <td key={c} className="px-4 py-1.5 tabular-nums">{r[c]}</td>)}</tr>)}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ActionCard({ a, onConfirm, onDismiss }: { a: Action; onConfirm: () => void; onDismiss: () => void }) {
+  const st = a.state || "pending";
+  return (
+    <div className={`agent-action agent-action--${st}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <PenLine className="w-4 h-4 text-[var(--sindoor)]" />
+        <span className="font-semibold text-sm">{a.title}</span>
+        <span className="agent-label ml-auto">{st === "pending" ? "needs your OK" : st}</span>
+      </div>
+      <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-1 text-sm">
+        {a.details.map(([k, v], i) => (<React.Fragment key={i}><dt className="agent-label pt-0.5">{k}</dt><dd className="break-words">{String(v)}</dd></React.Fragment>))}
+      </dl>
+      {a.preview && <pre className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-[13px] whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-auto">{a.preview}</pre>}
+      {(st === "pending" || st === "running") && (
+        <div className="flex gap-2 mt-3">
+          <button onClick={onConfirm} disabled={st === "running"} className="agent-btn agent-btn--primary">
+            {st === "running" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            {a.kind === "send_email" ? "Confirm & send" : "Confirm"}
+          </button>
+          <button onClick={onDismiss} disabled={st === "running"} className="agent-btn"><X className="w-3.5 h-3.5" />Dismiss</button>
+        </div>
+      )}
+      {a.result && <p className={`mt-3 text-sm font-medium ${st === "failed" ? "text-[var(--danger,#a3192b)]" : "text-[var(--success,#0e6b57)]"}`}>{a.result}</p>}
+    </div>
+  );
+}
+
+function StepChips({ steps }: { steps: Step[] }) {
+  if (!steps.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-2">
+      {steps.map((s) => (
+        <span key={s.id} title={s.note || ""} className={`agent-step ${s.status === "running" ? "agent-step--live" : ""} ${s.status === "error" ? "agent-step--err" : ""}`}>
+          {s.status === "running" ? <Loader2 className="w-3 h-3 animate-spin" /> : s.status === "error" ? <X className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+          {s.label}{s.write ? " ✎" : ""}{s.ms != null && s.status !== "running" ? <em>{s.ms < 1000 ? `${s.ms}ms` : `${(s.ms / 1000).toFixed(1)}s`}</em> : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Reveals the answer word by word. Older messages render instantly. */
+function Typed({ text, animate, onTick }: { text: string; animate: boolean; onTick: () => void }) {
+  const [n, setN] = useState(animate ? 0 : text.length);
+  useEffect(() => {
+    if (!animate) { setN(text.length); return; }
+    let i = 0;
+    const id = setInterval(() => {
+      i += 6; setN(Math.min(i, text.length)); onTick();
+      if (i >= text.length) clearInterval(id);
+    }, 16);
+    return () => clearInterval(id);
+  }, [text, animate]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <Markdown text={text.slice(0, n)} />;
+}
+
+/* ------------------------------------------------------------------ */
+/* Main component                                                       */
+/* ------------------------------------------------------------------ */
+
+export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNavigate, onChanged, docsLink }: AgentHomeProps) {
+  const [ov, setOv] = useState<Overview | null>(null);
+  const [ovError, setOvError] = useState("");
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const storeKey = `cma_agent_chat_${userEmail}`;
+  const hydrated = useRef(false);
+
+  const loadOverview = useCallback(async () => {
+    try {
+      const res = await fetch("/api/agent/overview", { headers: await authHeaders() });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      setOv(await res.json()); setOvError("");
+    } catch (e: any) { setOvError(e.message || "Could not load"); }
+  }, []);
+
+  useEffect(() => { loadOverview(); }, [loadOverview]);
+
+  // conversation memory (per user, this browser)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storeKey);
+      if (raw) setMsgs((JSON.parse(raw) as Msg[]).map((m) => ({ ...m, live: false, typing: false })));
+    } catch { /* ignore */ }
+    hydrated.current = true;
+  }, [storeKey]);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try { localStorage.setItem(storeKey, JSON.stringify(msgs.filter((m) => !m.live).slice(-40))); } catch { /* ignore */ }
+  }, [msgs, storeKey]);
+
+  const scrollDown = useCallback(() => { endRef.current?.scrollIntoView({ block: "end" }); }, []);
+  useEffect(() => { scrollDown(); }, [msgs.length, scrollDown]);
+
+  // ⌘K / Ctrl+K focuses the command bar
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); inputRef.current?.focus(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // stream events must land on the message they belong to, even if other messages were appended meanwhile
+  const patchMsg = (id: string, fn: (m: Msg) => Msg) => setMsgs((all) => all.map((m) => (m.id === id ? fn(m) : m)));
+
+  const send = useCallback(async (text: string) => {
+    const content = text.trim();
+    if (!content || busy) return;
+    setInput(""); setBusy(true);
+    const history = [...msgs, { id: uid(), role: "user" as const, text: content }];
+    const aiId = uid();
+    const patchLast = (fn: (m: Msg) => Msg) => patchMsg(aiId, fn);
+    setMsgs([...history, { id: aiId, role: "ai", text: "", steps: [], blocks: [], actions: [], live: true }]);
+    try {
+      const res = await fetch("/api/agent/chat", {
+        method: "POST", headers: await authHeaders(),
+        body: JSON.stringify({ messages: history.map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })).filter((m) => m.content) }),
+      });
+      if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const ev = JSON.parse(line);
+          if (ev.t === "step") patchLast((m) => {
+            const steps = [...(m.steps || [])]; const i = steps.findIndex((s) => s.id === ev.id);
+            const next: Step = { id: ev.id, name: ev.name, label: ev.label, write: ev.write, status: ev.status, ms: ev.ms, note: ev.note };
+            if (i >= 0) steps[i] = next; else steps.push(next);
+            return { ...m, steps };
+          });
+          else if (ev.t === "block") patchLast((m) => ({ ...m, blocks: [...(m.blocks || []), ev.block] }));
+          else if (ev.t === "action") patchLast((m) => ({ ...m, actions: [...(m.actions || []), { ...ev.action, state: "pending" }] }));
+          else if (ev.t === "message") patchLast((m) => ({ ...m, text: ev.content, typing: true }));
+          else if (ev.t === "error") patchLast((m) => ({ ...m, error: ev.error }));
+        }
+      }
+    } catch (e: any) {
+      patchLast((m) => ({ ...m, error: e.message || "Request failed" }));
+    } finally {
+      patchLast((m) => ({ ...m, live: false }));
+      setBusy(false);
+      inputRef.current?.focus();
+    }
+  }, [msgs, busy]);
+
+  const runAction = async (msgId: string, actId: string, confirm: boolean) => {
+    const setAct = (patch: Partial<Action>) => setMsgs((all) => all.map((m) => m.id !== msgId ? m : { ...m, actions: (m.actions || []).map((a) => a.id === actId ? { ...a, ...patch } : a) }));
+    const action = msgs.find((m) => m.id === msgId)?.actions?.find((a) => a.id === actId);
+    if (!action) return;
+    if (!confirm) {
+      setAct({ state: "dismissed", result: "Dismissed. Nothing was changed." });
+      // tell the model, so asking again later prepares a fresh action instead of "it is already prepared"
+      setMsgs((all) => [...all, { id: uid(), role: "ai", text: `Dismissed: "${action.title}: ${action.summary}" was not applied.` }]);
+      return;
+    }
+    setAct({ state: "running" });
+    try {
+      const res = await fetch("/api/agent/execute", { method: "POST", headers: await authHeaders(), body: JSON.stringify({ kind: action.kind, payload: action.payload }) });
+      const out = await res.json();
+      if (!res.ok || out.error) throw new Error(out.error || "Action failed");
+      setAct({ state: "done", result: out.message });
+      setMsgs((all) => [...all, { id: uid(), role: "ai", text: `Done: ${out.message}` }]);
+      onChanged(out.refresh || []);
+      loadOverview();
+    } catch (e: any) {
+      setAct({ state: "failed", result: e.message });
+    }
+  };
+
+  const toggleVoice = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    if (listening) { setListening(false); return; }
+    const rec = new SR(); rec.lang = "en-IN"; rec.interimResults = false;
+    rec.onresult = (e: any) => setInput((v) => `${v} ${e.results[0][0].transcript}`.trim());
+    rec.onend = () => setListening(false);
+    setListening(true); rec.start();
+  };
+  const voiceSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  const hasChat = msgs.length > 0;
+  const statusEntries = useMemo(() => Object.entries(ov?.stats.byStatus || {}).sort((a, b) => b[1] - a[1]), [ov]);
+  const share = ov && ov.stats.total ? Math.round((ov.stats.mine / ov.stats.total) * 100) : 0;
+  const name = ov?.user.name || userEmail.split("@")[0];
+
+  return (
+    <div className="agent-home relative max-w-[1100px] mx-auto">
+      <div className="agent-aurora" aria-hidden />
+
+      {/* ---- header ---- */}
+      <div className="relative flex items-center gap-3 mb-5">
+        <span className="agent-label">{ov?.company || "Workspace"} · CMA</span>
+        <span className="ml-auto flex items-center gap-3">{docsLink}</span>
+      </div>
+
+      {/* ---- stats ribbon ---- */}
+      <section className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" aria-label="Pipeline statistics">
+        <div className="agent-stat">
+          <span className="agent-label">Total quotes</span>
+          <div className="flex items-end justify-between gap-2">
+            <span className="agent-num">{ov ? ov.stats.total : "–"}</span>
+            {ov && <Sparkline data={ov.stats.weeks} />}
+          </div>
+          <span className="text-xs text-gray-500">{ov ? `${inr(ov.stats.totalValue)} in pipeline` : " "}</span>
+        </div>
+        <div className="agent-stat col-span-2 lg:col-span-1">
+          <span className="agent-label">Per status</span>
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {statusEntries.length === 0 && <span className="text-xs text-gray-400">No quotes yet</span>}
+            {statusEntries.map(([s, n]) => (
+              <button key={s} onClick={() => send(`Show my ${s} quotes`)} className="agent-chip-sm" title={`Ask about ${s} quotes`}>
+                <i style={{ background: STATUS_DOT[s] || "#8c8478" }} />{s}<b>{n}</b>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="agent-stat">
+          <span className="agent-label">My contribution</span>
+          <span className="agent-num">{ov ? ov.stats.mine : "–"}</span>
+          <div className="h-1 rounded-full bg-gray-200 overflow-hidden"><div className="h-full rounded-full bg-[var(--neelam)] transition-all duration-700" style={{ width: `${share}%` }} /></div>
+          <span className="text-xs text-gray-500">{ov ? `${inr(ov.stats.myValue)} · ${share}% of all quotes` : " "}</span>
+        </div>
+        <div className="agent-stat">
+          <span className="agent-label">Pulse</span>
+          <div className="flex items-baseline gap-3">
+            <button onClick={() => onNavigate("inbox")} className="text-left"><span className="agent-num !text-2xl">{ov?.inbox.unread ?? "–"}</span><span className="block text-[11px] text-gray-500">unread</span></button>
+            <button onClick={() => send("Which clients are waiting on a reply?")} className="text-left"><span className="agent-num !text-2xl text-[var(--sindoor)]">{ov?.inbox.waiting ?? "–"}</span><span className="block text-[11px] text-gray-500">waiting</span></button>
+          </div>
+          {ov && (
+            <div className="flex h-1 rounded-full overflow-hidden bg-gray-200" title={`Hot ${ov.followups.hot} · Warm ${ov.followups.warm} · Cold ${ov.followups.cold}`}>
+              {(["hot", "warm", "cold"] as const).map((k, i) => ov.followups[k] > 0 && <div key={k} style={{ flex: ov.followups[k], background: ["#ea5420", "#e5a03a", "#2747d8"][i] }} />)}
+            </div>
+          )}
+        </div>
+      </section>
+      {ovError && <p className="text-xs text-[var(--danger,#a3192b)] mb-3">Could not load stats: {ovError}</p>}
+
+      {/* ---- the assistant ---- */}
+      <section className="agent-panel relative" aria-label="Bloomgard AI">
+        <div className="flex items-center gap-3 px-5 pt-4">
+          <div className="agent-orb" aria-hidden />
+          <div className="leading-tight">
+            <div className="font-semibold text-sm">Bloomgard AI</div>
+            <div className="agent-label !tracking-[0.12em]">{busy ? "working…" : "connected · quotes · inbox · catalogue · settings"}</div>
+          </div>
+          {hasChat && (
+            <button onClick={() => { setMsgs([]); localStorage.removeItem(storeKey); inputRef.current?.focus(); }} className="agent-btn ml-auto" title="Start a new conversation">
+              <RotateCcw className="w-3.5 h-3.5" />New chat
+            </button>
+          )}
+        </div>
+
+        {!hasChat && (
+          <div className="px-5 pt-8 pb-2 text-center">
+            <h2 className="agent-hello">{greeting()}, {name}.</h2>
+            <p className="text-sm text-gray-500 mt-2">
+              {ov && (ov.inbox.unread || ov.inbox.waiting)
+                ? `${ov.inbox.unread} unread email${ov.inbox.unread === 1 ? "" : "s"} and ${ov.followups.cold} cold quote${ov.followups.cold === 1 ? "" : "s"} are waiting. Ask me anything, or tell me what to do.`
+                : "Ask me anything about your quotes, emails and catalogue, or tell me what to do."}
+            </p>
+          </div>
+        )}
+
+        {hasChat && (
+          <div className="px-5 pt-4 space-y-5 max-h-[52vh] overflow-y-auto agent-scroll" aria-live="polite">
+            {msgs.map((m) => m.role === "user" ? (
+              <div key={m.id} className="flex justify-end"><div className="agent-user">{m.text}</div></div>
+            ) : (
+              <div key={m.id} className="flex gap-3">
+                <div className="agent-orb agent-orb--sm shrink-0 mt-1" aria-hidden />
+                <div className="min-w-0 flex-1 text-[15px]">
+                  <StepChips steps={m.steps || []} />
+                  {m.live && !m.text && !m.error && (m.steps || []).every((s) => s.status !== "running") && <span className="agent-dots" aria-label="thinking"><i /><i /><i /></span>}
+                  {(m.blocks || []).map((b, i) => (
+                    <div key={i} className="mb-3">
+                      {b.type === "chart" && <ChartBlock b={b} />}
+                      {b.type === "quotes" && <QuotesBlock b={b} onOpen={onOpenQuote} />}
+                      {b.type === "emails" && <EmailsBlock b={b} onOpen={() => onNavigate("inbox")} />}
+                      {b.type === "table" && <TableBlock b={b} />}
+                    </div>
+                  ))}
+                  {m.text && <Typed text={m.text} animate={!!m.typing} onTick={scrollDown} />}
+                  {(m.actions || []).map((a) => (
+                    <div key={a.id} className="mt-3"><ActionCard a={a} onConfirm={() => runAction(m.id, a.id, true)} onDismiss={() => runAction(m.id, a.id, false)} /></div>
+                  ))}
+                  {m.error && <p className="text-sm text-[var(--danger,#a3192b)] mt-2">⚠ {m.error}</p>}
+                </div>
+              </div>
+            ))}
+            <div ref={endRef} />
+          </div>
+        )}
+
+        {/* ---- command bar ---- */}
+        <form className="px-5 pt-4" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+          <div className="agent-input">
+            <textarea
+              ref={inputRef} value={input} rows={1} autoFocus
+              onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
+              placeholder="Ask, search or command…  e.g. “change the rate of ITM-001 to 95” or “reply to Priya”"
+              aria-label="Message Bloomgard AI"
+            />
+            {voiceSupported && (
+              <button type="button" onClick={toggleVoice} className={`agent-icon-btn ${listening ? "agent-icon-btn--on" : ""}`} aria-label="Dictate"><Mic className="w-4 h-4" /></button>
+            )}
+            <kbd className="hidden md:inline-flex agent-kbd">⌘K</kbd>
+            <button type="submit" disabled={busy || !input.trim()} className="agent-send" aria-label="Send">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
+            </button>
+          </div>
+        </form>
+
+        {/* ---- choice chips ---- */}
+        <div className="px-5 pt-3 pb-5 flex flex-wrap gap-2" aria-label="Suggestions">
+          {(ov?.chips || []).map((c) => {
+            const Icon = CHIP_ICONS[c.icon] || Sparkles;
+            return <button key={c.label} onClick={() => send(c.prompt)} disabled={busy} className="agent-chip"><Icon className="w-3.5 h-3.5" />{c.label}</button>;
+          })}
+        </div>
+      </section>
+
+      {/* ---- latest quotes + create ---- */}
+      <section className="relative mt-6" aria-label="Latest quotes">
+        <div className="flex items-center mb-3">
+          <span className="agent-label">Latest quotes</span>
+          <button onClick={() => onNavigate("pipeline")} className="ml-auto text-xs font-semibold text-[var(--neelam)] hover:underline">View all →</button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {(ov?.latest || []).map((q) => (
+            <button key={q.qn} onClick={() => onOpenQuote(q.qn)} className="agent-quote group">
+              <div className="flex items-center justify-between"><span className="font-mono text-[11px] text-gray-500">{q.qn}</span><StatusPill s={q.status} /></div>
+              <div className="mt-2 text-base font-semibold truncate">{q.client || "Untitled client"}</div>
+              <div className="flex items-end justify-between mt-3">
+                <span className="text-xl font-semibold tabular-nums">{q.value ? inr(q.value) : "—"}</span>
+                <span className="text-[11px] text-gray-400">{q.items} item{q.items === 1 ? "" : "s"} · {ago(q.date)}</span>
+              </div>
+            </button>
+          ))}
+          {ov && ov.latest.length === 0 && <p className="text-sm text-gray-400 col-span-3">No quotes yet. Create your first one below.</p>}
+        </div>
+        <button onClick={onNewQuote} className="agent-create mt-4"><Plus className="w-4 h-4" />Create quote</button>
+      </section>
+    </div>
+  );
+}

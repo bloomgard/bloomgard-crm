@@ -17,7 +17,7 @@ test.describe('In-app help', () => {
     const errors = pageErrors(page);
     await openApp(page);
     const views: Array<[string, string]> = [
-      ['Dashboard', 'ai/dashboard-and-copilot/'], ['Quotes', 'sales/quotes/'], ['Inbox', 'email/inbox/'],
+      ['Home', 'getting-started/'], ['Dashboard', 'ai/dashboard-and-copilot/'], ['Quotes', 'sales/quotes/'], ['Inbox', 'email/inbox/'],
       ['Follow ups', 'sales/follow-ups/'], ['Lead Gen', 'sales/lead-gen/'], ['Docs', 'sales/quotes/#pdf-export-and-the-document-library'],
       ['Settings', 'configuration/settings/'],
     ];
@@ -39,8 +39,6 @@ test.describe('In-app help', () => {
       await expect(hint, `${title} has no help hint`).toBeVisible();
       await expect(hint).toHaveAttribute('href', DOCS + href);
     }
-    await page.locator('nav').getByText('Bloomgard AI').click();
-    await expect(page.getByTestId('help-hint')).toHaveAttribute('href', DOCS + 'ai/dashboard-and-copilot/#bloomgard-ai-chat-assistant');
     expect(errors, errors.join('\n')).toEqual([]);
   });
 

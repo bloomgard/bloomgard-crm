@@ -24,8 +24,9 @@ New users are created by a workspace Manager or Admin from **Settings → User A
 
 ## The workspace
 
-The left sidebar has seven views plus the AI assistant:
+The left sidebar opens on **Home** (the [AI command centre](./ai-home.md)) and has seven more views:
 
+0. **Home** – Bloomgard AI, stats, latest quotes, suggestions.
 1. **Dashboard** – totals, your contribution, recent activity, AI charts.
 2. **Quotes** – the pipeline of quotations; create a new one from here.
 3. **Inbox** – client email, AI actions, reply and compose.
@@ -33,7 +34,6 @@ The left sidebar has seven views plus the AI assistant:
 5. **Lead Gen** – enquiries that are not yet quotes.
 6. **Docs** – the Document Library of generated quote PDFs.
 7. **Settings** – a list of configuration screens.
-8. **Bloomgard AI** – chat assistant over your data.
 
 ## First-day checklist for a workspace admin
 
