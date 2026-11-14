@@ -26,7 +26,7 @@ users, catalogue (Master Data), email addresses, AI behaviour and quote template
 | [AI actions](./ai-assistant.md) | One click summarises an enquiry, extracts a draft quote, and writes a reply grounded in your catalogue. Replies are drafts; nothing is auto-sent. |
 | [Follow-ups](./follow-ups.md) | See quotes that have gone quiet, scored Hot / Warm / Cold, with AI-suggested follow-up emails waiting for approval. Optional autonomous follow-up agents. |
 | [Lead generation](./lead-gen.md) | Turn inbound enquiries from people you do not know yet into leads, then into quotes. |
-| [Dashboard & Bloomgard AI](./dashboard-and-copilot.md) | Pipeline analytics, AI-built charts from a sentence, and a chat assistant that reads your pipeline, inbox and catalogue. |
+| [Stats, charts & Bloomgard AI](./dashboard-and-copilot.md) | Live pipeline stats on Home, AI-built charts from a sentence, and a chat assistant that reads your pipeline, inbox and catalogue. |
 | [Settings](./settings.md) | Profile, users and roles, field configurator, email addresses, personalisation, AI behaviour, quote template. |
 | [Platform admin](./platform-admin.md) | Provision workspaces, toggle features per workspace, and meter usage for billing. |
 

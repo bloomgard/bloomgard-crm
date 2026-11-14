@@ -12,10 +12,10 @@ workspace and, with your confirmation, change it.
 
 ## What is on the screen
 
-- **Stats ribbon**: total quotes (with a trend line and pipeline value), quotes per status (click a status to ask about it), **My contribution**, and a **Pulse** of unread emails, clients waiting for a reply, and hot/warm/cold follow-ups.
-- **Bloomgard AI**: the command bar. Type or dictate (microphone button), press **Enter** to send, **Shift+Enter** for a new line, and **⌘K / Ctrl+K** from anywhere to jump to it.
-- **Suggestion chips**: generated from your live data, for example "Summarize 3 unread emails" or "Chase 6 cold quotes".
-- **Latest quotes** (the three newest) and a **Create quote** button.
+- **Stats strip** (top): total quotes (with a trend line and pipeline value), quotes per status (click a status to ask about it), **My contribution**, and a **Pulse** of unread emails, clients waiting for a reply, and hot/warm/cold follow-ups.
+- **Bloomgard AI** (the rest of the page, not a box): the conversation sits under your stats and latest quotes, with the command bar docked at the bottom. Type or dictate (microphone button), press **Enter** to send, **Shift+Enter** for a new line, and **⌘K / Ctrl+K** from anywhere to jump to it.
+- **Latest quotes** (the three newest) with a **Create quote** button beneath them.
+- **Three suggestion chips** above the command bar, generated from your live data, for example "Summarize 3 unread emails". **Click the command bar** to drop up many more questions you can ask; type to filter them, and pick a template (marked *edit*) to fill it in yourself.
 
 ## What you can ask
 

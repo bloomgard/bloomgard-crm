@@ -17,7 +17,7 @@ test.describe('In-app help', () => {
     const errors = pageErrors(page);
     await openApp(page);
     const views: Array<[string, string]> = [
-      ['Home', 'getting-started/'], ['Dashboard', 'ai/dashboard-and-copilot/'], ['Quotes', 'sales/quotes/'], ['Inbox', 'email/inbox/'],
+      ['Home', 'getting-started/'], ['Quotes', 'sales/quotes/'], ['Inbox', 'email/inbox/'],
       ['Follow ups', 'sales/follow-ups/'], ['Lead Gen', 'sales/lead-gen/'], ['Docs', 'sales/quotes/#pdf-export-and-the-document-library'],
       ['Settings', 'configuration/settings/'],
     ];

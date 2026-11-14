@@ -56,7 +56,6 @@ const JAALI_UI = true;
 const DOCS_URL = 'https://docs.bloomgard.co/crm/';
 const HELP: Record<string, { text: string; href: string }> = {
   home: { text: 'Talk to Bloomgard AI: ask questions, search quotes, send email, edit the catalogue, change settings or build charts. Changes wait for your confirmation.', href: 'getting-started/' },
-  dashboard: { text: 'Your pipeline at a glance: totals, your contribution and recent activity. Type a request such as "revenue by agent" to build an AI chart.', href: 'ai/dashboard-and-copilot/' },
   pipeline: { text: 'All quotations with their status. Search, change status, import or export, and open a quote to preview the PDF or email it to the client.', href: 'sales/quotes/' },
   new_entry: { text: 'Fill the form top to bottom. Choosing a catalogue value (such as an item code) fills the linked fields automatically. The quote number is assigned when you save.', href: 'sales/quotes/#creating-a-quote' },
   inbox: { text: 'Client emails land here. Open one, then use Generate AI Actions for a summary, an extracted quote and a drafted reply. Nothing is sent until you send it.', href: 'email/inbox/' },
@@ -1638,17 +1637,16 @@ Command: ${dashCommand}`;
       )}
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity"></div>}
 
-      <aside className={`fixed z-[100] w-64 flex flex-col shadow-2xl md:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 ease-in-out overflow-hidden
-        ${isMobileMenuOpen ? 'inset-y-0 left-0 translate-x-0 rounded-none border-r' : 'top-4 bottom-4 left-4 -translate-x-[120%] md:translate-x-0 rounded-3xl'} 
-        ${isGlass ? 'glass-sidebar bg-white/80 dark:bg-gray-50 backdrop-blur-3xl border border-white/50 dark:border-white/10' : (isDark ? 'bg-[#121628] border border-[#262c47]' : 'bg-white border border-gray-200')}`}>
-        <div className="p-8 pb-4">
+      <aside className={`fixed inset-y-0 left-0 z-[100] w-60 flex flex-col border-r transition-transform duration-300 ease-in-out overflow-hidden rounded-none
+        ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}
+        ${isDark ? 'bg-[#121628] border-[#262c47]' : 'bg-white border-gray-200'}`}>
+        <div className="px-5 pt-6 pb-4 border-b border-gray-100">
           <h1 className="text-gray-900"><BrandLockup height={20} /></h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
         </div>
-        <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-3 space-y-1 mt-3 overflow-y-auto scrollbar-hide">
           {[
             ['home', <div key='home' className='flex items-center gap-2'><Sparkles className='w-4 h-4' /> Home</div>],
-            ['dashboard', <div key='dashboard' className='flex items-center gap-2'><LayoutDashboard className='w-4 h-4' /> Dashboard</div>],
             ['pipeline', <div key='pipeline' className='flex items-center gap-2'><Rocket className='w-4 h-4' /> Quotes</div>],
             ['inbox', <div key='inbox' className='flex items-center gap-2'><Inbox className='w-4 h-4' /> Inbox</div>],
             ['alerts', <div key='alerts' className='flex items-center gap-2'><Bell className='w-4 h-4' /> Follow ups</div>],
@@ -1656,13 +1654,13 @@ Command: ${dashCommand}`;
             ['docs', <div key='docs' className='flex items-center gap-2'><FileText className='w-4 h-4' /> Docs</div>],
             ['settings', <div key='settings' className='flex items-center gap-2'><Settings className='w-4 h-4' /> Settings</div>]
           ].map(([v, label]) => (
-            <div key={v} onClick={() => { setCurrentView(v); setIsMobileMenuOpen(false); }} className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all font-bold text-sm ${currentView === v ? 'bg-gray-900 text-white shadow-md' : 'text-gray-800 hover:bg-gray-100/50'}`}>
+            <div key={v} onClick={() => { setCurrentView(v); setIsMobileMenuOpen(false); }} className={`flex items-center justify-between pl-3 pr-4 py-2.5 rounded-md cursor-pointer transition-colors font-semibold text-sm border-l-2 ${currentView === v ? 'bg-gray-100 text-gray-900 border-[var(--sindoor)]' : 'text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900'}`}>
               <span>{label}</span>
             </div>
           ))}
           {/* The old standalone 'Bloomgard AI' link is gone: Home is the assistant now. */}
         </nav>
-        <div className={`p-6 border-t space-y-4 ${isGlass ? 'bg-white/60 dark:bg-gray-50/60 border-white/30' : 'bg-gray-50/50 dark:bg-gray-50/50 border-gray-100 dark:border-gray-200'}`}>
+        <div className="p-4 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center text-gray-700 text-xs font-bold uppercase border border-gray-300">{user?.email?.charAt(0) || 'O'}</div>
             <div className="overflow-hidden">
@@ -1674,7 +1672,7 @@ Command: ${dashCommand}`;
         </div>
       </aside>
 
-      <main className={`flex-1 w-full px-3 py-4 pt-24 md:ml-[17.5rem] md:px-8 md:pt-8 lg:px-12 min-h-screen relative z-10 transition-all duration-500 ${isGlass ? '!bg-transparent' : ''}`}
+      <main className={`flex-1 w-full px-3 py-4 pt-24 md:ml-60 md:px-6 md:pt-6 lg:px-8 min-h-screen relative z-10 transition-all duration-500 ${isGlass ? '!bg-transparent' : ''}`}
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 6rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
       >
         {isGlass && (
@@ -2942,92 +2940,6 @@ Command: ${dashCommand}`;
           </div>
         )}
 
-        {currentView === "dashboard" && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-12">
-            <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-gray-200 pb-8">
-              <div><div className="flex items-center gap-3 flex-wrap"><h2 className="text-4xl font-bold tracking-tight text-gray-900">Intelligence</h2><DocsLink view="dashboard" /></div><p className="text-sm font-medium text-gray-500 mt-2"></p></div>
-            </header>
-
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-              <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
-                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-2">Total Quotes</p>
-                <p className="text-4xl font-bold text-gray-900">{visibleRecords.length}</p>
-              </div>
-              <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
-                <div className="flex justify-between items-start mb-4">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mt-1">Active Filter</p>
-                  <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg text-[10px] font-semibold outline-none cursor-pointer uppercase tracking-wider text-gray-600">
-                    {allStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-4xl font-bold text-gray-900">{visibleRecords.filter(r => r.status === statusFilter).length}</p>
-                  <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest">Filtered Records</p>
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm">
-                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-2">My Contribution</p>
-                <p className="text-4xl font-bold text-indigo-600">{visibleRecords.filter(r => r.created_by_email === user?.email).length}</p>
-              </div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm mb-10">
-              <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-3">
-                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500">Recent Quotes Activity</h3>
-                <button onClick={() => setCurrentView('pipeline')} className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-800">View All →</button>
-              </div>
-              <div className="space-y-3">
-                {sortedRecords.slice(0, 3).map((r, i) => (
-                  <div key={r.id || i} onClick={() => setSelectedRecord(r)} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 px-5 py-4 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 hover:border-gray-200 transition-colors gap-4">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</span>
-                      <span className="text-[10px] font-semibold text-gray-500">{r.date} • Created by <span className="text-gray-700">{r.created_by_email}</span></span>
-                    </div>
-                    <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                      <span className="text-xs font-bold text-gray-900">{getFieldValue(r, { name: 'subtotal' }) !== '-' ? `₹${getFieldValue(r, { name: 'subtotal' })}` : ''}</span>
-                      <span className={`px-2.5 py-1 rounded-md text-[9px] font-bold tracking-wide border shadow-sm ${r.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : r.status === 'Lost' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>{r.status || "Inquiry"}</span>
-                    </div>
-                  </div>
-                ))}
-                {sortedRecords.length === 0 && <p className="text-xs text-gray-500 italic py-4 text-center border border-dashed border-gray-200 rounded-xl">No quotes found.</p>}
-              </div>
-            </div>
-
-            {isManager && perfData.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm grid grid-cols-1 lg:grid-cols-2 gap-10">
-                <div>
-                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 mb-6 border-b border-gray-100 pb-3">Other contributions</h3>
-                  <div className="h-[240px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={perfData} innerRadius={60} outerRadius={85} paddingAngle={4} dataKey="value" stroke="none">
-                          {perfData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="flex flex-col justify-center space-y-4">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest border-b border-gray-100 pb-2">Split Breakdown</p>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-                    {perfData.map((d, i) => (
-                      <div key={i} className="flex justify-between items-center bg-gray-50 px-4 py-3 rounded-xl border border-gray-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                          <span className="text-xs font-semibold text-gray-700">{d.name}</span>
-                        </div>
-                        <span className="text-xs font-semibold text-gray-900 bg-white border border-gray-200 px-2.5 py-1 rounded-md shadow-sm">{d.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {(currentView === "pipeline" || currentView === "leadgen") && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-6xl mx-auto">
             <div className="flex flex-col gap-4 mb-6">
@@ -3123,10 +3035,10 @@ Command: ${dashCommand}`;
 
         {currentView === "inbox" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-[calc(100vh-140px)] flex gap-6">
-            <div className="w-1/3 bg-white/80 dark:bg-gray-50 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-200 flex flex-col overflow-hidden">
+            <div className="w-[26rem] shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
               <header className="p-4 border-b border-gray-100 dark:border-gray-200 flex flex-col gap-3">
                 <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3 flex-wrap"><h3 className="font-black text-lg text-gray-900 dark:text-white uppercase tracking-wider">Inbox</h3><DocsLink view="inbox" /></div>
+                  <div className="flex items-baseline gap-3 min-w-0"><h3 className="font-black text-lg text-gray-900 dark:text-white uppercase tracking-wider">Inbox</h3><DocsLink view="inbox" /></div>
                   <div className="flex gap-2">
                     <button onClick={() => { setEmailDraft({ to: '', subject: '', message: '', attachmentBase64: '', filename: '' }); setShowEmailModal(true); }} className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-sm">Compose</button>
                     <button onClick={() => fetchInboxLogs()} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider shadow-sm">Refresh</button>

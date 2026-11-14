@@ -50,6 +50,27 @@ const STATUS_DOT: Record<string, string> = {
 };
 const CHIP_ICONS: Record<string, any> = { mail: Mail, reply: CornerUpLeft, bell: Bell, plus: Plus, chart: BarChart3, sparkle: Sparkles, db: Database, settings: SettingsIcon };
 
+type Suggestion = { text: string; icon: string; fill?: boolean; prompt?: string };
+/** More things worth asking. Items with fill:true are templates: they drop into the box for you to complete. */
+const MORE_QUESTIONS: Suggestion[] = [
+  { icon: "bell", text: "Which quotes haven't been touched in over 10 days?" },
+  { icon: "db", text: "Who are my top 5 clients by quote value?" },
+  { icon: "chart", text: "Show a line chart of quotes per month" },
+  { icon: "chart", text: "Pie chart of quote value by client" },
+  { icon: "mail", text: "Summarize the latest email from each client" },
+  { icon: "reply", text: "Draft a follow-up for my largest pending quote" },
+  { icon: "sparkle", text: "Compare this month with last month" },
+  { icon: "db", text: "Which catalogue items have no rate set?" },
+  { icon: "settings", text: "Explain how my email forwarding works" },
+  { icon: "settings", text: "What is my AI tone set to, and what would you change?" },
+  { icon: "plus", text: "Create a quote for ", fill: true },
+  { icon: "reply", text: "Reply to ", fill: true },
+  { icon: "db", text: "Change the rate of  to ", fill: true },
+  { icon: "settings", text: "Set the AI tone to ", fill: true },
+  { icon: "sparkle", text: "Mark  as Approved", fill: true },
+  { icon: "sparkle", text: "Find quotes for ", fill: true },
+];
+
 const greeting = () => {
   const h = new Date().getHours();
   return h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
@@ -295,6 +316,8 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const storeKey = `cma_agent_chat_${userEmail}`;
@@ -329,7 +352,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   // ⌘K / Ctrl+K focuses the command bar
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); inputRef.current?.focus(); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); inputRef.current?.focus(); setOpen(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -422,19 +445,34 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const statusEntries = useMemo(() => Object.entries(ov?.stats.byStatus || {}).sort((a, b) => b[1] - a[1]), [ov]);
   const share = ov && ov.stats.total ? Math.round((ov.stats.mine / ov.stats.total) * 100) : 0;
   const name = ov?.user.name || userEmail.split("@")[0];
+  const topChips = (ov?.chips || []).slice(0, 3);
+
+  // the drop-up under the command bar: the remaining live chips, then the standing question list
+  const suggestions: Suggestion[] = useMemo(() => {
+    const live: Suggestion[] = (ov?.chips || []).slice(3).map((c) => ({ text: c.label, icon: c.icon, prompt: c.prompt }));
+    const all = [...live, ...MORE_QUESTIONS];
+    const q = input.trim().toLowerCase();
+    return (q ? all.filter((x) => x.text.toLowerCase().includes(q)) : all).slice(0, 12);
+  }, [ov, input]);
+  const showList = open && !busy && suggestions.length > 0;
+
+  const pick = (sg: Suggestion) => {
+    setOpen(false); setActive(-1);
+    if (sg.fill) { setInput(sg.text); requestAnimationFrame(() => inputRef.current?.focus()); } else send(sg.prompt || sg.text);
+  };
 
   return (
-    <div className="agent-home relative max-w-[1100px] mx-auto">
+    <div className="agent-home relative flex flex-col min-h-[calc(100vh-3rem)]">
       <div className="agent-aurora" aria-hidden />
 
       {/* ---- header ---- */}
-      <div className="relative flex items-center gap-3 mb-5">
+      <div className="relative flex items-center gap-3 mb-3">
         <span className="agent-label">{ov?.company || "Workspace"} · CMA</span>
         <span className="ml-auto flex items-center gap-3">{docsLink}</span>
       </div>
 
-      {/* ---- stats ribbon ---- */}
-      <section className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" aria-label="Pipeline statistics">
+      {/* ---- stats ---- */}
+      <section className="agent-stats relative" aria-label="Pipeline statistics">
         <div className="agent-stat">
           <span className="agent-label">Total quotes</span>
           <div className="flex items-end justify-between gap-2">
@@ -443,13 +481,13 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
           </div>
           <span className="text-xs text-gray-500">{ov ? `${inr(ov.stats.totalValue)} in pipeline` : " "}</span>
         </div>
-        <div className="agent-stat col-span-2 lg:col-span-1">
+        <div className="agent-stat">
           <span className="agent-label">Per status</span>
           <div className="flex flex-wrap gap-1.5 mt-1">
             {statusEntries.length === 0 && <span className="text-xs text-gray-400">No quotes yet</span>}
-            {statusEntries.map(([s, n]) => (
-              <button key={s} onClick={() => send(`Show my ${s} quotes`)} className="agent-chip-sm" title={`Ask about ${s} quotes`}>
-                <i style={{ background: STATUS_DOT[s] || "#8c8478" }} />{s}<b>{n}</b>
+            {statusEntries.map(([st, n]) => (
+              <button key={st} onClick={() => send(`Show my ${st} quotes`)} className="agent-chip-sm" title={`Ask about ${st} quotes`}>
+                <i style={{ background: STATUS_DOT[st] || "#8c8478" }} />{st}<b>{n}</b>
               </button>
             ))}
           </div>
@@ -462,7 +500,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
         </div>
         <div className="agent-stat">
           <span className="agent-label">Pulse</span>
-          <div className="flex items-baseline gap-3">
+          <div className="flex items-baseline gap-4">
             <button onClick={() => onNavigate("inbox")} className="text-left"><span className="agent-num !text-2xl">{ov?.inbox.unread ?? "–"}</span><span className="block text-[11px] text-gray-500">unread</span></button>
             <button onClick={() => send("Which clients are waiting on a reply?")} className="text-left"><span className="agent-num !text-2xl text-[var(--sindoor)]">{ov?.inbox.waiting ?? "–"}</span><span className="block text-[11px] text-gray-500">waiting</span></button>
           </div>
@@ -473,11 +511,36 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
           )}
         </div>
       </section>
-      {ovError && <p className="text-xs text-[var(--danger,#a3192b)] mb-3">Could not load stats: {ovError}</p>}
+      {ovError && <p className="text-xs text-[var(--danger,#a3192b)] mt-2">Could not load stats: {ovError}</p>}
 
-      {/* ---- the assistant ---- */}
-      <section className="agent-panel relative" aria-label="Bloomgard AI">
-        <div className="flex items-center gap-3 px-5 pt-4">
+      {/* ---- latest quotes, then create ---- */}
+      <section className="relative mt-5" aria-label="Latest quotes">
+        <div className="flex items-center mb-2">
+          <span className="agent-label">Latest quotes</span>
+          <button onClick={() => onNavigate("pipeline")} className="ml-auto text-xs font-semibold text-[var(--neelam)] hover:underline">View all →</button>
+        </div>
+        <div className="agent-latest">
+          {(ov?.latest || []).map((q) => (
+            <button key={q.qn} onClick={() => onOpenQuote(q.qn)} className="agent-quote group">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[11px] text-gray-500 truncate min-w-0">{q.qn}</span>
+                <StatusPill s={q.status} />
+              </div>
+              <div className="mt-1.5 text-[15px] font-semibold truncate">{q.client || "Untitled client"}</div>
+              <div className="flex items-end justify-between mt-2 gap-2">
+                <span className="text-lg font-semibold tabular-nums">{q.value ? inr(q.value) : "—"}</span>
+                <span className="text-[11px] text-gray-400 whitespace-nowrap">{q.items} item{q.items === 1 ? "" : "s"} · {ago(q.date)}</span>
+              </div>
+            </button>
+          ))}
+          {ov && ov.latest.length === 0 && <p className="text-sm text-gray-400 p-4">No quotes yet. Create your first one below.</p>}
+        </div>
+        <button onClick={onNewQuote} className="agent-create mt-3"><Plus className="w-4 h-4" />Create quote</button>
+      </section>
+
+      {/* ---- the conversation: the page itself ---- */}
+      <section className="relative flex-1 flex flex-col mt-5 min-h-[260px]" aria-label="Bloomgard AI">
+        <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
           <div className="agent-orb" aria-hidden />
           <div className="leading-tight">
             <div className="font-semibold text-sm">Bloomgard AI</div>
@@ -490,19 +553,17 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
           )}
         </div>
 
-        {!hasChat && (
-          <div className="px-5 pt-8 pb-2 text-center">
+        {!hasChat ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center py-10">
             <h2 className="agent-hello">{greeting()}, {name}.</h2>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-gray-500 mt-2 max-w-xl">
               {ov && (ov.inbox.unread || ov.inbox.waiting)
                 ? `${ov.inbox.unread} unread email${ov.inbox.unread === 1 ? "" : "s"} and ${ov.followups.cold} cold quote${ov.followups.cold === 1 ? "" : "s"} are waiting. Ask me anything, or tell me what to do.`
                 : "Ask me anything about your quotes, emails and catalogue, or tell me what to do."}
             </p>
           </div>
-        )}
-
-        {hasChat && (
-          <div className="px-5 pt-4 space-y-5 max-h-[52vh] overflow-y-auto agent-scroll" aria-live="polite">
+        ) : (
+          <div className="flex-1 pt-5 pb-4 space-y-6" aria-live="polite">
             {msgs.map((m) => m.role === "user" ? (
               <div key={m.id} className="flex justify-end"><div className="agent-user">{m.text}</div></div>
             ) : (
@@ -510,7 +571,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
                 <div className="agent-orb agent-orb--sm shrink-0 mt-1" aria-hidden />
                 <div className="min-w-0 flex-1 text-[15px]">
                   <StepChips steps={m.steps || []} />
-                  {m.live && !m.text && !m.error && (m.steps || []).every((s) => s.status !== "running") && <span className="agent-dots" aria-label="thinking"><i /><i /><i /></span>}
+                  {m.live && !m.text && !m.error && (m.steps || []).every((st) => st.status !== "running") && <span className="agent-dots" aria-label="thinking"><i /><i /><i /></span>}
                   {(m.blocks || []).map((b, i) => (
                     <div key={i} className="mb-3">
                       {b.type === "chart" && <ChartBlock b={b} />}
@@ -531,55 +592,64 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
           </div>
         )}
 
-        {/* ---- command bar ---- */}
-        <form className="px-5 pt-4" onSubmit={(e) => { e.preventDefault(); send(input); }}>
-          <div className="agent-input">
-            <textarea
-              ref={inputRef} value={input} rows={1} autoFocus
-              onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; }}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-              placeholder="Ask, search or command…  e.g. “change the rate of ITM-001 to 95” or “reply to Priya”"
-              aria-label="Message Bloomgard AI"
-            />
-            {voiceSupported && (
-              <button type="button" onClick={toggleVoice} className={`agent-icon-btn ${listening ? "agent-icon-btn--on" : ""}`} aria-label="Dictate"><Mic className="w-4 h-4" /></button>
-            )}
-            <kbd className="hidden md:inline-flex agent-kbd">⌘K</kbd>
-            <button type="submit" disabled={busy || !input.trim()} className="agent-send" aria-label="Send">
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
-            </button>
+        {/* ---- dock: three chips, the command bar, and the drop-up of more questions ---- */}
+        <div className="agent-dock">
+          <div className="flex flex-wrap gap-2 mb-2.5" aria-label="Suggestions">
+            {topChips.map((c) => {
+              const Icon = CHIP_ICONS[c.icon] || Sparkles;
+              return <button key={c.label} onClick={() => send(c.prompt)} disabled={busy} className="agent-chip"><Icon className="w-3.5 h-3.5" />{c.label}</button>;
+            })}
           </div>
-        </form>
-
-        {/* ---- choice chips ---- */}
-        <div className="px-5 pt-3 pb-5 flex flex-wrap gap-2" aria-label="Suggestions">
-          {(ov?.chips || []).map((c) => {
-            const Icon = CHIP_ICONS[c.icon] || Sparkles;
-            return <button key={c.label} onClick={() => send(c.prompt)} disabled={busy} className="agent-chip"><Icon className="w-3.5 h-3.5" />{c.label}</button>;
-          })}
-        </div>
-      </section>
-
-      {/* ---- latest quotes + create ---- */}
-      <section className="relative mt-6" aria-label="Latest quotes">
-        <div className="flex items-center mb-3">
-          <span className="agent-label">Latest quotes</span>
-          <button onClick={() => onNavigate("pipeline")} className="ml-auto text-xs font-semibold text-[var(--neelam)] hover:underline">View all →</button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {(ov?.latest || []).map((q) => (
-            <button key={q.qn} onClick={() => onOpenQuote(q.qn)} className="agent-quote group">
-              <div className="flex items-center justify-between"><span className="font-mono text-[11px] text-gray-500">{q.qn}</span><StatusPill s={q.status} /></div>
-              <div className="mt-2 text-base font-semibold truncate">{q.client || "Untitled client"}</div>
-              <div className="flex items-end justify-between mt-3">
-                <span className="text-xl font-semibold tabular-nums">{q.value ? inr(q.value) : "—"}</span>
-                <span className="text-[11px] text-gray-400">{q.items} item{q.items === 1 ? "" : "s"} · {ago(q.date)}</span>
+          <form className="relative" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+            {showList && (
+              <div className="agent-drop" role="listbox" aria-label="More questions to ask">
+                <div className="agent-label px-3 pt-2 pb-1">Try asking</div>
+                {suggestions.map((sg, i) => {
+                  const Icon = CHIP_ICONS[sg.icon] || Sparkles;
+                  return (
+                    <button
+                      type="button" key={sg.text} role="option" aria-selected={i === active}
+                      onMouseDown={(e) => e.preventDefault()} onClick={() => pick(sg)} onMouseEnter={() => setActive(i)}
+                      className={`agent-drop__item ${i === active ? "agent-drop__item--on" : ""}`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{sg.text}{sg.fill ? "…" : ""}</span>
+                      {sg.fill && <em>edit</em>}
+                    </button>
+                  );
+                })}
               </div>
-            </button>
-          ))}
-          {ov && ov.latest.length === 0 && <p className="text-sm text-gray-400 col-span-3">No quotes yet. Create your first one below.</p>}
+            )}
+            <div className="agent-input">
+              <textarea
+                ref={inputRef} value={input} rows={1} autoFocus
+                onClick={() => setOpen(true)} onBlur={() => setOpen(false)}
+                onChange={(e) => { setInput(e.target.value); setOpen(true); setActive(-1); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") { setOpen(false); return; }
+                  if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) { setOpen(true); return; }
+                  if (showList && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                    e.preventDefault();
+                    setActive((a) => (e.key === "ArrowDown" ? (a + 1) % suggestions.length : (a - 1 + suggestions.length) % suggestions.length));
+                    return;
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (showList && active >= 0) pick(suggestions[active]); else { setOpen(false); send(input); }
+                  }
+                }}
+                placeholder="Ask anything, or tell me what to do…"
+                aria-label="Message Bloomgard AI"
+              />
+              {voiceSupported && (
+                <button type="button" onClick={toggleVoice} className={`agent-icon-btn ${listening ? "agent-icon-btn--on" : ""}`} aria-label="Dictate"><Mic className="w-4 h-4" /></button>
+              )}
+              <kbd className="hidden md:inline-flex agent-kbd">⌘K</kbd>
+              <button type="submit" disabled={busy || !input.trim()} className="agent-send" aria-label="Send">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
+              </button>
+            </div>
+          </form>
         </div>
-        <button onClick={onNewQuote} className="agent-create mt-4"><Plus className="w-4 h-4" />Create quote</button>
       </section>
     </div>
   );

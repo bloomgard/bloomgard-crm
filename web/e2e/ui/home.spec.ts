@@ -33,8 +33,35 @@ test.describe('Bloomgard AI home', () => {
 
     await expect(page.getByLabel('Latest quotes').locator('.agent-quote')).toHaveCount(Math.min(3, count || 0));
     await expect(page.getByRole('button', { name: 'Create quote' })).toBeVisible();
-    expect(await page.getByLabel('Suggestions').getByRole('button').count()).toBeGreaterThanOrEqual(5);
+    // exactly three choice chips; the rest live in the drop-up
+    await expect(page.getByLabel('Suggestions').getByRole('button')).toHaveCount(3);
+    await expect(page.getByRole('listbox')).toHaveCount(0);
     expect(errors, errors.join('\n')).toEqual([]);
+  });
+
+  test('clicking the command bar drops up more questions; they filter, fill templates and close on Escape', async ({ page }) => {
+    await openApp(page);
+    await expect(page.getByRole('listbox')).toHaveCount(0); // not open just because the box is autofocused
+    await input(page).click();
+    const list = page.getByRole('listbox', { name: 'More questions to ask' });
+    await expect(list).toBeVisible();
+    expect(await list.getByRole('option').count()).toBeGreaterThanOrEqual(8);
+
+    await input(page).fill('chart');
+    const filtered = await list.getByRole('option').allInnerTexts();
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(filtered.every((t) => /chart/i.test(t))).toBe(true);
+
+    await input(page).fill('');
+    await list.getByRole('option', { name: /Create a quote for/ }).click(); // a template: lands in the box for editing
+    await expect(input(page)).toHaveValue(/Create a quote for/);
+    await expect(list).toBeHidden();
+
+    await input(page).fill('');
+    await input(page).click();
+    await expect(list).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(list).toBeHidden();
   });
 
   test('Create quote opens the new-quote form; a latest-quote card opens that quote', async ({ page }) => {

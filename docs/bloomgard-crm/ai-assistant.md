@@ -18,7 +18,7 @@ person to review and press send.
 | **Generate AI Actions** | [Inbox](./inbox.md) | Summary, extracted quote (client + items) and a drafted reply. |
 | **Create Quote Now** | Inbox | Builds a real quote from the extracted data. |
 | **Follow-up suggestions** | [Follow-ups](./follow-ups.md) | Suggested follow-up email snippets awaiting approval. |
-| **Bloomgard AI chat** and **AI charts** | [Dashboard & Bloomgard AI](./dashboard-and-copilot.md) | Answers and charts over your own data. |
+| **Bloomgard AI chat** and **AI charts** | [Stats, charts & Bloomgard AI](./dashboard-and-copilot.md) | Answers and charts over your own data. |
 
 ## Grounded in your catalogue
 

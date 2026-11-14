@@ -1,7 +1,7 @@
 import { Page, expect } from '@playwright/test';
 import { ENV } from '../helpers/env';
 
-export const VIEWS = ['Home', 'Dashboard', 'Quotes', 'Inbox', 'Follow ups', 'Lead Gen', 'Docs', 'Settings'] as const;
+export const VIEWS = ['Home', 'Quotes', 'Inbox', 'Follow ups', 'Lead Gen', 'Docs', 'Settings'] as const;
 
 /** Open the dashboard and wait for the workspace to finish initialising. */
 export async function openApp(page: Page) {

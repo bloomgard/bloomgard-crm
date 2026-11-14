@@ -14,6 +14,17 @@ test.describe('Workspace shell', () => {
     expect(errors, errors.join('\n')).toEqual([]);
   });
 
+  test('there is no Dashboard view, and the sidebar is a rectangular rail fixed to the left edge', async ({ page }) => {
+    await openApp(page);
+    await expect(page.locator('nav').getByText('Dashboard', { exact: true })).toHaveCount(0);
+    const box = await page.locator('aside').boundingBox();
+    const vp = page.viewportSize()!;
+    expect(box!.x).toBe(0);
+    expect(box!.y).toBe(0);
+    expect(Math.round(box!.height)).toBe(vp.height);
+    expect(await page.locator('aside').evaluate((el) => getComputedStyle(el).borderRadius)).toBe('0px');
+  });
+
   test('each view shows its own heading', async ({ page }) => {
     await openApp(page);
     await go(page, 'Quotes');

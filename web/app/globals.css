@@ -321,3 +321,43 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 @media (prefers-reduced-motion: reduce) { .agent-aurora, .agent-orb, .agent-orb::after, .agent-dots i, .agent-step--live { animation: none; } }
 
 .jaali .agent-input textarea:focus-visible, .jaali .agent-input textarea:focus { outline: none !important; box-shadow: none; }
+
+/* ------------------------------------------------------------------
+   Layout pass: the assistant IS the page; the other pages fill the screen
+   instead of sitting in boxes; the sidebar is a fixed rail.
+   ------------------------------------------------------------------ */
+.jaali { --agent-canvas: var(--kora); }
+.jaali.dark { --agent-canvas: #0b0e1a; }
+
+.agent-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--color-gray-200); border-bottom: 1px solid var(--color-gray-200); }
+.agent-stats .agent-stat { background: transparent; border: 0; border-left: 1px solid var(--color-gray-200); border-radius: 0; backdrop-filter: none; box-shadow: none; padding: 14px 20px; min-height: 104px; }
+.agent-stats .agent-stat:first-child { border-left: 0; padding-left: 0; }
+@media (max-width: 1023px) {
+  .agent-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-stats .agent-stat:nth-child(odd) { border-left: 0; padding-left: 0; }
+  .agent-stats .agent-stat:nth-child(n + 3) { border-top: 1px solid var(--color-gray-200); }
+}
+.agent-latest { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--color-gray-200); border-bottom: 1px solid var(--color-gray-200); }
+.agent-latest .agent-quote { border: 0; border-left: 1px solid var(--color-gray-200); border-radius: 0; background: transparent; padding: 14px 20px; min-width: 0; text-align: left; }
+.agent-latest .agent-quote:first-child { border-left: 0; padding-left: 0; }
+.agent-latest .agent-quote:hover { background: color-mix(in srgb, var(--color-gray-100) 60%, transparent); transform: none; box-shadow: none; }
+@media (max-width: 767px) {
+  .agent-latest { grid-template-columns: 1fr; }
+  .agent-latest .agent-quote { border-left: 0; padding-left: 0; border-top: 1px solid var(--color-gray-200); }
+  .agent-latest .agent-quote:first-child { border-top: 0; }
+}
+
+.agent-dock { position: sticky; bottom: 0; z-index: 20; margin-top: auto; padding: 16px 0 10px; background: linear-gradient(to top, var(--agent-canvas) 78%, transparent); }
+.agent-drop { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 340px; overflow-y: auto; padding: 4px; z-index: 30; border-radius: 14px; border: 1px solid var(--color-gray-200); background: var(--color-white); box-shadow: var(--shadow-lg); }
+.agent-drop__item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 12px; border-radius: 9px; font-size: 13.5px; color: var(--color-gray-800); }
+.agent-drop__item svg { color: var(--sindoor); }
+.agent-drop__item em { margin-left: auto; font-style: normal; font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--color-gray-400); }
+.agent-drop__item--on { background: var(--color-gray-100); }
+
+/* other pages: full width, no outer card */
+.jaali main .max-w-5xl, .jaali main .max-w-6xl, .jaali main .max-w-7xl { max-width: none; }
+.jaali main > .animate-in > [class*="rounded-xl"],
+.jaali main > .animate-in > [class*="rounded-2xl"],
+.jaali main > .animate-in > [class*="rounded-3xl"] { border-radius: 0; border: 0; box-shadow: none; background: transparent; backdrop-filter: none; }
+.jaali main > .animate-in > [class*="rounded-["] { border-radius: 0; border: 0; box-shadow: none; background: transparent; padding-left: 0; padding-right: 0; }
+.jaali main > .animate-in > [class*="rounded-["] > .absolute { display: none; }

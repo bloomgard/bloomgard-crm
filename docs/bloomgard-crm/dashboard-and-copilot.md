@@ -1,31 +1,17 @@
 ---
-title: Dashboard and Bloomgard AI
+title: Stats, charts and Bloomgard AI
 description: Pipeline analytics, AI-built charts, and the chat assistant.
 order: 10
 section: AI
 ---
 
-# Dashboard and Bloomgard AI
+# Stats, charts and Bloomgard AI
 
-## Dashboard
+## Statistics and charts
 
-The **Dashboard** summarises the workspace:
-
-- **Total Quotes**, **My Contribution** and **Other contributions** (managers see everyone's).
-- **Recent Quotes Activity** with a *View All →* link to the pipeline.
-- **Split Breakdown** of the pipeline.
-- An **Active Filter** and **Filtered Records** count when you narrow the view.
-
-### AI-built charts ("Intelligence")
-
-Type what you want to see in plain language ("total revenue by agent", "pie chart of quote
-statuses"). The AI turns it into a chart definition:
-
-- **Chart**: pie, bar, line, or a single metric.
-- **Metric**: count of quotes, or total value.
-- **Dimension**: status, agent, client, source or date.
-
-The chart is computed from your own visible quotes; the AI only chooses the shape.
+The old Dashboard page has been replaced by [Home](./ai-home.md). The numbers (total quotes, quotes per status,
+your contribution, pipeline value) sit at the top of Home, and charts are drawn in the chat when you ask: "pie
+chart of quote value by client", "line chart of quotes per month", and so on.
 
 ## Bloomgard AI (chat assistant)
 
