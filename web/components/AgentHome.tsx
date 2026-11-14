@@ -82,9 +82,25 @@ const ago = (iso?: string) => {
   return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
 };
 
-async function authHeaders() {
-  const { data } = await supabase.auth.getSession();
+async function authHeaders(fresh = false) {
+  const { data } = fresh ? await supabase.auth.refreshSession() : await supabase.auth.getSession();
   return { Authorization: `Bearer ${data.session?.access_token || ""}`, "Content-Type": "application/json" };
+}
+
+/**
+ * Calls the agent API as the signed-in user. A 401 usually means the access token went stale: refresh the
+ * session once and retry. If the session itself is gone (signed out or revoked elsewhere), go to sign-in
+ * instead of leaving a half-working page.
+ */
+async function agentFetch(url: string, init: RequestInit = {}) {
+  let res = await fetch(url, { ...init, headers: { ...(await authHeaders()), ...(init.headers || {}) } });
+  if (res.status !== 401) return res;
+  res = await fetch(url, { ...init, headers: { ...(await authHeaders(true)), ...(init.headers || {}) } });
+  if (res.status === 401) {
+    await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    window.location.replace("/login");
+  }
+  return res;
 }
 
 /** Tiny markdown: **bold**, `code`, bullets, numbered lists, headings, paragraphs. */
@@ -327,7 +343,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
 
   const loadOverview = useCallback(async () => {
     try {
-      const res = await fetch("/api/agent/overview", { headers: await authHeaders() });
+      const res = await agentFetch("/api/agent/overview");
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
       setOv(await res.json()); setOvError("");
     } catch (e: any) { setOvError(e.message || "Could not load"); }
@@ -373,8 +389,8 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
     setMsgs([...history, { id: aiId, role: "ai", text: "", steps: [], blocks: [], actions: [], live: true }]);
     try {
       abortRef.current = new AbortController();
-      const res = await fetch("/api/agent/chat", {
-        method: "POST", headers: await authHeaders(), signal: abortRef.current.signal,
+      const res = await agentFetch("/api/agent/chat", {
+        method: "POST", signal: abortRef.current.signal,
         body: JSON.stringify({ messages: history.map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })).filter((m) => m.content) }),
       });
       if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
@@ -423,7 +439,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
     }
     setAct({ state: "running" });
     try {
-      const res = await fetch("/api/agent/execute", { method: "POST", headers: await authHeaders(), body: JSON.stringify({ kind: action.kind, payload: action.payload }) });
+      const res = await agentFetch("/api/agent/execute", { method: "POST", body: JSON.stringify({ kind: action.kind, payload: action.payload }) });
       const out = await res.json();
       if (!res.ok || out.error) throw new Error(out.error || "Action failed");
       setAct({ state: "done", result: out.message });

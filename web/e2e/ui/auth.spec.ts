@@ -30,3 +30,20 @@ test.describe('Sign in', () => {
     await page.waitForURL((u) => !u.pathname.startsWith('/dashboard'), { timeout: 20_000 });
   });
 });
+
+test('signing out on one device leaves the other devices signed in', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { openAppFresh } = await import('./_app');
+  const a = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const b = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const pa = await a.newPage(); const pb = await b.newPage();
+  await openAppFresh(pa);
+  await openAppFresh(pb);
+  await pa.getByRole('button', { name: 'Sign Out' }).click();
+  await expect(pa).not.toHaveURL(/\/dashboard/, { timeout: 20_000 }); // back to the public site
+  // device B still works end to end, including the server-checked AI home
+  await pb.reload();
+  await expect(pb.getByText(/Could not load stats/)).toHaveCount(0);
+  await expect(pb.getByLabel('Pipeline statistics').locator('.agent-num').first()).toHaveText(/^\d+$/, { timeout: 30_000 });
+  await a.close(); await b.close();
+});

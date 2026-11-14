@@ -1097,7 +1097,7 @@ export default function ClientDashboard() {
   };
 
   const handleLogout = async () => {
-    try { await supabase.auth.signOut(); } catch (e) { console.error("Sign out error", e); }
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) { console.error("Sign out error", e); }
     localStorage.clear();
     window.location.replace("/");
   };
@@ -3230,7 +3230,7 @@ Command: ${dashCommand}`;
         )}
 
         {currentView === "new_entry" && (
-          <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
+          <div className="animate-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-gray-100 pb-6">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{editingId ? "Revise Entry" : "Create Entry"}</h2><DocsLink view="new_entry" /></div>
@@ -3245,7 +3245,7 @@ Command: ${dashCommand}`;
               </div>
             </div>
 
-            <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 mb-8 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="py-6 mb-2 border-b border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Ref ID</label><input readOnly className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-400 outline-none cursor-not-allowed italic" value={qn || "Auto-generated on save"} /></div>
               <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Date</label><input type="date" className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400" value={date} onChange={e => setDate(e.target.value)} /></div>
               <div className="space-y-1.5">
@@ -3259,9 +3259,9 @@ Command: ${dashCommand}`;
 
             <div className="space-y-8 pb-20">
               {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => (
-                <div key={sIdx} className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
+                <div key={sIdx} className="pt-4 pb-8 border-b border-gray-200">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
-                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-3"><span className="w-2 h-2 bg-gray-300 rounded-full"></span>{section.title}</h3>
+                    <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[var(--sindoor)] rounded-full"></span>{section.title}</h3>
                     {section.allow_multiple && (
                       <button onClick={() => { const nd = { ...dynamicData }; nd[section.title] = [...(nd[section.title] || []), {}]; setDynamicData(nd); }} className="text-[10px] font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg uppercase tracking-wider active:scale-95 transition-transform">+ Add Row</button>
                     )}
@@ -3270,7 +3270,7 @@ Command: ${dashCommand}`;
                   {section.allow_multiple ? (
                     <div className="space-y-4">
                       {(dynamicData[section.title] || []).map((row, rIdx) => (
-                        <div key={rIdx} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-gray-50 rounded-xl border border-gray-100">
+                        <div key={rIdx} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-5 pr-10 border-t border-dashed border-gray-200 first:border-t-0">
                           {section.fields.map((f, fIdx) => {
                             const allEntries = findAllEntriesByKey(f.name);
                             const activeEntries = allEntries.filter(entry => {
