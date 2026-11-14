@@ -383,3 +383,8 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 
 /* decorative glow and mandala must never cause sideways scrolling */
 .jaali, .agent-home { overflow-x: clip; }
+
+/* brighter dock: chips, briefing pills and the command bar sit on solid white, not tinted glass */
+.agent-chip, .agent-brief { background: var(--color-white); }
+.agent-chip { border-color: var(--color-gray-200); box-shadow: 0 1px 2px rgba(21, 18, 14, 0.04); }
+.agent-input { background: var(--color-white); }

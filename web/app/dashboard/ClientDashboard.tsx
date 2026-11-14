@@ -1646,8 +1646,8 @@ Command: ${dashCommand}`;
       <aside className={`fixed inset-y-0 left-0 z-[100] w-60 flex flex-col border-r transition-transform duration-300 ease-in-out overflow-hidden rounded-none
         ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}
         ${isDark ? 'bg-[#121628] border-[#262c47]' : 'bg-white border-gray-200'}`}>
-        <div className="px-5 pt-6 pb-4 border-b border-gray-100">
-          <h1 className="text-gray-900"><BrandLockup height={20} /></h1>
+        <div className="px-4 pt-6 pb-4 border-b border-gray-100">
+          <h1 className="text-gray-900"><BrandLockup height={25} /></h1>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mt-1">{companyName || "Workspace"}</p>
         </div>
         <nav className="flex-1 px-3 space-y-1 mt-3 overflow-y-auto scrollbar-hide">
