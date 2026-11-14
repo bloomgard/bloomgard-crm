@@ -13,9 +13,10 @@ const fn = (name: string, description: string, properties: Record<string, any> =
 
 export const TOOLS = [
   fn('get_overview', 'Headline numbers: quote counts per status, pipeline value, my contribution, unread emails, follow-up temperature, latest quotes.'),
-  fn('search_quotes', 'Find quotations by free text (QN number, client, email, item, status) and/or status.', {
-    query: { type: 'string', description: 'Free text. Omit to list the newest quotes.' },
+  fn('search_quotes', 'Find quotations by free text (QN number, client, email, item, status) and/or status. Every result carries its computed ₹ value; sort by value to find the biggest or smallest.', {
+    query: { type: 'string', description: 'Free text. Omit to list all quotes.' },
     status: { type: 'string', description: 'Exact status, e.g. Inquiry, Draft, Pending, Approved, Rejected, Lost, Lead.' },
+    sort: { type: 'string', enum: ['newest', 'oldest', 'value_desc', 'value_asc'], description: 'Default newest.' },
     limit: { type: 'integer', description: 'Max rows, default 10, max 25.' },
   }),
   fn('get_quote', 'Everything about one quote: client, line items, conversation with the client, status history, follow-up state.', {
@@ -211,6 +212,8 @@ async function runQuery(ctx: AgentCtx, a: any) {
     const o: any = { ...r };
     (spec.drop || []).forEach((k) => delete o[k]);
     (spec.clip || []).forEach((k) => { if (o[k]) o[k] = clip(o[k], 700); });
+    // amounts live inside the quote's form data, not in a column: expose the computed value
+    if (a.table === 'quotations' && 'custom_metadata' in r) o.value = Math.round(quoteValue(r));
     if (o.custom_metadata) o.custom_metadata = clip(JSON.stringify(o.custom_metadata), 800);
     return o;
   });
@@ -258,7 +261,11 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
           .join(' ').toLowerCase();
         return text.split(/\s+/).every((w) => hay.includes(w));
       });
-      const cards = hits.slice(0, limit).map(quoteCard);
+      const sorted = [...hits];
+      if (a.sort === 'value_desc') sorted.sort((x: any, y: any) => quoteValue(y) - quoteValue(x));
+      else if (a.sort === 'value_asc') sorted.sort((x: any, y: any) => quoteValue(x) - quoteValue(y));
+      else if (a.sort === 'oldest') sorted.reverse();
+      const cards = sorted.slice(0, limit).map(quoteCard);
       return { result: { matches: hits.length, shown: cards.length, quotes: cards }, blocks: cards.length ? [{ type: 'quotes', title: text ? `Quotes matching "${a.query}"` : 'Quotes', quotes: cards }] : [] };
     }
     case 'get_quote': {

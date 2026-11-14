@@ -14,8 +14,10 @@ test.describe.serial('Outbound email', () => {
   const cleanup = new Cleanup();
   const expectedFrom = () => actor.tenant.custom_email_sender || '';
   const workspaceReplyTo = () => `${actor.tenant.inbound_routing_id}@inbound.bloomgard.co`;
+  const startedAt = new Date().toISOString();
+  // only rows from this run: test quote numbers (QN-9999-xxx) are reused across runs
   const sentRows = async (subject: string) => {
-    const { data } = await admin().from('sent_emails').select('*').eq('tenant_id', actor.tenantId).eq('subject', subject);
+    const { data } = await admin().from('sent_emails').select('*').eq('tenant_id', actor.tenantId).eq('subject', subject).gte('created_at', startedAt);
     return data || [];
   };
 

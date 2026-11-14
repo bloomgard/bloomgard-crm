@@ -111,6 +111,10 @@ export default function ClientDashboard() {
   const [isRunningCoordinator, setIsRunningCoordinator] = useState(false);
   const [records, setRecords] = useState([]);
   const [currentView, setCurrentView] = useState("home"); // the AI command centre is the landing view
+  useEffect(() => {
+    const names: Record<string, string> = { home: 'Home', pipeline: 'Quotes', inbox: 'Inbox', alerts: 'Follow ups', leadgen: 'Lead Gen', docs: 'Documents', settings: 'Settings', new_entry: 'New quote', agents: 'Agents' };
+    document.title = `${names[currentView] || 'Workspace'} · Bloomgard CMA`;
+  }, [currentView]);
   const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint' | 'email'>('menu');
   const { masterTree, findAllEntriesByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
   const { masterTree: autoMasterTree, findAllEntriesByKey: findAllAutoEntriesByKey } = useMasterDataFields(tenantId || undefined, 'auto');
@@ -308,21 +312,23 @@ export default function ClientDashboard() {
   };
 
   const handleInboxAction = async (emailId, action, value) => {
+    // Optimistic: the list reacts immediately; if the server refuses, put the old value back.
+    const before = inboxLogs.find(e => e.id === emailId)?.[action];
+    const apply = (v) => {
+      setInboxLogs(prev => prev.map(e => e.id === emailId ? { ...e, [action]: v } : e));
+      setSelectedInboxEmail(prev => (prev && prev.id === emailId ? { ...prev, [action]: v } : prev));
+    };
+    apply(value);
     try {
-      const updates = { [action]: value };
       const res = await fetch(getApiUrl('/api/inbox/update'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailId, updates, tenantId: user?.tenant_id || tenantId })
+        body: JSON.stringify({ emailId, updates: { [action]: value }, tenantId: user?.tenant_id || tenantId })
       });
-      if (res.ok) {
-        setInboxLogs(prev => prev.map(e => e.id === emailId ? { ...e, ...updates } : e));
-        if (selectedInboxEmail?.id === emailId) {
-          setSelectedInboxEmail(prev => ({ ...prev, ...updates }));
-        }
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (e) {
       console.error("Inbox Action Error:", e);
+      apply(before);
     }
   };
 
@@ -3036,12 +3042,12 @@ Command: ${dashCommand}`;
         {currentView === "inbox" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-[calc(100vh-140px)] flex gap-6">
             <div className="w-[26rem] shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
-              <header className="p-4 border-b border-gray-100 dark:border-gray-200 flex flex-col gap-3">
+              <header className="pr-5 pt-1 pb-4 border-b border-gray-200 flex flex-col gap-4">
                 <div className="flex justify-between items-center">
-                  <div className="flex items-baseline gap-3 min-w-0"><h3 className="font-black text-lg text-gray-900 dark:text-white uppercase tracking-wider">Inbox</h3><DocsLink view="inbox" /></div>
+                  <div className="flex items-center gap-3 min-w-0"><h2 className="text-3xl font-bold text-gray-900">Inbox</h2><DocsLink view="inbox" /></div>
                   <div className="flex gap-2">
-                    <button onClick={() => { setEmailDraft({ to: '', subject: '', message: '', attachmentBase64: '', filename: '' }); setShowEmailModal(true); }} className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-sm">Compose</button>
-                    <button onClick={() => fetchInboxLogs()} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-all uppercase tracking-wider shadow-sm">Refresh</button>
+                    <button onClick={() => { setEmailDraft({ to: '', subject: '', message: '', attachmentBase64: '', filename: '' }); setShowEmailModal(true); }} className="agent-btn agent-btn--primary"><Pen className="w-3.5 h-3.5" />Compose</button>
+                    <button onClick={() => fetchInboxLogs()} className="agent-btn">Refresh</button>
                   </div>
                 </div>
                 <div className="relative">
@@ -3051,7 +3057,7 @@ Command: ${dashCommand}`;
                     placeholder="Search emails..."
                     value={inboxSearch}
                     onChange={(e) => setInboxSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-50 border border-gray-200 dark:border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[var(--neelam)] focus:ring-4 focus:ring-[rgba(39,71,216,0.12)] transition-all"
                   />
                 </div>
               </header>
@@ -3060,14 +3066,14 @@ Command: ${dashCommand}`;
                   .filter(log => !log.is_deleted)
                   .filter(log => log.subject?.toLowerCase().includes(inboxSearch.toLowerCase()) || log.sender_email?.toLowerCase().includes(inboxSearch.toLowerCase()))
                   .map((log) => (
-                    <div key={log.id} onClick={() => { setSelectedInboxEmail(log); if (!log.is_read) handleInboxAction(log.id, 'is_read', true); }} className={`p-4 border-b border-gray-100 dark:border-gray-200 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-indigo-50/50 dark:bg-indigo-900/20 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50 dark:hover:bg-gray-900/50 border-l-4 border-l-transparent'}`}>
+                    <div key={log.id} onClick={() => { setSelectedInboxEmail(log); if (!log.is_read) handleInboxAction(log.id, 'is_read', true); }} className={`pl-4 pr-5 py-3.5 border-b border-gray-200 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-gray-100 border-l-4 border-l-[var(--sindoor)]' : 'hover:bg-gray-50 border-l-4 border-l-transparent'}`}>
                       <div className="flex justify-between items-start mb-1">
-                        <span className={`text-sm ${log.is_read ? 'font-semibold text-gray-700' : 'font-black text-gray-900'} dark:text-white truncate pr-2`}>{log.sender_email}</span>
+                        <span className={`text-sm truncate pr-2 flex items-center gap-2 ${log.is_read ? 'font-medium text-gray-700' : 'font-semibold text-gray-900'}`}>{!log.is_read && <i className="w-1.5 h-1.5 rounded-full bg-[var(--sindoor)] shrink-0" aria-label="unread" />}<span className="truncate">{log.sender_email}</span></span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-500 whitespace-nowrap">{new Date(log.created_at).toLocaleDateString()}</span>
+                          <span className="text-[11px] text-gray-400 whitespace-nowrap tabular-nums">{new Date(log.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
                         </div>
                       </div>
-                      <div className={`text-xs ${log.is_read ? 'font-medium text-gray-600' : 'font-bold text-gray-800'} dark:text-gray-700 truncate mb-1`}>{log.subject || 'No Subject'}</div>
+                      <div className={`text-[13px] truncate mb-0.5 ${log.is_read ? 'text-gray-600' : 'font-semibold text-gray-800'}`}>{log.subject || 'No Subject'}</div>
                       <div className="text-xs text-gray-500 truncate flex items-center justify-between">
                         <span className="truncate pr-4">{log.body_text?.substring(0, 50)}...</span>
                         <button
@@ -3080,17 +3086,17 @@ Command: ${dashCommand}`;
                     </div>
                   ))}
                 {inboxLogs.filter(log => !log.is_deleted).length === 0 && (
-                  <div className="p-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">No Emails Yet</div>
+                  <div className="p-8 text-center text-sm text-gray-400">No emails yet. Forward client mail to your inbound address to see it here.</div>
                 )}
               </div>
             </div>
 
-            <div className="w-2/3 bg-white/80 dark:bg-gray-50 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200 dark:border-gray-200 flex flex-col overflow-hidden relative">
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
               {selectedInboxEmail ? (
-                <div className="flex-1 overflow-y-auto p-6 flex flex-col">
+                <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-1 pb-6 flex flex-col">
                   <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-200 flex justify-between items-start">
                     <div>
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{selectedInboxEmail.subject}</h2>
+                      <h2 className="inbox-subject text-gray-900 mb-2">{selectedInboxEmail.subject}</h2>
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <span className="font-semibold text-gray-800 dark:text-gray-800">{selectedInboxEmail.sender_email}</span>
                         <span>•</span>
@@ -3107,7 +3113,7 @@ Command: ${dashCommand}`;
                     </div>
                   </div>
 
-                  <div className="text-sm text-gray-800 dark:text-gray-700 whitespace-pre-wrap mb-8 bg-gray-50 dark:bg-gray-50/50 p-6 rounded-xl border border-gray-100 dark:border-gray-200 flex-1">
+                  <div className="text-[15px] leading-relaxed text-gray-800 whitespace-pre-wrap mb-8 flex-1">
                     {selectedInboxEmail.body_text || selectedInboxEmail.body_html || "No Content"}
                   </div>
 
@@ -3125,7 +3131,7 @@ Command: ${dashCommand}`;
                       <button
                         onClick={handleInboxReply}
                         disabled={isSendingReply || !inboxReplyText.trim()}
-                        className="px-6 py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-md"
+                        className="agent-btn agent-btn--primary"
                       >
                         {isSendingReply ? 'Sending...' : 'Send Reply'}
                       </button>
@@ -3135,10 +3141,10 @@ Command: ${dashCommand}`;
                   <div className="mt-4 border-t border-gray-200 dark:border-gray-200 pt-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 flex items-center gap-2">
-                        <div className="flex items-center gap-2"><Bot className="w-4 h-4 text-indigo-600" /> <span className="font-bold text-indigo-600">Bloomgard AI Analysis</span></div>
+                        <div className="flex items-center gap-2.5"><span className="agent-orb agent-orb--sm" aria-hidden /> <span className="font-semibold text-gray-900">Bloomgard AI analysis</span></div>
                       </h3>
                       {!emailAiAnalysis[selectedInboxEmail.id] && (
-                        <button onClick={() => handleAnalyzeEmail(selectedInboxEmail)} disabled={isAnalyzingEmail} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-md disabled:opacity-50">
+                        <button onClick={() => handleAnalyzeEmail(selectedInboxEmail)} disabled={isAnalyzingEmail} className="agent-btn agent-btn--primary">
                           {isAnalyzingEmail ? "Analyzing..." : "Generate AI Actions"}
                         </button>
                       )}
@@ -3190,9 +3196,9 @@ Command: ${dashCommand}`;
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 flex items-center justify-center text-gray-400 font-medium text-sm flex-col gap-3">
-                  <Download className="w-10 h-10 text-gray-400" />
-                  <p>Select an email to view contents</p>
+                <div className="flex-1 flex items-center justify-center text-gray-400 text-sm flex-col gap-3">
+                  <div className="agent-orb opacity-60" aria-hidden />
+                  <p>Select an email to read it</p>
                 </div>
               )}
             </div>

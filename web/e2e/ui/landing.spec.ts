@@ -102,3 +102,10 @@ test.describe('Landing page', () => {
     await expect(page.locator('input[type="email"], input[type="password"]').first()).toBeVisible();
   });
 });
+
+test('a visitor with no session who opens the root URL stays on the landing page', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(1500);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('button', { name: /Book a demo/i }).first()).toBeVisible();
+});

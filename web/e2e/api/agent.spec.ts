@@ -116,6 +116,19 @@ test.describe.serial('Bloomgard AI agent', () => {
     expect(out.message).toContain(String(count));
   });
 
+  test('chat: knows quote values (they live in form data, not a column)', async ({ request }) => {
+    test.setTimeout(150_000);
+    const res = await request.get(`${ENV.baseUrl}/api/agent/overview`, { headers: authed(token) });
+    expect(res.status()).toBe(200);
+    const out = await ask(request, token, 'Which of my quotes has the highest value? Give its quote number and amount in one line.');
+    expect(out.error).toBeUndefined();
+    const { data } = await admin().from('quotations').select('qn_number, custom_metadata').eq('tenant_id', actor.tenantId).neq('status', 'Lead');
+    const { quoteValue } = await import('../../lib/agent/core');
+    const top = (data || []).map((q: any) => ({ qn: q.qn_number, v: quoteValue(q) })).sort((x, y) => y.v - x.v)[0];
+    expect(out.message).toContain(top.qn);
+    expect(out.message).not.toMatch(/no (recorded )?value/i);
+  });
+
   test('chat: grounds a catalogue price in Master Data', async ({ request }) => {
     test.setTimeout(150_000);
     const out = await ask(request, token, `What is the unit and the current rate of catalogue item ${code()}?`);

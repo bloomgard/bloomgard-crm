@@ -1,7 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUp, BarChart3, Bell, Check, ChevronRight, CornerUpLeft, Database, Loader2, Mail, Mic, PenLine,
+  ArrowUp, BarChart3, Bell, Check, ChevronRight, Copy, CornerUpLeft, Database, Loader2, Mail, Mic, PenLine, Square,
   Plus, RotateCcw, Settings as SettingsIcon, Sparkles, X,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -318,6 +318,8 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const [listening, setListening] = useState(false);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
+  const [copied, setCopied] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const storeKey = `cma_agent_chat_${userEmail}`;
@@ -370,8 +372,9 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
     const patchLast = (fn: (m: Msg) => Msg) => patchMsg(aiId, fn);
     setMsgs([...history, { id: aiId, role: "ai", text: "", steps: [], blocks: [], actions: [], live: true }]);
     try {
+      abortRef.current = new AbortController();
       const res = await fetch("/api/agent/chat", {
-        method: "POST", headers: await authHeaders(),
+        method: "POST", headers: await authHeaders(), signal: abortRef.current.signal,
         body: JSON.stringify({ messages: history.map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })).filter((m) => m.content) }),
       });
       if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
@@ -398,8 +401,10 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
         }
       }
     } catch (e: any) {
-      patchLast((m) => ({ ...m, error: e.message || "Request failed" }));
+      if (e?.name === "AbortError") patchLast((m) => ({ ...m, text: m.text || "Stopped.", steps: (m.steps || []).map((st) => (st.status === "running" ? { ...st, status: "error", note: "stopped" } : st)) }));
+      else patchLast((m) => ({ ...m, error: e.message || "Request failed" }));
     } finally {
+      abortRef.current = null;
       patchLast((m) => ({ ...m, live: false }));
       setBusy(false);
       inputRef.current?.focus();
@@ -466,10 +471,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
       <div className="agent-aurora" aria-hidden />
 
       {/* ---- header ---- */}
-      <div className="relative flex items-center gap-3 mb-3">
-        <span className="agent-label">{ov?.company || "Workspace"} · CMA</span>
-        <span className="ml-auto flex items-center gap-3">{docsLink}</span>
-      </div>
+      <div className="relative flex items-center justify-end gap-3 mb-2 min-h-[20px]">{docsLink}</div>
 
       {/* ---- stats ---- */}
       <section className="agent-stats relative" aria-label="Pipeline statistics">
@@ -539,35 +541,27 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
       </section>
 
       {/* ---- the conversation: the page itself ---- */}
-      <section className="relative flex-1 flex flex-col mt-5 min-h-[260px]" aria-label="Bloomgard AI">
-        <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-          <div className="agent-orb" aria-hidden />
-          <div className="leading-tight">
-            <div className="font-semibold text-sm">Bloomgard AI</div>
-            <div className="agent-label !tracking-[0.12em]">{busy ? "working…" : "connected · quotes · inbox · catalogue · settings"}</div>
-          </div>
-          {hasChat && (
-            <button onClick={() => { setMsgs([]); localStorage.removeItem(storeKey); inputRef.current?.focus(); }} className="agent-btn ml-auto" title="Start a new conversation">
-              <RotateCcw className="w-3.5 h-3.5" />New chat
-            </button>
-          )}
-        </div>
-
+      <section className="relative flex-1 flex flex-col mt-2 min-h-[260px]" aria-label="Bloomgard AI">
         {!hasChat ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-10">
+          <div className="flex flex-col items-center text-center pt-10 pb-6 agent-rise">
             <h2 className="agent-hello">{greeting()}, {name}.</h2>
-            <p className="text-sm text-gray-500 mt-2 max-w-xl">
-              {ov && (ov.inbox.unread || ov.inbox.waiting)
-                ? `${ov.inbox.unread} unread email${ov.inbox.unread === 1 ? "" : "s"} and ${ov.followups.cold} cold quote${ov.followups.cold === 1 ? "" : "s"} are waiting. Ask me anything, or tell me what to do.`
-                : "Ask me anything about your quotes, emails and catalogue, or tell me what to do."}
-            </p>
+            <p className="text-sm text-gray-500 mt-2">Ask anything about your quotes, email and catalogue, or tell me what to do.</p>
+            {ov && (
+              <div className="flex flex-wrap justify-center gap-2 mt-5" aria-label="Briefing">
+                {ov.inbox.unread > 0 && <button onClick={() => send("Summarize my unread emails and tell me which ones need a reply first.")} className="agent-brief"><Mail className="w-3.5 h-3.5" /><b>{ov.inbox.unread}</b> unread email{ov.inbox.unread === 1 ? "" : "s"}</button>}
+                {ov.inbox.waiting > 0 && <button onClick={() => send("Which clients are waiting on a reply from us? Draft the replies for me to confirm.")} className="agent-brief"><CornerUpLeft className="w-3.5 h-3.5" /><b>{ov.inbox.waiting}</b> waiting on you</button>}
+                {ov.followups.hot > 0 && <button onClick={() => send("Show my hot follow-ups and what each client needs.")} className="agent-brief"><Bell className="w-3.5 h-3.5" /><b>{ov.followups.hot}</b> hot</button>}
+                {ov.followups.cold > 0 && <button onClick={() => send("List my cold quotes and draft a short follow-up for the most valuable one.")} className="agent-brief"><Bell className="w-3.5 h-3.5" /><b>{ov.followups.cold}</b> going cold</button>}
+                <button onClick={() => send("Give me a briefing: what changed in the last 7 days across quotes, emails and follow-ups?")} className="agent-brief"><Sparkles className="w-3.5 h-3.5" />Brief me</button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex-1 pt-5 pb-4 space-y-6" aria-live="polite">
             {msgs.map((m) => m.role === "user" ? (
-              <div key={m.id} className="flex justify-end"><div className="agent-user">{m.text}</div></div>
+              <div key={m.id} className="flex justify-end agent-rise"><div className="agent-user">{m.text}</div></div>
             ) : (
-              <div key={m.id} className="flex gap-3">
+              <div key={m.id} className="flex gap-3 agent-rise group/msg">
                 <div className="agent-orb agent-orb--sm shrink-0 mt-1" aria-hidden />
                 <div className="min-w-0 flex-1 text-[15px]">
                   <StepChips steps={m.steps || []} />
@@ -585,6 +579,14 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
                     <div key={a.id} className="mt-3"><ActionCard a={a} onConfirm={() => runAction(m.id, a.id, true)} onDismiss={() => runAction(m.id, a.id, false)} /></div>
                   ))}
                   {m.error && <p className="text-sm text-[var(--danger,#a3192b)] mt-2">⚠ {m.error}</p>}
+                  {m.text && !m.live && (
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(m.text).catch(() => {}); setCopied(m.id); setTimeout(() => setCopied(""), 1400); }}
+                      className="agent-copy opacity-0 group-hover/msg:opacity-100 focus:opacity-100" aria-label="Copy answer"
+                    >
+                      {copied === m.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}{copied === m.id ? "Copied" : "Copy"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -594,11 +596,18 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
 
         {/* ---- dock: three chips, the command bar, and the drop-up of more questions ---- */}
         <div className="agent-dock">
-          <div className="flex flex-wrap gap-2 mb-2.5" aria-label="Suggestions">
-            {topChips.map((c) => {
-              const Icon = CHIP_ICONS[c.icon] || Sparkles;
-              return <button key={c.label} onClick={() => send(c.prompt)} disabled={busy} className="agent-chip"><Icon className="w-3.5 h-3.5" />{c.label}</button>;
-            })}
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="flex flex-wrap gap-2" aria-label="Suggestions">
+              {topChips.map((c) => {
+                const Icon = CHIP_ICONS[c.icon] || Sparkles;
+                return <button key={c.label} onClick={() => send(c.prompt)} disabled={busy} className="agent-chip"><Icon className="w-3.5 h-3.5" />{c.label}</button>;
+              })}
+            </div>
+            {hasChat && (
+              <button onClick={() => { abortRef.current?.abort(); setMsgs([]); localStorage.removeItem(storeKey); inputRef.current?.focus(); }} className="agent-btn ml-auto shrink-0" title="Start a new conversation">
+                <RotateCcw className="w-3.5 h-3.5" />New chat
+              </button>
+            )}
           </div>
           <form className="relative" onSubmit={(e) => { e.preventDefault(); send(input); }}>
             {showList && (
@@ -644,10 +653,15 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
                 <button type="button" onClick={toggleVoice} className={`agent-icon-btn ${listening ? "agent-icon-btn--on" : ""}`} aria-label="Dictate"><Mic className="w-4 h-4" /></button>
               )}
               <kbd className="hidden md:inline-flex agent-kbd">⌘K</kbd>
-              <button type="submit" disabled={busy || !input.trim()} className="agent-send" aria-label="Send">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
-              </button>
+              {busy ? (
+                <button type="button" onClick={() => abortRef.current?.abort()} className="agent-send agent-send--stop" aria-label="Stop"><Square className="w-3.5 h-3.5 fill-current" /></button>
+              ) : (
+                <button type="submit" disabled={!input.trim()} className="agent-send" aria-label="Send"><ArrowUp className="w-4 h-4" /></button>
+              )}
             </div>
+            <p className="agent-hint" aria-hidden>
+              <span>Enter to send</span><span>Shift + Enter for a new line</span><span>⌘K to focus</span><span>Changes always wait for your OK</span>
+            </p>
           </form>
         </div>
       </section>

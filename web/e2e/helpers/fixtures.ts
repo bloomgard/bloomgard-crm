@@ -127,4 +127,5 @@ export async function purgeLeftovers(actor: Actor) {
   }
   await db.from('clients').delete().eq('tenant_id', actor.tenantId).like('company_name', 'E2E Co %');
   await db.from('inbound_emails').delete().eq('tenant_id', actor.tenantId).like('sender_email', '%@e2e-%.test');
+  await db.from('sent_emails').delete().eq('tenant_id', actor.tenantId).like('subject', '%QN-9999-%');
 }

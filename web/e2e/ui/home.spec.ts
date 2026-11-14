@@ -64,6 +64,20 @@ test.describe('Bloomgard AI home', () => {
     await expect(list).toBeHidden();
   });
 
+  test('on a signed-in device the root URL opens the workspace, like Gmail', async ({ page }) => {
+    await openApp(page);
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    await expect(input(page)).toBeVisible({ timeout: 45_000 });
+  });
+
+  test('the home shows a greeting with a clickable briefing, and no separate assistant header', async ({ page }) => {
+    await openApp(page);
+    await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)|Working late/ })).toBeVisible();
+    await expect(page.getByText(/connected · quotes/i)).toHaveCount(0);
+    await expect(page.getByLabel('Briefing').getByRole('button', { name: 'Brief me' })).toBeVisible();
+  });
+
   test('Create quote opens the new-quote form; a latest-quote card opens that quote', async ({ page }) => {
     await openApp(page);
     await page.getByRole('button', { name: 'Create quote' }).click();

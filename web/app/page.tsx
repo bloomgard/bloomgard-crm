@@ -244,6 +244,24 @@ const FAQS = [
 type Theme = "system" | "light" | "dark";
 
 /* ───────────────────────── Page ───────────────────────── */
+/**
+ * Like Gmail: a device that is already signed in goes straight to the workspace; only visitors see this page.
+ * Supabase keeps the session in localStorage, so this runs in the browser. The inline copy executes while the
+ * HTML is still being parsed (before the landing page paints); the effect below covers client-side navigation.
+ */
+const hasStoredSession = () => {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i) || "";
+      if (!/^sb-.+-auth-token$/.test(k)) continue;
+      const v = JSON.parse(localStorage.getItem(k) || "null");
+      if (v && (v.refresh_token || v.currentSession?.refresh_token)) return true;
+    }
+  } catch { /* storage blocked: treat as signed out */ }
+  return false;
+};
+const SIGNED_IN_REDIRECT = `(function(){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i)||"";if(!/^sb-.+-auth-token$/.test(k))continue;var v=JSON.parse(localStorage.getItem(k)||"null");if(v&&(v.refresh_token||(v.currentSession&&v.currentSession.refresh_token))){document.documentElement.style.visibility="hidden";location.replace("/dashboard");return;}}}catch(e){}})();`;
+
 export default function BloomgardLanding() {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -253,6 +271,10 @@ export default function BloomgardLanding() {
   const [scrolled, setScrolled] = useState(false);
   const [theme, setTheme] = useState<Theme>("system");
   const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    if (hasStoredSession()) router.replace("/dashboard");
+  }, [router]);
 
   // The Android (Capacitor) shell opens the app straight to the sign-in screen.
   useEffect(() => {
@@ -332,6 +354,8 @@ export default function BloomgardLanding() {
   const openContact = () => { setShowPortal(false); setShowContact(true); };
 
   return (
+    <>
+    <script dangerouslySetInnerHTML={{ __html: SIGNED_IN_REDIRECT }} suppressHydrationWarning />
     <div
       ref={rootRef}
       className={`${styles.root} ${display.variable} ${sans.variable} ${mono.variable}`}
@@ -737,5 +761,6 @@ export default function BloomgardLanding() {
         </div>
       )}
     </div>
+    </>
   );
 }
