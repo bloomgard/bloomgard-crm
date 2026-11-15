@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { db } from '@/lib/agent/core';
 import { DEFAULT_SCHEMA } from '@/lib/defaultSchema';
+import { domainOfEmail, isFreeEmailDomain, ensureRoutingId, startDomainSetup, ensureInboundWebhook } from '@/lib/emailDomain';
 
 export const ROLES = ['agent', 'manager', 'admin'] as const;
 const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
@@ -41,6 +42,21 @@ export async function provisionWorkspace(o: { companyName: string; fullName: str
   const companyName = String(o.companyName || '').trim();
   if (companyName.length < 2) throw new Error('Enter your company name.');
   if (!String(o.fullName || '').trim()) throw new Error('Enter your name.');
+  // Workspaces are for organisations: a company email, and one workspace per company domain.
+  const email = String(o.email || '').trim().toLowerCase();
+  const domain = domainOfEmail(email);
+  const allow = (process.env.SIGNUP_ALLOWED_EMAILS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const personal = isFreeEmailDomain(domain);
+  if (personal && !allow.includes(email)) throw new Error(`Please sign up with your company email. ${domain} is a personal email provider.`);
+  if (!personal) {
+    const [{ data: claimed }, { data: colleague }] = await Promise.all([
+      db.from('tenants').select('id').eq('features_jsonb->email_domain->>name', domain).limit(1),
+      db.from('profiles').select('id').ilike('email', `%@${domain}`).limit(1),
+    ]);
+    if ((claimed && claimed.length) || (colleague && colleague.length)) {
+      throw new Error(`A Bloomgard workspace for ${domain} already exists. Ask your admin to add you.`);
+    }
+  }
   const tenantId = crypto.randomUUID();
   const { error: tErr } = await db.from('tenants').insert([{ id: tenantId, company_name: companyName, ai_enabled: true }]);
   if (tErr) throw new Error(tErr.message);
@@ -48,7 +64,11 @@ export async function provisionWorkspace(o: { companyName: string; fullName: str
     const { error: sErr } = await db.from('tenant_schemas').insert([{ tenant_id: tenantId, company_name: companyName, schema_config: DEFAULT_SCHEMA, html_template: '' }]);
     if (sErr) throw new Error(sErr.message);
     const user = await createWorkspaceUser({ tenantId, email: o.email, role: 'admin', fullName: o.fullName.trim(), password: o.password });
-    return { tenantId, userId: user.userId };
+    // Email: a routing address straight away, and the company domain registered for sending.
+    const routing = await ensureRoutingId(tenantId, companyName);
+    const setup = personal ? null : await startDomainSetup(tenantId, domain).catch((e) => ({ name: domain, status: 'error', error: e.message }));
+    ensureInboundWebhook().catch(() => {});
+    return { tenantId, userId: user.userId, routing: `${routing}@inbound.bloomgard.co`, domain: setup };
   } catch (e) {
     await db.from('tenant_schemas').delete().eq('tenant_id', tenantId);
     await db.from('tenants').delete().eq('id', tenantId);

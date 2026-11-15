@@ -146,6 +146,19 @@ test.describe.serial('Bloomgard AI agent', () => {
     }
   });
 
+  test('chat: exports quotes in the format asked for, with the right rows', async ({ request }) => {
+    test.setTimeout(150_000);
+    const out = await ask(request, token, 'Export all my Pending quotes as a CSV with quote number, client and value.');
+    const exp = out.blocks.find((b) => b.type === 'export');
+    expect(exp, JSON.stringify(out.events.slice(-3))).toBeTruthy();
+    expect(exp.format).toBe('csv');
+    expect(exp.filename).toMatch(/\.csv$/);
+    const { count } = await admin().from('quotations').select('id', { count: 'exact', head: true }).eq('tenant_id', actor.tenantId).eq('status', 'Pending');
+    expect(exp.rows.length).toBe(count);
+    expect(exp.columns).toEqual(expect.arrayContaining(['qn', 'client', 'value']));
+    expect(out.message || '').not.toMatch(/QN-\d{4}-\d{3}.*QN-\d{4}-\d{3}.*QN-\d{4}-\d{3}/s); // describes the file, does not paste rows
+  });
+
   test('chat: grounds a catalogue price in Master Data', async ({ request }) => {
     test.setTimeout(150_000);
     const out = await ask(request, token, `What is the unit and the current rate of catalogue item ${code()}?`);

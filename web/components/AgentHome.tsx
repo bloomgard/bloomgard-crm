@@ -1,7 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUp, BarChart3, Bell, Check, ChevronRight, Copy, CornerUpLeft, Database, Loader2, Mail, Mic, PenLine, Square,
+  ArrowUp, BarChart3, Bell, Check, ChevronRight, Copy, CornerUpLeft, Database, Download, FileSpreadsheet, Loader2, Mail, Mic, PenLine, Square,
   Plus, RotateCcw, Settings as SettingsIcon, Sparkles, X,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -27,7 +27,7 @@ type Overview = {
   inbox: { unread: number; waiting: number }; followups: { hot: number; warm: number; cold: number };
   latest: Array<{ qn: string; status: string; client: string; value: number; date: string; items: number }>;
   logs?: Array<{ module: string; fields: Array<{ name: string; label: string; options: string[] }>; entries: Array<{ qn: string; at: string | null; by: string; v: Record<string, string> }> }>;
-  chips: Array<{ label: string; prompt: string; icon: string }>;
+  chips: Array<{ label: string; prompt: string; icon: string; nav?: string }>;
 };
 
 export type AgentHomeProps = {
@@ -317,6 +317,53 @@ function TableBlock({ b }: { b: any }) {
   );
 }
 
+/** A file the AI prepared. Built in the browser on click; the rows are not kept in chat history. */
+function ExportBlock({ b }: { b: any }) {
+  const [saving, setSaving] = useState(false);
+  const rows: any[] = b.rows || [];
+  const download = async () => {
+    setSaving(true);
+    try {
+      if (b.format === "xlsx") {
+        // @ts-ignore - xlsx ships no types here
+        const XLSX: any = await import("xlsx");
+        const ws = XLSX.utils.json_to_sheet(rows, { header: b.columns });
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Quotes");
+        XLSX.writeFile(wb, b.filename);
+        return;
+      }
+      const esc = (v: any) => { const t = String(v ?? ""); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+      const text = b.format === "json" ? JSON.stringify(rows, null, 2) : [b.columns.join(","), ...rows.map((r) => b.columns.map((c: string) => esc(r[c])).join(","))].join("\n");
+      const blob = new Blob([b.format === "csv" ? "\ufeff" + text : text], { type: b.format === "json" ? "application/json" : "text/csv;charset=utf-8" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = b.filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } finally { setSaving(false); }
+  };
+  return (
+    <div className="agent-block" data-export={b.filename}>
+      <div className="flex flex-wrap items-center gap-3">
+        <FileSpreadsheet className="w-5 h-5 text-[#0e6b57]" />
+        <div className="min-w-0">
+          <div className="font-semibold text-sm truncate">{b.filename}</div>
+          <div className="agent-label">{b.format} · {rows.length} row{rows.length === 1 ? "" : "s"} · {b.columns.length} columns</div>
+        </div>
+        {rows.length ? (
+          <button type="button" onClick={download} disabled={saving} className="agent-btn agent-btn--primary ml-auto">{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}Download</button>
+        ) : <span className="text-xs text-gray-500 ml-auto">{b.expired ? "Ask again to download" : "Nothing matched"}</span>}
+      </div>
+      {rows.length > 0 && (
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-xs">
+            <thead><tr>{b.columns.map((c: string) => <th key={c} className="text-left px-2 py-1 agent-label font-normal">{c}</th>)}</tr></thead>
+            <tbody>{rows.slice(0, 3).map((r, i) => <tr key={i} className="border-t border-gray-100">{b.columns.map((c: string) => <td key={c} className="px-2 py-1 whitespace-nowrap">{String(r[c] ?? "")}</td>)}</tr>)}</tbody>
+          </table>
+          {rows.length > 3 && <p className="text-[11px] text-gray-500 mt-1">…and {rows.length - 3} more in the file.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ActionCard({ a, onConfirm, onDismiss }: { a: Action; onConfirm: () => void; onDismiss: () => void }) {
   const st = a.state || "pending";
   return (
@@ -442,7 +489,12 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   useEffect(() => {
     if (!hydrated.current) return;
     // generated passwords are shown once on their card and never stored
-    const safe = msgs.filter((m) => !m.live).slice(-40).map((m) => ({ ...m, actions: (m.actions || []).map(({ secret, ...rest }) => rest) }));
+    const safe = msgs.filter((m) => !m.live).slice(-40).map((m) => ({
+      ...m,
+      actions: (m.actions || []).map(({ secret, ...rest }) => rest),
+      // exported rows can be large and are a snapshot: keep the card, drop the data
+      blocks: (m.blocks || []).map((b) => (b.type === "export" ? { ...b, rows: [], expired: true } : b)),
+    }));
     try { localStorage.setItem(storeKey, JSON.stringify(safe)); } catch { /* ignore */ }
   }, [msgs, storeKey]);
 
@@ -723,6 +775,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
                       {b.type === "quotes" && <QuotesBlock b={b} onOpen={onOpenQuote} />}
                       {b.type === "emails" && <EmailsBlock b={b} onOpen={() => onNavigate("inbox")} />}
                       {b.type === "table" && <TableBlock b={b} />}
+                      {b.type === "export" && <ExportBlock b={b} />}
                     </div>
                   ))}
                   {m.text && <Typed text={m.text} animate={!!m.typing} onTick={scrollDown} />}
@@ -751,7 +804,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
             <div className="flex flex-wrap gap-2" aria-label="Suggestions">
               {topChips.map((c) => {
                 const Icon = CHIP_ICONS[c.icon] || Sparkles;
-                return <button key={c.label} onClick={() => send(c.prompt)} disabled={busy} className="agent-chip"><Icon className="w-3.5 h-3.5" />{c.label}</button>;
+                return <button key={c.label} onClick={() => (c.nav ? onNavigate(c.nav) : send(c.prompt))} disabled={busy} className={`agent-chip ${c.nav ? "agent-chip--todo" : ""}`}><Icon className="w-3.5 h-3.5" />{c.label}</button>;
               })}
             </div>
             {hasChat && (

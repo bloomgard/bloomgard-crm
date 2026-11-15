@@ -52,7 +52,7 @@ test('Create account: a new workspace from the sign-up form, signed straight in 
   test.setTimeout(120_000);
   const { admin } = await import('../helpers/db');
   const tag = `e2e${Date.now().toString(36)}`;
-  const email = `e2e-ui-signup-${tag}@e2e-signup.test`;
+  const email = `e2e-ui-signup-${tag}@e2e-${tag}.test`;
   const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const page = await ctx.newPage();
   try {
@@ -65,6 +65,10 @@ test('Create account: a new workspace from the sign-up form, signed straight in 
     await page.getByRole('button', { name: 'Create account' }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
     await expect(page.getByText('ADMIN', { exact: true }).or(page.getByText('admin', { exact: true })).first()).toBeVisible({ timeout: 45_000 });
+    // the new workspace's email setup shows its own routing address
+    await page.locator('nav').getByText('Settings', { exact: true }).click();
+    await page.getByRole('button', { name: /^Email Settings/ }).click();
+    await expect(page.getByTestId('email-domain')).toContainText(/e2e-ui-signup-.*@inbound\.bloomgard\.co/, { timeout: 20_000 });
   } finally {
     const { data: prof } = await admin().from('profiles').select('id, tenant_id').eq('email', email).maybeSingle();
     if (prof) {
@@ -75,4 +79,18 @@ test('Create account: a new workspace from the sign-up form, signed straight in 
     }
     await ctx.close();
   }
+});
+
+test('sign-up refuses a personal email address', async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const page = await ctx.newPage();
+  await page.goto('/signup');
+  await page.getByPlaceholder('Acme Steel Pvt. Ltd.').fill('Personal Co');
+  await page.getByPlaceholder('Priya Sharma').fill('Someone');
+  await page.locator('input[type="email"]').fill(`someone.${Date.now()}@gmail.com`);
+  await page.locator('input[type="password"]').fill('kora-neel-12345');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByText(/company email/)).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/mode=signup/);
+  await ctx.close();
 });

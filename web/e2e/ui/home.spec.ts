@@ -111,6 +111,19 @@ test.describe('Bloomgard AI home', () => {
     await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)|Working late/ })).toBeVisible();
   });
 
+  test('asking for an export gives a download in the chat', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openApp(page);
+    await page.getByRole('button', { name: 'New chat' }).click().catch(() => {});
+    await input(page).fill('Export all my quotes to Excel.');
+    await input(page).press('Enter');
+    const card = page.locator('[data-export]').last();
+    await expect(card).toBeVisible({ timeout: 90_000 });
+    const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: 'Download' }).click()]);
+    expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
+    expect((await download.path()) || '').toBeTruthy();
+  });
+
   test('a chart request draws a chart in the chat', async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);

@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import crypto from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -12,9 +13,32 @@ const AI_MODEL = 'openai/gpt-4o-mini';
 
 export const maxDuration = 60;
 
+/**
+ * Resend signs webhooks the Svix way: HMAC-SHA256 over "id.timestamp.body" with the base64 key after "whsec_".
+ * Enforced only when RESEND_WEBHOOK_SECRET is set, so local tests and older setups keep working.
+ */
+function signatureOk(raw: string, headers: Headers) {
+  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!secret) return true;
+  const id = headers.get('svix-id'), ts = headers.get('svix-timestamp'), sig = headers.get('svix-signature');
+  if (!id || !ts || !sig) return false;
+  if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false; // replayed or stale
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const expected = crypto.createHmac('sha256', key).update(`${id}.${ts}.${raw}`).digest();
+  return sig.split(' ').some((part) => {
+    const [, value] = part.split(',');
+    const got = Buffer.from(value || '', 'base64');
+    return got.length === expected.length && crypto.timingSafeEqual(got, expected);
+  });
+}
+
 export async function POST(request: Request) {
   try {
-    const payload = await request.json();
+    const raw = await request.text();
+    if (!signatureOk(raw, request.headers)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+    const payload = JSON.parse(raw || '{}');
     // 2. Safely Extract fromAddress
     const fromAddress = payload.data?.from || '';
     if (!fromAddress) {
@@ -63,6 +87,14 @@ export async function POST(request: Request) {
         .or(`inbound_routing_id.eq.${parsedTenantId},routing_slug.eq.${parsedTenantId}`)
         .maybeSingle();
       if (routedTenant) tenantId = routedTenant.id;
+    }
+
+    // A workspace's own reply subdomain (reply.acme.com): any address on it belongs to that workspace
+    const atDomain = exactEmail.split('@')[1] || '';
+    if (!tenantId && atDomain) {
+      const { data: byDomain } = await supabase.from('tenants').select('id')
+        .eq('features_jsonb->email_domain->reply->>name', atDomain).limit(1);
+      if (byDomain && byDomain.length) tenantId = byDomain[0].id;
     }
 
     // Third try: local-part is a raw tenant UUID

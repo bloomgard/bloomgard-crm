@@ -3,7 +3,8 @@
 import React, { useMemo, useRef, useState } from "react";
 import { MasterDataEntry, MasterDataValue, useMasterDataFields } from "@/hooks/useMasterDataFields";
 import { autoMapColumns } from "@/lib/fieldMatch";
-import { Wand2, X, Save, Trash2, Plus, Upload, Sparkles } from "lucide-react";
+import { Wand2, X, Save, Trash2, Plus, Upload, Sparkles, ArrowUp, ArrowDown, Loader2, HelpCircle } from "lucide-react";
+import { supabase } from "@/utils/supabaseClient";
 
 type MasterDataUIProps = {
   tenantId: string;
@@ -75,12 +76,21 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
   const [aiText, setAiText] = useState("");
   const [addColFor, setAddColFor] = useState<string | null>(null); // parent entry id, "" = new root
   const [newKey, setNewKey] = useState("");
+  type AiCol = { action: string; confidence: number; reason: string; question: string | null; options: string[] };
+  type MapRow = { col: number; header: string; keyName: string | null; ai?: AiCol; resolved?: boolean };
   const [importState, setImportState] = useState<null | {
     headers: string[];
     rows: string[][];
-    mapping: { header: string; keyName: string | null }[];
+    mapping: MapRow[];
+    ai: "loading" | "done" | "error";
+    summary?: string;
   }>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const allTargets = useMemo(() => Array.from(new Set([
+    ...masterTree.flatMap((root) => flattenChain(root).map((e) => e.key_name)),
+    ...schemaFields,
+  ])), [masterTree, schemaFields]);
 
   const grids: Grid[] = useMemo(
     () => masterTree.map((root) => ({ columns: flattenChain(root) })),
@@ -165,13 +175,53 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
     if (aoa.length < 2) { alert("Sheet needs a header row and at least one data row."); return; }
     const headers = aoa[0].map((h) => String(h ?? "").trim());
     const rows = aoa.slice(1).map((r) => headers.map((_, i) => String(r[i] ?? "").trim()));
-    setImportState({ headers, rows, mapping: autoMapColumns(headers, schemaFields) });
+    // Instant name-based guess first, then let Bloomgard AI read the values and refine it.
+    const quick = autoMapColumns(headers, schemaFields).map((m, i) => ({ col: i, header: m.header, keyName: m.keyName }));
+    setImportState({ headers, rows, mapping: quick, ai: "loading" });
+    try {
+      const { data } = await supabase.auth.getSession();
+      const res = await fetch("/api/master-data/ai-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token || ""}` },
+        body: JSON.stringify({ headers, rows: rows.slice(0, 12), fields: allTargets }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "AI unavailable");
+      const byCol = new Map<number, any>((out.columns || []).map((c: any) => [c.column, c]));
+      let mapping: MapRow[] = headers.map((h, i) => {
+        const c = byCol.get(i);
+        if (!c) return quick[i];
+        const keyName = c.action === "map" ? c.target : c.action === "new" ? c.new_key : null;
+        return { col: i, header: h, keyName, ai: { action: c.action, confidence: c.confidence, reason: c.reason, question: c.question, options: c.options || [] }, resolved: !c.question };
+      });
+      // the AI's parent -> child order, then everything else
+      const order: number[] = out.order || [];
+      if (order.length) mapping = [...order.map((i) => mapping.find((m) => m.col === i)!).filter(Boolean), ...mapping.filter((m) => !order.includes(m.col))];
+      setImportState((st) => (st ? { ...st, mapping, ai: "done", summary: out.summary } : st));
+    } catch {
+      setImportState((st) => (st ? { ...st, ai: "error" } : st));
+    }
   };
+
+  const setMap = (idx: number, keyName: string | null) => setImportState((st) => {
+    if (!st) return st;
+    const mapping = [...st.mapping];
+    mapping[idx] = { ...mapping[idx], keyName, resolved: true };
+    return { ...st, mapping };
+  });
+  const move = (idx: number, dir: -1 | 1) => setImportState((st) => {
+    if (!st) return st;
+    const j = idx + dir;
+    if (j < 0 || j >= st.mapping.length) return st;
+    const mapping = [...st.mapping];
+    [mapping[idx], mapping[j]] = [mapping[j], mapping[idx]];
+    return { ...st, mapping };
+  });
 
   const confirmImport = () => {
     if (!importState) return;
     const picked = importState.mapping
-      .map((m, i) => ({ ...m, i }))
+      .map((m) => ({ ...m, i: m.col }))
       .filter((m) => m.keyName);
     if (picked.length === 0) { alert("Map at least one column to a field."); return; }
     const columns = picked.map((m) => ({ key_name: m.keyName! }));
@@ -179,6 +229,8 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
     setImportState(null);
     bulkImport(columns, rows);
   };
+
+  const doubts = importState ? importState.mapping.filter((m) => m.ai?.question && !m.resolved).length : 0;
 
   // ---- render -----------------------------------------------------------
   const readOnly = activeTab === "auto";
@@ -436,30 +488,53 @@ export default function MasterDataUI({ tenantId, schemaFields }: MasterDataUIPro
               <button onClick={() => setImportState(null)} className="text-gray-400 hover:text-gray-900 p-1"><X size={18} /></button>
             </div>
             <div className="p-5 overflow-auto flex-1 space-y-2">
-              {importState.mapping.map((m, i) => (
-                <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2">
-                  <span className="text-sm font-mono text-gray-700 w-40 truncate" title={m.header}>{m.header || <em className="text-gray-400">col {i + 1}</em>}</span>
-                  <span className="text-gray-300">→</span>
-                  <select
-                    value={m.keyName || ""}
-                    onChange={(e) => {
-                      const mapping = [...importState.mapping];
-                      mapping[i] = { ...mapping[i], keyName: e.target.value || null };
-                      setImportState({ ...importState, mapping });
-                    }}
-                    className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#436bf9]"
-                  >
-                    <option value="">— ignore —</option>
-                    {schemaFields.map((f) => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                  <span className="text-[10px] text-gray-400 w-24 truncate">e.g. {importState.rows[0]?.[i] || "—"}</span>
-                </div>
-              ))}
+              <div className={`md-ai ${importState.ai === "error" ? "md-ai--err" : ""}`}>
+                {importState.ai === "loading" && <><Loader2 size={14} className="animate-spin" /> Bloomgard AI is reading your sheet and matching columns…</>}
+                {importState.ai === "done" && <><Sparkles size={14} /> {importState.summary || "Bloomgard AI matched the columns below."} {doubts > 0 ? <b className="ml-1">{doubts} question{doubts === 1 ? "" : "s"} for you.</b> : null}</>}
+                {importState.ai === "error" && <>AI matching is unavailable right now; columns were matched by name. Check them before importing.</>}
+              </div>
+              {importState.mapping.map((m, i) => {
+                const unsure = !!m.ai?.question && !m.resolved;
+                const isNew = !!m.keyName && !allTargets.includes(m.keyName);
+                return (
+                  <div key={m.col} className={`rounded-xl px-3 py-2 ${unsure ? "bg-amber-50 border border-amber-200" : "bg-gray-50"}`} data-col={m.header}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col">
+                        <button type="button" onClick={() => move(i, -1)} className="text-gray-400 hover:text-gray-900" aria-label="Move up"><ArrowUp size={12} /></button>
+                        <button type="button" onClick={() => move(i, 1)} className="text-gray-400 hover:text-gray-900" aria-label="Move down"><ArrowDown size={12} /></button>
+                      </div>
+                      <span className="text-sm font-mono text-gray-700 w-36 truncate" title={m.header}>{m.header || <em className="text-gray-400">col {m.col + 1}</em>}</span>
+                      <span className="text-gray-300">→</span>
+                      <select value={m.keyName || ""} onChange={(e) => setMap(i, e.target.value || null)} aria-label={`Field for ${m.header}`}
+                        className="flex-1 min-w-0 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#436bf9]">
+                        <option value="">— ignore —</option>
+                        {allTargets.map((f) => <option key={f} value={f}>{f}</option>)}
+                        {isNew && <option value={m.keyName!}>New field: {m.keyName}</option>}
+                      </select>
+                      {m.ai && !unsure && <span className={`md-conf ${m.ai.confidence >= 0.85 ? "md-conf--hi" : ""}`} title={m.ai.reason}>AI {Math.round(m.ai.confidence * 100)}%</span>}
+                      <span className="text-[10px] text-gray-400 w-24 truncate" title={importState.rows[0]?.[m.col]}>e.g. {importState.rows[0]?.[m.col] || "—"}</span>
+                    </div>
+                    {unsure && (
+                      <div className="mt-2 ml-8 text-xs text-amber-900">
+                        <p className="flex items-center gap-1.5"><HelpCircle size={13} />{m.ai!.question}</p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {m.ai!.options.map((o) => (
+                            <button key={o} type="button" onClick={() => setMap(i, o === "ignore" ? null : o.replace(/^new:/, ""))} className="md-choice">
+                              {o === "ignore" ? "Ignore this column" : o.startsWith("new:") ? `New field “${o.slice(4)}”` : o}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-gray-500 pt-1">Order matters: the first imported column is the parent, the next its child, and so on (e.g. code → name → unit → rate).</p>
             </div>
             <div className="p-5 border-t border-gray-100 flex justify-end gap-3 bg-white">
               <button onClick={() => setImportState(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
-              <button onClick={confirmImport} className="bg-[#436bf9] text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2">
-                <Upload size={14} /> Import
+              <button onClick={confirmImport} disabled={doubts > 0 || importState.ai === "loading"} title={doubts > 0 ? "Answer the questions above first" : ""} className="bg-[#436bf9] text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50">
+                <Upload size={14} /> {doubts > 0 ? `Answer ${doubts} question${doubts === 1 ? "" : "s"} to import` : "Import"}
               </button>
             </div>
           </div>

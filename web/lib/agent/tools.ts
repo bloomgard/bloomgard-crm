@@ -2,6 +2,7 @@ import { db, AgentCtx, buildOverview, visibleQuotes, quoteCard, quoteValue, clie
 import { sendEmail } from '@/lib/email';
 import { logEmailSent } from '@/utils/usageLogger';
 import { createWorkspaceUser, ROLES } from '@/lib/users';
+import { loadState, refreshDomain, withDnsChecks, dnsHost } from '@/lib/emailDomain';
 
 /* ------------------------------------------------------------------ */
 /* Tool schemas (OpenAI function-calling format, via OpenRouter)       */
@@ -44,6 +45,17 @@ export const TOOLS = [
   fn('get_followups', 'Quiet quotes scored hot/warm/cold, plus quotes where the client replied and nobody answered.', {
     min_days: { type: 'integer', description: 'Only quotes untouched for at least this many days (default 0).' },
   }),
+  fn('export_quotes', 'Export quotes as a downloadable file (CSV, Excel or JSON) in the chat. Pick the filters and columns the user asked for. Columns can be the standard ones or any form field key (see get_settings form_modules).', {
+    format: { type: 'string', enum: ['xlsx', 'csv', 'json'] },
+    status: { type: 'string', description: 'Only this status.' },
+    query: { type: 'string', description: 'Free text filter (client, QN, item…).' },
+    from_date: { type: 'string', description: 'YYYY-MM-DD, quote date on or after.' },
+    to_date: { type: 'string', description: 'YYYY-MM-DD, quote date on or before.' },
+    one_row_per_item: { type: 'boolean', description: 'One row per line item instead of per quote.' },
+    columns: { type: 'array', items: { type: 'string' }, description: 'Standard: qn, date, status, client, contact_person, email, value, items, created_by, last_contact. Item columns (with one_row_per_item): item_code, item_name, quantity, uom, item_rate, line_total. Or any form field key. Omit for a sensible default.' },
+    filename: { type: 'string' },
+  }, ['format']),
+  fn('check_email_domain', 'Check the company email domain: asks the email provider to verify now, looks up every DNS record at the host, and returns each record (type, host, value, status, found at host) plus the detected DNS host and its tips. Use it to guide someone through DNS setup.'),
   fn('make_chart', 'Render a chart in the chat from live quote data.', {
     title: { type: 'string' },
     chart: { type: 'string', enum: ['bar', 'pie', 'line', 'metric'] },
@@ -108,7 +120,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_overview: 'Reading workspace overview', search_quotes: 'Searching quotes', get_quote: 'Opening quote',
   query_database: 'Querying database', list_emails: 'Reading inbox', get_email: 'Reading email',
   get_master_data: 'Reading catalogue', get_settings: 'Reading settings', get_followups: 'Scoring follow-ups',
-  make_chart: 'Building chart', send_email: 'Drafting email', create_quote: 'Preparing quote',
+  make_chart: 'Building chart', check_email_domain: 'Checking email domain', export_quotes: 'Preparing export', send_email: 'Drafting email', create_quote: 'Preparing quote',
   update_quote_status: 'Preparing status change', update_master_item: 'Preparing catalogue change',
   add_master_item: 'Preparing catalogue item', update_settings: 'Preparing settings change', add_log_entry: 'Preparing log entry', change_form: 'Preparing form changes', add_user: 'Preparing new user',
 };
@@ -383,6 +395,67 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
         .slice(0, 20);
       const cards = rows.map((r: any) => ({ ...quoteCard(r.q), temperature: r.temp, idle_days: r.idle, client_waiting: incoming.has(r.q.id) }));
       return { result: { count: cards.length, quotes: cards }, blocks: cards.length ? [{ type: 'quotes', title: 'Follow-ups', quotes: cards }] : [] };
+    }
+    case 'export_quotes': {
+      const all = await visibleQuotes(ctx, 5000);
+      const text = String(a.query || '').trim().toLowerCase();
+      const from = a.from_date ? String(a.from_date) : '';
+      const to = a.to_date ? String(a.to_date) : '';
+      const quotes = all.filter((q: any) => {
+        if (a.status && String(q.status).toLowerCase() !== String(a.status).toLowerCase()) return false;
+        const d = String(q.date || q.created_at || '').slice(0, 10);
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+        if (!text) return true;
+        return [q.qn_number, q.status, clientName(q), q.clients?.email_id, ...(q.quotation_items || []).flatMap((i: any) => [i.item_code, i.item_name])].join(' ').toLowerCase().includes(text);
+      });
+      const perItem = !!a.one_row_per_item;
+      const STD: Record<string, (q: any) => any> = {
+        qn: (q) => q.qn_number, date: (q) => q.date, status: (q) => q.status, client: (q) => clientName(q),
+        contact_person: (q) => q.clients?.contact_person || '', email: (q) => q.clients?.email_id || '',
+        value: (q) => Math.round(quoteValue(q)), items: (q) => (q.quotation_items || []).length,
+        created_by: (q) => q.created_by_email, last_contact: (q) => String(q.last_contact_date || '').slice(0, 10),
+      };
+      const ITEM: Record<string, (i: any) => any> = {
+        item_code: (i) => i.item_code, item_name: (i) => i.item_name, quantity: (i) => Number(i.quantity) || 0, uom: (i) => i.uom,
+        item_rate: (i) => Number(i.item_rate) || 0, line_total: (i) => Math.round((Number(i.quantity) || 0) * (Number(i.item_rate) || 0) * 100) / 100,
+      };
+      const formValue = (q: any, key: string) => {
+        for (const sec of Object.values(q.custom_metadata || {})) {
+          const obj: any = Array.isArray(sec) ? sec[0] : sec;
+          if (obj && typeof obj === 'object' && obj[key] != null && obj[key] !== '') return obj[key];
+        }
+        return '';
+      };
+      const cols: string[] = (Array.isArray(a.columns) && a.columns.length ? a.columns.map(String) : perItem
+        ? ['qn', 'date', 'status', 'client', 'item_code', 'item_name', 'quantity', 'uom', 'item_rate', 'line_total']
+        : ['qn', 'date', 'status', 'client', 'contact_person', 'email', 'value', 'items', 'created_by']).slice(0, 30);
+      const cell = (q: any, c: string, item?: any) => (STD[c] ? STD[c](q) : ITEM[c] ? (item ? ITEM[c](item) : '') : formValue(q, c));
+      const rows = perItem
+        ? quotes.flatMap((q: any) => ((q.quotation_items || []).length ? q.quotation_items : [null]).map((it: any) => Object.fromEntries(cols.map((c) => [c, cell(q, c, it)]))))
+        : quotes.map((q: any) => Object.fromEntries(cols.map((c) => [c, cell(q, c)])));
+      const stamp = new Date().toISOString().slice(0, 10);
+      const filename = `${String(a.filename || `quotes-${a.status ? String(a.status).toLowerCase().replace(/\s+/g, '-') + '-' : ''}${stamp}`).replace(/[^\w.-]+/g, '-').replace(/\.(xlsx|csv|json)$/i, '')}.${a.format}`;
+      return {
+        result: { exported: true, format: a.format, filename, rows: rows.length, quotes: quotes.length, columns: cols, note: 'The file is shown in the chat with a Download button.' },
+        blocks: [{ type: 'export', filename, format: a.format, columns: cols, rows: rows.slice(0, 20000), quotes: quotes.length }],
+      };
+    }
+    case 'check_email_domain': {
+      const { tenant, state } = await loadState(ctx.tenantId);
+      if (!state) return { result: { connected: false, note: 'No company domain set up. An admin can add one in Settings > Email Settings.', routing_address: tenant?.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : null } };
+      const fresh = state.resend_id ? await refreshDomain(ctx.tenantId).catch(() => state) : state;
+      const full = await withDnsChecks(fresh!);
+      const host = full.test ? null : await dnsHost(full.name);
+      return {
+        result: {
+          domain: full.name, status: full.status, error: full.error, sender: tenant?.custom_email_sender,
+          dns_host: host?.name, host_tip: host?.tip,
+          records: (full.records || []).map((r) => ({ purpose: r.purpose, type: r.type, host: r.name, full_name: r.fqdn, value: r.value, priority: r.priority, provider_status: r.status, found_at_host: r.seen })),
+          branded_replies: full.reply ? { domain: full.reply.name, status: full.reply.status } : null,
+          routing_address: tenant?.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : null,
+        },
+      };
     }
     case 'make_chart': {
       const data = await chartData(ctx, a.metric, a.dimension);

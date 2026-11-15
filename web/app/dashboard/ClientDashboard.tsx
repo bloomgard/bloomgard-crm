@@ -12,6 +12,7 @@ import BrandLockup from '@/components/BrandLockup';
 import AgentHome from '@/components/AgentHome';
 import FieldConfigurator from '@/components/FieldConfigurator';
 import LogModule from '@/components/LogModule';
+import EmailDomainSetup from '@/components/EmailDomainSetup';
 
 // BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
@@ -2254,6 +2255,7 @@ Command: ${dashCommand}`;
               </div>
             )}
 
+            {settingsSubView === 'email' && <EmailDomainSetup />}
             {settingsSubView === 'email' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
                 <div className="flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">

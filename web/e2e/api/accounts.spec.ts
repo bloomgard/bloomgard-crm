@@ -18,7 +18,7 @@ test.describe.serial('Accounts and users', () => {
   });
 
   test('sign-up creates a workspace with the default form and makes the person its admin', async ({ request }) => {
-    const email = `e2e-signup-${tag}@e2e-signup.test`;
+    const email = `e2e-signup-${tag}@e2e-${tag}.test`;
     const res = await request.post(`${ENV.baseUrl}/api/signup`, { headers: protectionHeaders(), data: { companyName: `E2E Signup Co ${tag}`, fullName: 'Signup Tester', email, password: 'kora-neel-12345' } });
     expect(res.status(), await res.text()).toBe(200);
     const { tenantId } = await res.json();
@@ -28,24 +28,68 @@ test.describe.serial('Accounts and users', () => {
     expect(prof).toMatchObject({ role: 'admin', tenant_id: tenantId, full_name: 'Signup Tester' });
     const { data: sc } = await admin().from('tenant_schemas').select('schema_config').eq('tenant_id', tenantId).single();
     expect((sc!.schema_config as any[]).map((m) => m.title)).toContain('Quote Details');
-    const { data: tenant } = await admin().from('tenants').select('company_name').eq('id', tenantId).single();
+    const { data: tenant } = await admin().from('tenants').select('company_name, inbound_routing_id, features_jsonb').eq('id', tenantId).single();
     expect(tenant!.company_name).toBe(`E2E Signup Co ${tag}`);
+    expect(tenant!.inbound_routing_id).toMatch(/^e2e-signup-/); // its own routing address on inbound.bloomgard.co
+    expect((tenant!.features_jsonb as any).email_domain).toMatchObject({ name: `e2e-${tag}.test`, test: true }); // reserved domain: never sent to Resend
 
-    const again = await request.post(`${ENV.baseUrl}/api/signup`, { headers: protectionHeaders(), data: { companyName: 'Dup Co', fullName: 'X', email, password: 'kora-neel-12345' } });
+    const again = await request.post(`${ENV.baseUrl}/api/signup`, { headers: protectionHeaders(), data: { companyName: 'Dup Co', fullName: 'X', email: `someone-else@e2e-${tag}.test`, password: 'kora-neel-12345' } });
     expect(again.status()).toBe(400);
-    expect((await again.json()).error).toMatch(/already has/);
-    expect((await request.post(`${ENV.baseUrl}/api/signup`, { headers: protectionHeaders(), data: { companyName: 'Short', fullName: 'X', email: `x-${tag}@e2e-signup.test`, password: 'short' } })).status()).toBe(400);
+    expect((await again.json()).error).toMatch(/already exists. Ask your admin/); // one workspace per company domain
+    expect((await request.post(`${ENV.baseUrl}/api/signup`, { headers: protectionHeaders(), data: { companyName: 'Short', fullName: 'X', email: `x-${tag}@e2e-${tag}.test`, password: 'short' } })).status()).toBe(400);
+  });
+
+  test('sign-up is for organisations: personal email providers are refused', async ({ request }) => {
+    for (const email of [`someone.${tag}@gmail.com`, `someone.${tag}@outlook.com`, `someone.${tag}@yahoo.co.in`]) {
+      const res = await request.post(`${ENV.baseUrl}/api/signup`, { headers: protectionHeaders(), data: { companyName: 'Personal Co', fullName: 'X', email, password: 'kora-neel-12345' } });
+      expect(res.status(), email).toBe(400);
+      expect((await res.json()).error).toMatch(/company email/);
+    }
+  });
+
+  test('email domain API: shows the routing address, refuses personal domains and an unverified sender', async ({ request }) => {
+    const res = await request.get(`${ENV.baseUrl}/api/email-domain`, { headers: authed(token) });
+    expect(res.status(), await res.text()).toBe(200);
+    const v = await res.json();
+    expect(v.routing_address).toMatch(/@inbound\.bloomgard\.co$/);
+    expect(v.can_manage).toBe(true);
+    const anon = await request.get(`${ENV.baseUrl}/api/email-domain`, { headers: protectionHeaders() });
+    expect(anon.status()).toBe(401);
+    if (!v.domain) {
+      const free = await request.post(`${ENV.baseUrl}/api/email-domain`, { headers: authed(token), data: { action: 'create', domain: 'gmail.com' } });
+      expect(free.status()).toBe(400);
+      expect((await free.json()).error).toMatch(/personal email provider/);
+      const sender = await request.post(`${ENV.baseUrl}/api/email-domain`, { headers: authed(token), data: { action: 'set_sender', local: 'sales' } });
+      expect(sender.status()).toBe(400);
+    }
+  });
+
+  test('mail to a workspace\'s branded reply subdomain is routed to that workspace', async ({ request }) => {
+    const { data: t } = await admin().from('tenants').select('features_jsonb').eq('id', actor.tenantId).single();
+    const before = t!.features_jsonb;
+    const replyDomain = `reply.e2e-${tag}.test`;
+    try {
+      await admin().from('tenants').update({ features_jsonb: { ...(before as any || {}), email_domain: { name: `e2e-${tag}.test`, test: true, reply: { name: replyDomain, status: 'verified' } } } }).eq('id', actor.tenantId);
+      const subject = `E2E branded reply ${tag}`;
+      const res = await request.post(`${ENV.baseUrl}/api/inbound-email`, { headers: { ...protectionHeaders(), 'Content-Type': 'application/json' }, data: { type: 'email.received', data: { from: `buyer-${tag}@e2e-buyer.test`, to: [`sales@${replyDomain}`], subject, text: 'hello' } } });
+      expect(res.status(), await res.text()).toBe(200);
+      const { data: rows } = await admin().from('inbound_emails').select('tenant_id').eq('subject', subject);
+      expect(rows?.[0]?.tenant_id).toBe(actor.tenantId);
+      await admin().from('inbound_emails').delete().eq('subject', subject);
+    } finally {
+      await admin().from('tenants').update({ features_jsonb: before }).eq('id', actor.tenantId);
+    }
   });
 
   test('create-user needs a signed-in Admin/Manager and never resets an existing account', async ({ request }) => {
-    const anon = await request.post(`${ENV.baseUrl}/api/create-user`, { headers: { ...protectionHeaders(), 'Content-Type': 'application/json' }, data: { email: `x-${tag}@e2e-signup.test`, password: 'whatever-123', role: 'admin', tenantId: actor.tenantId } });
+    const anon = await request.post(`${ENV.baseUrl}/api/create-user`, { headers: { ...protectionHeaders(), 'Content-Type': 'application/json' }, data: { email: `x-${tag}@e2e-${tag}.test`, password: 'whatever-123', role: 'admin', tenantId: actor.tenantId } });
     expect(anon.status()).toBe(401);
     // the old takeover: an existing email plus a new password
     const takeover = await request.post(`${ENV.baseUrl}/api/create-user`, { headers: authed(token), data: { email: actor.email, password: 'hijack-password-1', role: 'agent' } });
     expect(takeover.status()).toBe(400);
     expect((await takeover.json()).error).toMatch(/already has/);
 
-    const email = `e2e-user-${tag}@e2e-signup.test`;
+    const email = `e2e-user-${tag}@e2e-${tag}.test`;
     const ok = await request.post(`${ENV.baseUrl}/api/create-user`, { headers: authed(token), data: { email, role: 'agent', tenantId: crypto.randomUUID() } });
     expect(ok.status(), await ok.text()).toBe(200);
     const out = await ok.json();
@@ -66,7 +110,7 @@ test.describe.serial('Accounts and users', () => {
   });
 
   test('the AI can add a user (password returned once) and change the quote form', async ({ request }) => {
-    const email = `e2e-ai-user-${tag}@e2e-signup.test`;
+    const email = `e2e-ai-user-${tag}@e2e-${tag}.test`;
     const res = await request.post(`${ENV.baseUrl}/api/agent/execute`, { headers: authed(token), data: { kind: 'add_user', payload: { email, role: 'manager', full_name: 'AI Added' } } });
     expect(res.status(), await res.text()).toBe(200);
     const out = await res.json();

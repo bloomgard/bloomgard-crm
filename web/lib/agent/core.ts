@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { domainSummary, refreshDomain } from '../emailDomain';
 
 /** Service-role client. Every query made through it MUST be scoped to ctx.tenantId. */
 export const db = createClient(
@@ -215,7 +216,17 @@ export async function buildOverview(ctx: AgentCtx) {
     };
   });
 
-  const chips: Array<{ label: string; prompt: string; icon: string }> = [];
+  const chips: Array<{ label: string; prompt: string; icon: string; nav?: string }> = [];
+  // A company domain that is not connected yet comes first: nothing looks right until mail sends from it.
+  // The chip disappears once the domain verifies: if the stored status is stale, ask Resend again first.
+  let emailState = (ctx.tenant.features_jsonb || {}).email_domain;
+  if (emailState?.resend_id && emailState.status !== 'verified' && (!emailState.checked_at || Date.now() - Date.parse(emailState.checked_at) > 10 * 60_000)) {
+    emailState = (await refreshDomain(ctx.tenantId).catch(() => null)) || emailState;
+  }
+  const email = domainSummary(emailState);
+  if (email && !email.test && email.status !== 'verified') {
+    chips.push({ icon: 'settings', nav: 'settings:email', label: email.error ? `Fix ${email.domain} email setup` : `Connect ${email.domain}${email.total ? ` (${email.verified}/${email.total})` : ''}`, prompt: 'Check my company email domain setup and tell me exactly which DNS records are still missing.' });
+  }
   if ((unread || 0) > 0) chips.push({ icon: 'mail', label: `Summarize ${unread} unread email${unread === 1 ? '' : 's'}`, prompt: 'Summarize my unread emails and tell me which ones need a reply first.' });
   if (waiting > 0) chips.push({ icon: 'reply', label: `Reply to ${waiting} waiting client${waiting === 1 ? '' : 's'}`, prompt: 'Which clients are waiting on a reply from us? Draft the replies for me to confirm.' });
   if (temps.cold > 0) chips.push({ icon: 'bell', label: `Chase ${temps.cold} cold quote${temps.cold === 1 ? '' : 's'}`, prompt: 'List my cold quotes and draft a short follow-up for the most valuable one.' });
@@ -238,6 +249,7 @@ export async function buildOverview(ctx: AgentCtx) {
     followups: temps,
     latest,
     logs,
+    email_domain: email,
     chips: chips.slice(0, 8),
   };
 }

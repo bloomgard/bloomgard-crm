@@ -9,6 +9,33 @@ section: Email
 
 Bloomgard uses one email provider, **Resend**, for both receiving and sending.
 
+## Your company domain
+
+When you create an account with your company email, Bloomgard registers your domain (e.g. `acme.com`) for
+sending and gives your workspace its own receiving address (e.g. `acme-steel@inbound.bloomgard.co`).
+Open **Settings → Email Settings** to finish:
+
+1. **Add the DNS records.** Every record is listed with its type, host, value and priority, each with a copy
+   button. Bloomgard detects your DNS host (Cloudflare, GoDaddy, Namecheap, Route 53, …) and shows where to add
+   them. On Cloudflare you can paste an API token ("Edit zone DNS" for that domain) and Bloomgard adds the records
+   for you; the token is used once and never stored.
+2. **Watch them verify.** Each record shows two checks: *Our provider* (Resend's verification) and *At your host*
+   (Bloomgard's own DNS lookup). The page re-checks every 30 seconds; **Check now** forces it.
+3. **Choose your sender**, e.g. `sales@acme.com`, once the domain is verified. Until then mail goes out from
+   `support@bloomgard.co`.
+4. **Receiving needs no DNS.** Everything Bloomgard sends has Reply-To set to your workspace address, so replies
+   arrive in the Inbox automatically. To also bring in mail sent to your existing mailbox, forward it there
+   (steps for Google Workspace and Microsoft 365 are on the page), and use **Send a test** to watch a real email
+   make the round trip.
+5. **Branded replies (optional).** Receive on `reply.acme.com` instead, with one MX record on that subdomain. Your
+   main mailbox is not affected.
+
+The records never change your main MX, so Google Workspace or Microsoft 365 keep working. You can also ask
+Bloomgard AI "which DNS records are still missing?" and it checks live.
+
+Sign-up is for organisations: personal addresses (Gmail, Outlook, Yahoo, …) are refused, and a company domain
+can have one workspace; colleagues are added by its admin.
+
 ## Your addresses
 
 Open **Settings → Email Settings**:

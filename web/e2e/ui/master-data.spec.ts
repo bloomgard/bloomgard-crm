@@ -78,18 +78,53 @@ test.describe.serial('Master Data screen', () => {
     const modal = page.getByText('Map Columns').locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]');
     await expect(modal).toBeVisible();
     await expect(modal).toContainText('2 rows');
-    // headers were matched to field keys without renaming anything
-    const selects = modal.locator('select');
-    await expect(selects.nth(0)).toHaveValue('item_code');
-    await expect(selects.nth(1)).toHaveValue('item_name');
-    await expect(selects.nth(2)).toHaveValue('uom');
-    await expect(selects.nth(3)).toHaveValue('item_rate');
-    await expect(selects.nth(4)).toHaveValue('');                 // "Internal notes" has no field: ignored
-    await modal.getByRole('button', { name: 'Import' }).click();
+    // the AI reads the sheet; wait for it, then check what it matched (by header, since it may reorder columns)
+    await expect(modal.getByText(/Bloomgard AI is reading/)).toHaveCount(0, { timeout: 60_000 });
+    const field = (h: string) => modal.getByLabel(`Field for ${h}`);
+    await expect(field('Item Code')).toHaveValue('item_code');
+    await expect(field('Product Name')).toHaveValue('item_name');
+    await expect(field('UOM')).toHaveValue('uom');
+    await expect(field('Rate')).toHaveValue('item_rate');
+    await field('Internal notes').selectOption('');                  // we do not want notes in the catalogue
+    // anything the AI was unsure about must be answered before importing; answer by keeping its pick
+    for (const h of ['Item Code', 'Product Name', 'UOM', 'Rate']) await field(h).selectOption(await field(h).inputValue());
+    await expect(modal.getByRole('button', { name: /^Import$/ })).toBeEnabled();
+    await modal.getByRole('button', { name: /^Import$/ }).click();
     await expect(page.locator('tr', { hasText: c1 })).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('tr', { hasText: c2 })).toBeVisible();
     await expect(page.locator('tr', { hasText: c1 })).toContainText('Excel Gadget One');
     await expect(page.locator('tr', { hasText: c1 })).not.toContainText('skip me');
+  });
+
+  test('Bloomgard AI matches columns by their values, and asks before importing a column it is unsure about', async ({ page }) => {
+    test.setTimeout(120_000);
+    const c1 = `E2E-AI-${tag}-1`;
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Col A', 'Col B', 'Col C', 'Col D', 'Misc'],
+      [c1, 'Stainless Hinge 4 inch', 'PCS', 42.5, 'x7'],
+      [`E2E-AI-${tag}-2`, 'Brass Handle', 'PCS', 118, 'see note'],
+      [`E2E-AI-${tag}-3`, 'Mild Steel Bracket', 'KG', 96, ''],
+    ]);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    await openApp(page);
+    await openSetting(page, 'Master Data');
+    await page.locator('input[type="file"]').setInputFiles({ name: 'unnamed.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
+    const modal = page.getByText('Map Columns').locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]');
+    await expect(modal.getByText(/Bloomgard AI is reading/)).toHaveCount(0, { timeout: 60_000 });
+    const field = (h: string) => modal.getByLabel(`Field for ${h}`);
+    // headers say nothing; the values do
+    await expect(field('Col A')).toHaveValue('item_code');
+    await expect(field('Col B')).toHaveValue('item_name');
+    await expect(field('Col D')).toHaveValue('item_rate');
+    // a column it cannot place confidently comes with a question, and Import waits for the answer
+    const question = modal.locator('.bg-amber-50');
+    if (await question.count()) {
+      await expect(modal.getByRole('button', { name: /Answer \d+ question/ })).toBeDisabled();
+      while (await question.count()) await question.first().getByRole('button').last().click();
+    }
+    await expect(modal.getByRole('button', { name: /^Import$/ })).toBeEnabled();
+    await modal.getByRole('button', { name: 'Cancel' }).click();
   });
 
   test('an imported value can be deleted from the grid and takes its children with it', async ({ page }) => {
