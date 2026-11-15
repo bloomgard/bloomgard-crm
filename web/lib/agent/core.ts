@@ -71,17 +71,20 @@ export const clientName = (q: any) =>
  * can weigh megabytes. Never pull the whole column for lists. The tenant's form blueprint tells us which
  * sections exist and which field holds the amount; select just those parts as JSON paths.
  */
-type MetaPlan = { money: Array<[string, string]>; sections: string[] };
+type LogDef = { title: string; fields: Array<{ name: string; label: string; type: string; options?: string }> };
+type MetaPlan = { money: Array<[string, string]>; sections: string[]; logs: LogDef[] };
 const planCache = new Map<string, { at: number; plan: MetaPlan }>();
 const safeKey = (k: string) => String(k).replace(/["\\]/g, '');
 
 export async function metaPlan(tenantId: string): Promise<MetaPlan> {
   const hit = planCache.get(tenantId);
-  if (hit && Date.now() - hit.at < 60_000) return hit.plan;
+  // short-lived: shared by the tool calls of one request, but configuration changes show up within seconds
+  if (hit && Date.now() - hit.at < 5_000) return hit.plan;
   const { data } = await db.from('tenant_schemas').select('schema_config').eq('tenant_id', tenantId).maybeSingle();
   const sections = (Array.isArray(data?.schema_config) ? data!.schema_config : []).filter((x: any) => x?.title && Array.isArray(x.fields));
   const money: Array<[string, string]> = [];
   const keep: string[] = [];
+  const logs: LogDef[] = sections.filter((x: any) => x.is_log).map((x: any) => ({ title: x.title, fields: x.fields || [] }));
   for (const sec of sections) {
     const fields = sec.fields || [];
     const heavy = /attach|file|document|image|logo/i.test(sec.title) || fields.some((f: any) => /attach|file|image/i.test(String(f.type || '')));
@@ -91,6 +94,7 @@ export async function metaPlan(tenantId: string): Promise<MetaPlan> {
   const plan: MetaPlan = {
     money: money.length ? money : [['Quote Details', 'subtotal']],
     sections: keep.length ? keep : ['Client Information', 'Quote Details', 'Products'],
+    logs,
   };
   planCache.set(tenantId, { at: Date.now(), plan });
   return plan;
@@ -106,7 +110,8 @@ export async function visibleQuotes(ctx: AgentCtx, limit = 1000, lean = false) {
   const moneySel = plan.money.map(([sec, f], i) => `m${i}:custom_metadata->"${safeKey(sec)}"->>"${safeKey(f)}"`);
   const select = lean
     ? ['id, qn_number, status, date, created_at, created_by_email, last_contact_date, clients(company_name), quotation_items(quantity, item_rate)',
-       'cn:custom_metadata->"Client Information"->>client_name', ...moneySel].join(', ')
+       'cn:custom_metadata->"Client Information"->>client_name', ...moneySel,
+       ...plan.logs.map((l, i) => `l${i}:custom_metadata->"${safeKey(l.title)}"`)].join(', ')
     : ['id, qn_number, status, date, created_at, created_by_email, last_contact_date, follow_up_due_date, client_id, clients(company_name, email_id, contact_person), quotation_items(item_code, item_name, quantity, uom, item_rate)',
        'ac:custom_metadata->agent_conversations', ...plan.sections.map((t, i) => `s${i}:custom_metadata->"${safeKey(t)}"`)].join(', ');
   let query = db.from('quotations').select(select).eq('tenant_id', ctx.tenantId).order('created_at', { ascending: false }).limit(limit);
@@ -120,6 +125,8 @@ export async function visibleQuotes(ctx: AgentCtx, limit = 1000, lean = false) {
       plan.money.forEach(([sec, f], i) => { if (q[`m${i}`] != null) (meta[sec] ||= {})[f] = q[`m${i}`]; delete q[`m${i}`]; });
       if (q.cn) meta['Client Information'] = { client_name: q.cn };
       delete q.cn;
+      q.__logs = {};
+      plan.logs.forEach((l, i) => { q.__logs[l.title] = Array.isArray(q[`l${i}`]) ? q[`l${i}`] : []; delete q[`l${i}`]; });
     } else {
       plan.sections.forEach((t, i) => { if (q[`s${i}`] != null) meta[t] = q[`s${i}`]; delete q[`s${i}`]; });
       if (q.ac) meta.agent_conversations = q.ac;
@@ -185,6 +192,29 @@ export async function buildOverview(ctx: AgentCtx) {
 
   const latest = quotes.slice(0, 3).map(quoteCard);
 
+  // Log modules: every entry (who, when, and the value of each dropdown) so Home can filter and count them.
+  const plan = await metaPlan(ctx.tenantId);
+  const logs = plan.logs.map((l) => {
+    const filterFields = l.fields.filter((f) => f.type === 'dropdown' || f.type === 'master_status');
+    const entries: any[] = [];
+    quotes.forEach((q: any) => (q.__logs?.[l.title] || []).forEach((e: any) => {
+      if (!e || typeof e !== 'object') return;
+      const v: Record<string, string> = {};
+      filterFields.forEach((f) => { if (e[f.name] != null && e[f.name] !== '') v[f.name] = String(e[f.name]); });
+      entries.push({ qn: q.qn_number, at: e._at || null, by: e._by || '', v });
+    }));
+    entries.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    return {
+      module: l.title,
+      fields: filterFields.map((f) => {
+        const configured = String(f.options || '').split(',').map((o) => o.trim()).filter(Boolean);
+        const seen = entries.map((e) => e.v[f.name]).filter(Boolean);
+        return { name: f.name, label: f.label || f.name, options: Array.from(new Set([...configured, ...seen])) };
+      }),
+      entries: entries.slice(0, 3000),
+    };
+  });
+
   const chips: Array<{ label: string; prompt: string; icon: string }> = [];
   if ((unread || 0) > 0) chips.push({ icon: 'mail', label: `Summarize ${unread} unread email${unread === 1 ? '' : 's'}`, prompt: 'Summarize my unread emails and tell me which ones need a reply first.' });
   if (waiting > 0) chips.push({ icon: 'reply', label: `Reply to ${waiting} waiting client${waiting === 1 ? '' : 's'}`, prompt: 'Which clients are waiting on a reply from us? Draft the replies for me to confirm.' });
@@ -207,6 +237,7 @@ export async function buildOverview(ctx: AgentCtx) {
     inbox: { unread: unread || 0, waiting },
     followups: temps,
     latest,
+    logs,
     chips: chips.slice(0, 8),
   };
 }

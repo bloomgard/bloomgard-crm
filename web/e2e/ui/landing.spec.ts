@@ -53,20 +53,22 @@ test.describe('Landing page', () => {
     expect(bg).toBe('rgb(11, 14, 26)');
   });
 
-  test('sign-in dialog offers both portals and closes with Escape', async ({ page }) => {
+  test('the sign-in dialog offers Log in and Create account, and closes with Escape', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Log in' }).first().click();
-    const dialog = page.getByRole('dialog', { name: 'Sign in' });
+    const dialog = page.getByRole('dialog', { name: 'Welcome' });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/Bloomgard Suite|Admin identity/)).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await page.getByRole('button', { name: 'Log in' }).first().click();
-    await dialog.getByRole('button', { name: /Client portal/ }).click();
+    await dialog.getByRole('button', { name: /^Log in/ }).click();
     await expect(page).toHaveURL(/\/login$/);
     await page.goBack();
     await page.getByRole('button', { name: 'Log in' }).first().click();
-    await page.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: /Bloomgard Suite/ }).click();
-    await expect(page).toHaveURL(/\/boss\/login$/);
+    await page.getByRole('dialog', { name: 'Welcome' }).getByRole('button', { name: /Create account/ }).click();
+    await expect(page).toHaveURL(/\/login\?mode=signup$/);
+    await expect(page.getByText('Company name')).toBeVisible();
   });
 
   test('contact dialog shows support@bloomgard.co, copies it and opens Gmail to that address', async ({ page, context }) => {
@@ -97,9 +99,9 @@ test.describe('Landing page', () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
-  test('the boss sign-in page loads', async ({ page }) => {
-    await page.goto('/boss/login');
-    await expect(page.locator('input[type="email"], input[type="password"]').first()).toBeVisible();
+  test('the old Boss portal is gone', async ({ page }) => {
+    const res = await page.goto('/boss');
+    expect(res?.status()).toBe(404);
   });
 });
 

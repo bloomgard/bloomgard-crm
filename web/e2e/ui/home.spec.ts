@@ -26,7 +26,7 @@ test.describe('Bloomgard AI home', () => {
 
     const stats = page.getByLabel('Pipeline statistics');
     await expect(stats.getByText('Total quotes')).toBeVisible();
-    await expect(stats.getByText('Per status')).toBeVisible();
+    await expect(stats.getByText('Status & logs')).toBeVisible();
     await expect(stats.getByText('My contribution')).toBeVisible();
     const { count } = await admin().from('quotations').select('id', { count: 'exact', head: true }).eq('tenant_id', actor.tenantId).neq('status', 'Lead');
     await expect(stats.locator('.agent-num').first()).toHaveText(String(count));

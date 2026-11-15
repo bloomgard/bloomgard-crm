@@ -31,6 +31,13 @@ export const sendEmail = async (mailOptions: {
   bcc?: string | string[];
   headers?: any;
 }) => {
+  // A bad Reply-To (e.g. "@inbound.bloomgard.co" from an empty forwarding address) makes Resend refuse the
+  // whole email. Drop invalid ones rather than failing the send; replies then go to the From address.
+  const validAddr = (a: string) => /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(String(a).replace(/^.*<([^>]+)>\s*$/, '$1').trim());
+  if (mailOptions.replyTo) {
+    const list = (Array.isArray(mailOptions.replyTo) ? mailOptions.replyTo : [mailOptions.replyTo]).filter(validAddr);
+    mailOptions = { ...mailOptions, replyTo: list.length ? list : undefined };
+  }
   try {
     const response = await resend.emails.send({
       from: mailOptions.from,

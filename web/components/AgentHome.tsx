@@ -15,7 +15,7 @@ type Step = { id: string; name: string; label: string; write?: boolean; status: 
 type Action = {
   id: string; kind: string; title: string; summary: string; risk: string;
   details: Array<[string, string]>; preview?: string; payload: any;
-  state?: "pending" | "running" | "done" | "failed" | "dismissed"; result?: string;
+  state?: "pending" | "running" | "done" | "failed" | "dismissed"; result?: string; secret?: string;
 };
 type Msg = {
   id: string; role: "user" | "ai"; text: string; steps?: Step[]; blocks?: any[]; actions?: Action[];
@@ -26,6 +26,7 @@ type Overview = {
   stats: { total: number; totalValue: number; byStatus: Record<string, number>; valueByStatus?: Record<string, number>; mine: number; myValue: number; weeks: number[] };
   inbox: { unread: number; waiting: number }; followups: { hot: number; warm: number; cold: number };
   latest: Array<{ qn: string; status: string; client: string; value: number; date: string; items: number }>;
+  logs?: Array<{ module: string; fields: Array<{ name: string; label: string; options: string[] }>; entries: Array<{ qn: string; at: string | null; by: string; v: Record<string, string> }> }>;
   chips: Array<{ label: string; prompt: string; icon: string }>;
 };
 
@@ -202,10 +203,14 @@ function ChartBlock({ b }: { b: any }) {
 }
 
 /**
- * Status picker for the stats strip. Statuses can be long free text and there can be dozens, so the button
- * stays compact (truncated) and the list is a fixed-size, scrollable, searchable popover sorted by count.
+ * Compact popover picker used in the stats strip. Values can be long free text and there can be dozens,
+ * so the button stays short (truncated) and the list is a fixed-size, scrollable, searchable popover.
+ * `anyLabel` adds an "any" choice with the empty value, for filters.
  */
-function StatusPicker({ entries, value, onChange }: { entries: Array<[string, number]>; value: string; onChange: (s: string) => void }) {
+function Picker({ entries, value, onChange, label, dot, small, anyLabel, align = "right" }: {
+  entries: Array<[string, number?]>; value: string; onChange: (v: string) => void; label: string;
+  dot?: (v: string) => string | undefined; small?: boolean; anyLabel?: string; align?: "left" | "right";
+}) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -216,36 +221,37 @@ function StatusPicker({ entries, value, onChange }: { entries: Array<[string, nu
     document.addEventListener("mousedown", close); document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
   }, [open]);
-  const shown = entries.filter(([st]) => st.toLowerCase().includes(q.trim().toLowerCase()));
+  const all: Array<[string, number?]> = anyLabel ? [["", undefined], ...entries] : entries;
+  const shown = all.filter(([v]) => !q.trim() || v.toLowerCase().includes(q.trim().toLowerCase()));
+  const text = (v: string) => (v === "" && anyLabel ? anyLabel : v);
   return (
     <div ref={ref} className="relative min-w-0">
-      <button type="button" onClick={() => { setOpen((o) => !o); setQ(""); }} className="agent-select" aria-haspopup="listbox" aria-expanded={open} aria-label="Status" title={value}>
-        <i style={{ background: STATUS_DOT[value] || "#8c8478" }} aria-hidden />
-        <span className="truncate max-w-[9.5rem]">{value}</span>
+      <button type="button" onClick={() => { setOpen((o) => !o); setQ(""); }} className={`agent-select ${small ? "agent-select--sm" : ""} ${small && value ? "agent-select--set" : ""}`} aria-haspopup="listbox" aria-expanded={open} aria-label={label} title={text(value)}>
+        {dot && value && <i style={{ background: dot(value) || "#8c8478" }} aria-hidden />}
+        <span className={`truncate ${small ? "max-w-[7.5rem]" : "max-w-[9.5rem]"}`}>{text(value)}</span>
         <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "-rotate-90" : "rotate-90"}`} aria-hidden />
       </button>
       {open && (
-        <div className="agent-picker" role="listbox" aria-label="Statuses">
-          {entries.length > 8 && (
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${entries.length} statuses…`} className="agent-picker__search" />
-          )}
+        <div className={`agent-picker ${align === "left" ? "agent-picker--left" : ""}`} role="listbox" aria-label={label}>
+          {entries.length > 8 && <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${entries.length}…`} className="agent-picker__search" />}
           <div className="agent-picker__list">
-            {shown.map(([st, n]) => (
-              <button key={st} type="button" role="option" aria-selected={st === value} title={st}
-                onClick={() => { onChange(st); setOpen(false); }}
-                className={`agent-picker__item ${st === value ? "agent-picker__item--on" : ""}`}>
-                <i style={{ background: STATUS_DOT[st] || "#8c8478" }} aria-hidden />
-                <span className="truncate flex-1 text-left">{st}</span>
-                <b>{n}</b>
+            {shown.map(([v, n]) => (
+              <button key={v || "__any"} type="button" role="option" aria-selected={v === value} title={text(v)}
+                onClick={() => { onChange(v); setOpen(false); }}
+                className={`agent-picker__item ${v === value ? "agent-picker__item--on" : ""}`}>
+                {dot && <i style={{ background: v ? dot(v) || "#8c8478" : "transparent", border: v ? 0 : "1px solid var(--color-gray-300)" }} aria-hidden />}
+                <span className="truncate flex-1 text-left">{text(v)}</span>
+                {n != null && <b>{n}</b>}
               </button>
             ))}
-            {shown.length === 0 && <p className="px-3 py-2 text-xs text-gray-500">No status matches “{q}”.</p>}
+            {shown.length === 0 && <p className="px-3 py-2 text-xs text-gray-500">No match for “{q}”.</p>}
           </div>
         </div>
       )}
     </div>
   );
 }
+
 
 function StatusPill({ s }: { s: string }) {
   return (
@@ -334,6 +340,20 @@ function ActionCard({ a, onConfirm, onDismiss }: { a: Action; onConfirm: () => v
         </div>
       )}
       {a.result && <p className={`mt-3 text-sm font-medium ${st === "failed" ? "text-[var(--danger,#a3192b)]" : "text-[var(--success,#0e6b57)]"}`}>{a.result}</p>}
+      {a.secret && <SecretRow value={a.secret} />}
+    </div>
+  );
+}
+
+function SecretRow({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="agent-secret">
+      <span className="agent-label">Password</span>
+      <code>{value}</code>
+      <button type="button" className="agent-btn" onClick={() => { navigator.clipboard?.writeText(value).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}{copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }
@@ -382,6 +402,12 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const [active, setActive] = useState(-1);
   const [copied, setCopied] = useState("");
   const [statusPick, setStatusPick] = useState("");
+  const [logModule, setLogModule] = useState("");
+  const STATUS_MODE = "__status";
+  const [statMode, setStatMode] = useState(STATUS_MODE);
+  const [logFilters, setLogFilters] = useState<Record<string, string>>({});
+  const [logBy, setLogBy] = useState("");
+  const [logPeriod, setLogPeriod] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -415,7 +441,9 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   }, [storeKey]);
   useEffect(() => {
     if (!hydrated.current) return;
-    try { localStorage.setItem(storeKey, JSON.stringify(msgs.filter((m) => !m.live).slice(-40))); } catch { /* ignore */ }
+    // generated passwords are shown once on their card and never stored
+    const safe = msgs.filter((m) => !m.live).slice(-40).map((m) => ({ ...m, actions: (m.actions || []).map(({ secret, ...rest }) => rest) }));
+    try { localStorage.setItem(storeKey, JSON.stringify(safe)); } catch { /* ignore */ }
   }, [msgs, storeKey]);
 
   const scrollDown = useCallback(() => { endRef.current?.scrollIntoView({ block: "end" }); }, []);
@@ -496,7 +524,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
       const res = await agentFetch("/api/agent/execute", { method: "POST", body: JSON.stringify({ kind: action.kind, payload: action.payload }) });
       const out = await res.json();
       if (!res.ok || out.error) throw new Error(out.error || "Action failed");
-      setAct({ state: "done", result: out.message });
+      setAct({ state: "done", result: out.message, secret: out.secret });
       setMsgs((all) => [...all, { id: uid(), role: "ai", text: `Done: ${out.message}` }]);
       onChanged(out.refresh || []);
       loadOverview();
@@ -521,9 +549,31 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   const share = ov && ov.stats.total ? Math.round((ov.stats.mine / ov.stats.total) * 100) : 0;
   const name = ov?.user.name || userEmail.split("@")[0];
   const topChips = (ov?.chips || []).slice(0, 3);
-  const pickedStatus = statusPick && ov?.stats.byStatus[statusPick] != null ? statusPick : statusEntries[0]?.[0] || "";
+  const pickedStatus = statusPick && ov?.stats.byStatus[statusPick] != null ? statusPick : "";
   const pickedCount = pickedStatus ? ov?.stats.byStatus[pickedStatus] || 0 : 0;
   const pickedShare = ov && ov.stats.total ? Math.round((pickedCount / ov.stats.total) * 100) : 0;
+
+  // ---- Logs stat: module, then one filter per dropdown in that module, who logged it, and a period ----
+  const PERIODS: Array<[string, number]> = [["Last 7 days", 7], ["Last 30 days", 30], ["Last 90 days", 90]];
+  const logMods = ov?.logs || [];
+  const mod = logMods.find((l) => l.module === logModule) || logMods[0];
+  // (statMode decides whether the box shows quote status or one of the log modules)
+  const inPeriod = (at: string | null) => {
+    const days = PERIODS.find(([l]) => l === logPeriod)?.[1];
+    return !days || (!!at && Date.now() - new Date(at).getTime() <= days * 86400000);
+  };
+  const matches = (e: any, skip?: string) =>
+    inPeriod(e.at) && (skip === "__by" || !logBy || e.by === logBy) &&
+    Object.entries(logFilters).every(([k, v]) => k === skip || !v || e.v[k] === v);
+  const logRows = (mod?.entries || []).filter((e) => matches(e));
+  const logQuotes = new Set(logRows.map((e) => e.qn)).size;
+  const countFor = (field: string, value: string) => (mod?.entries || []).filter((e) => matches(e, field) && e.v[field] === value).length;
+  const people = Array.from(new Set((mod?.entries || []).map((e) => e.by).filter(Boolean)));
+  const askAboutLogs = () => {
+    if (!mod) return;
+    const parts = [...Object.entries(logFilters).filter(([, v]) => v).map(([k, v]) => `${mod.fields.find((f) => f.name === k)?.label || k} = ${v}`), ...(logBy ? [`logged by ${logBy}`] : []), ...(logPeriod ? [logPeriod.toLowerCase()] : [])];
+    send(`Show the quotes with ${mod.module} entries${parts.length ? ` where ${parts.join(", ")}` : ""}, and summarise what they say.`);
+  };
 
   // the drop-up under the command bar: the remaining live chips, then the standing question list
   const suggestions: Suggestion[] = useMemo(() => {
@@ -540,7 +590,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
   };
 
   return (
-    <div className="agent-home relative flex flex-col min-h-[calc(100vh-3rem)]">
+    <div className="agent-home relative flex flex-col">
       <div className="agent-aurora" aria-hidden />
 
       {/* ---- header ---- */}
@@ -556,17 +606,44 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
           </div>
           <span className="text-xs text-gray-500">{ov ? `${inr(ov.stats.totalValue)} in pipeline` : " "}</span>
         </div>
-        <div className="agent-stat">
-          <span className="agent-label">Per status</span>
-          <div className="flex items-end justify-between gap-2">
-            <button onClick={() => pickedStatus && send(`Show my ${pickedStatus} quotes`)} className="agent-num text-left" title={pickedStatus ? `Ask about ${pickedStatus} quotes` : ""}>
-              {ov ? pickedCount : "–"}
-            </button>
-            {statusEntries.length > 0 && <StatusPicker entries={statusEntries} value={pickedStatus} onChange={setStatusPick} />}
-          </div>
-          <span className="text-xs text-gray-500">
-            {!ov ? " " : statusEntries.length === 0 ? "No quotes yet" : `${pickedShare}% of quotes · ${inr(ov.stats.valueByStatus?.[pickedStatus] || 0)}`}
-          </span>
+        <div className="agent-stat agent-stat--logs" aria-label="Status and logs">
+          <span className="agent-label">Status &amp; logs</span>
+          {!ov ? <span className="agent-num">–</span> : (
+            <>
+              <div className="flex items-end justify-between gap-2">
+                <button onClick={statMode === STATUS_MODE ? () => pickedStatus && send(`Show my ${pickedStatus} quotes`) : askAboutLogs} className="agent-num text-left" title="Ask about these">
+                  {statMode === STATUS_MODE ? (pickedStatus ? pickedCount : ov.stats.total) : logRows.length}
+                </button>
+                <Picker label="Status or log" entries={[["Quote status", ov.stats.total], ...logMods.map((l) => [l.module, l.entries.length] as [string, number])]}
+                  value={statMode === STATUS_MODE ? "Quote status" : mod?.module || "Quote status"}
+                  onChange={(v) => { setStatMode(v === "Quote status" ? STATUS_MODE : v); setLogModule(v === "Quote status" ? "" : v); setLogFilters({}); setLogBy(""); }} />
+              </div>
+              {statMode === STATUS_MODE ? (
+                <>
+                  <div className="flex flex-wrap gap-1.5" aria-label="Status filter">
+                    <Picker small align="left" label="Status" anyLabel="All statuses" dot={(v) => STATUS_DOT[v]} entries={statusEntries} value={pickedStatus} onChange={setStatusPick} />
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {statusEntries.length === 0 ? "No quotes yet" : pickedStatus ? `${pickedShare}% of quotes · ${inr(ov.stats.valueByStatus?.[pickedStatus] || 0)}` : `${statusEntries.length} statuses · ${inr(ov.stats.totalValue)}`}
+                  </span>
+                  {logMods.length === 0 && <button onClick={() => onNavigate("settings:blueprint")} className="text-[11px] font-semibold text-[var(--neelam)] hover:underline text-left">Add Status, Action or Remark logs →</button>}
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-1.5" aria-label="Log filters">
+                    {mod!.fields.map((f) => (
+                      <Picker key={f.name} small align="left" label={`${f.label} filter`} anyLabel={`${f.label}: any`} dot={f.name === "status" ? (v) => STATUS_DOT[v] : undefined}
+                        entries={f.options.map((o) => [o, countFor(f.name, o)])} value={logFilters[f.name] || ""}
+                        onChange={(v) => setLogFilters({ ...logFilters, [f.name]: v })} />
+                    ))}
+                    {people.length > 1 && <Picker small align="left" label="Logged by" anyLabel="Anyone" entries={people.map((p) => [p, (mod?.entries || []).filter((e) => matches(e, "__by") && e.by === p).length])} value={logBy} onChange={setLogBy} />}
+                    <Picker small align="left" label="Period" anyLabel="All time" entries={PERIODS.map(([l]) => [l])} value={logPeriod} onChange={setLogPeriod} />
+                  </div>
+                  <span className="text-xs text-gray-500">{logRows.length ? `${logQuotes} quote${logQuotes === 1 ? "" : "s"} · last ${ago(logRows[0].at || undefined)}` : "No entries match"}</span>
+                </>
+              )}
+            </>
+          )}
         </div>
         <div className="agent-stat">
           <span className="agent-label">My contribution</span>
@@ -615,7 +692,7 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
       </section>
 
       {/* ---- the conversation: the page itself ---- */}
-      <section className="relative flex-1 flex flex-col mt-2 min-h-[260px]" aria-label="Bloomgard AI">
+      <section className="relative flex flex-col mt-2" aria-label="Bloomgard AI">
         {!hasChat ? (
           <div className="flex flex-col items-center text-center pt-10 pb-6 agent-rise">
             <h2 className="agent-hello">{greeting()}, {name}.</h2>

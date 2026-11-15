@@ -14,6 +14,7 @@ workspace and, with your confirmation, change it.
 
 - **Stats strip** (top): total quotes (with a trend line and pipeline value), quotes per status (click a status to ask about it), **My contribution**, and a **Pulse** of unread emails, clients waiting for a reply, and hot/warm/cold follow-ups.
 - **Bloomgard AI** (the rest of the page, not a box): the conversation sits under your stats and latest quotes, with the command bar docked at the bottom. Type or dictate (microphone button), press **Enter** to send, **Shift+Enter** for a new line, and **⌘K / Ctrl+K** from anywhere to jump to it.
+- **Status & logs** (in the stats strip): one box for both, since a status is a log too. The big dropdown starts on *Quote status* (with a small status dropdown) and lists every [log module](./settings.md#log-modules); for a log, small dropdowns filter by each of its dropdowns, by who logged it and by period. Click the number to ask about it.
 - **Latest quotes** (the three newest) with a **Create quote** button beneath them.
 - **Three suggestion chips** above the command bar, generated from your live data, for example "Summarize 3 unread emails". **Click the command bar** to drop up many more questions you can ask; type to filter them, and pick a template (marked *edit*) to fill it in yourself.
 
@@ -30,6 +31,9 @@ workspace and, with your confirmation, change it.
 | Change the catalogue | "Change the rate of ITM-001 to 95." |
 | Review or change settings | "Explain my email setup." / "Set the AI tone to Friendly." |
 | Update a quote | "Mark QN-2026-007 as Approved." |
+| Build the form | "Create an Action log with Call, Visit and Meeting, and an Outcome dropdown." |
+| Add a teammate | "Add priya@acme.com as a manager." (the password is shown once) |
+| Log something | "Log a call on QN-2026-007: positive, sending samples." |
 
 ## Changes always need your OK
 

@@ -1,70 +1,21 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { authenticate } from '@/lib/agent/core';
+import { createWorkspaceUser } from '@/lib/users';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'; 
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-
+/**
+ * Add a user to the caller's own workspace. The caller must be signed in as an Admin or Manager; the
+ * workspace comes from their session, never from the request body. Only admins can create admins.
+ */
 export async function POST(request: Request) {
+  const ctx = await authenticate(request);
+  if (!ctx) return Response.json({ success: false, error: 'Not signed in' }, { status: 401 });
+  if (!ctx.isManager) return Response.json({ success: false, error: 'Only a Manager or Admin can add users.' }, { status: 403 });
+  let body: any;
+  try { body = await request.json(); } catch { return Response.json({ success: false, error: 'Bad request' }, { status: 400 }); }
+  if (String(body?.role).toLowerCase() === 'admin' && ctx.role !== 'admin') return Response.json({ success: false, error: 'Only an Admin can create another Admin.' }, { status: 403 });
   try {
-    const { email, password, role, tenantId } = await request.json();
-
-    if (!email || !password || !tenantId) {
-      return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
-    }
-
-    // 1. Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-
-    let userId = authData?.user?.id;
-
-    if (authError) {
-      if (authError.message.includes("already registered") || authError.message.includes("already exists")) {
-        // Fetch existing user from profiles table
-        const { data: existingUser } = await supabaseAdmin
-          .from('profiles')
-          .select('id')
-          .eq('email', email)
-          .single();
-          
-        if (existingUser) {
-          userId = existingUser.id;
-          
-          // Optionally update the user's password since they are being re-onboarded
-          await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-        } else {
-           throw new Error("User registered in auth but profile not found.");
-        }
-      } else {
-        throw authError;
-      }
-    }
-
-    if (!userId) {
-      throw new Error("Could not create or retrieve User ID.");
-    }
-
-    // 2. Update/Insert Profile
-    const { error: pErr } = await supabaseAdmin
-      .from("profiles")
-      .upsert({ 
-        id: userId, 
-        email: email, 
-        tenant_id: tenantId, 
-        role: role,
-        inbound_email: `${userId}@inbound.bloomgard.co`
-      }, { onConflict: 'id' });
-    
-    if (pErr) throw pErr;
-
-    return NextResponse.json({ success: true, userId });
-
-  } catch (error: any) {
-    console.error('Create User Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const u = await createWorkspaceUser({ tenantId: ctx.tenantId, email: body?.email, role: body?.role || 'agent', fullName: body?.fullName, password: body?.password || undefined });
+    return Response.json({ success: true, userId: u.userId, password: u.password });
+  } catch (e: any) {
+    return Response.json({ success: false, error: e.message }, { status: 400 });
   }
 }

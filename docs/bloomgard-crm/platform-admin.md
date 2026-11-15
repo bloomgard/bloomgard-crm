@@ -5,23 +5,16 @@ order: 12
 section: Administration
 ---
 
-# Platform admin (Boss portal)
+# Platform administration
 
-The **Boss portal** (`/boss/login`) is for Bloomgard operators, not for client users. It
-requires a platform administrator account.
+The separate Boss portal has been retired. Everything a workspace needs is now managed from inside it:
 
-## What operators can do
-
-- **New Workspace**: provision a tenant and its first admin (workspace name, admin email and password).
-- **Select a workspace** from the sidebar to administer it.
-- **Feature toggles**: enable or disable features per workspace (for example AI email, analytics) and mark each as **Billable**.
-- **Usage metrics**: **Quotes Generated**, **Emails Sent**, **AI Tokens Used**.
-- **Dynamic billing formula**: write a math expression using `quotes`, `tokens`, `emails` and `base_fee`; the portal evaluates it against the workspace's usage to produce the bill. The default is `(quotes * 0.5) + (tokens * 0.001) + (emails * 0.1) + 50`.
-- **Sync Master**: save the workspace's changes (toggles and billing formula).
-- **Terminate Workspace**: remove a workspace.
+- **New workspaces** are created by signing up (*Create account*); the person signing up becomes the admin.
+- **Users** are added by Admins and Managers in Settings → User Access, or by asking Bloomgard AI. Passwords are
+  generated and shown once. Only an Admin can create another Admin.
+- **The quote form** (modules, fields, log modules) is edited in the Field Configurator or by asking Bloomgard AI.
 
 ## Isolation
 
-Each workspace's data is isolated by tenant id using database row-level security: users
-only ever see their own workspace. Server-side routes use a service key and always scope
-queries by tenant.
+Each workspace's data is isolated by tenant id. Every server action takes the workspace from the signed-in
+session, never from the request, and is re-checked against the user's role.

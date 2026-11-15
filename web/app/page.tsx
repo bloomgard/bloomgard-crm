@@ -690,8 +690,8 @@ export default function BloomgardLanding() {
             <div>
               <p className={styles.footColTitle}>Sign in</p>
               <div className={styles.footLinks}>
-                <button type="button" onClick={() => router.push("/login")}>Client portal</button>
-                <button type="button" onClick={() => router.push("/boss/login")}>Bloomgard Suite</button>
+                <button type="button" onClick={() => router.push("/login")}>Log in</button>
+                <button type="button" onClick={() => router.push("/signup")}>Create account</button>
               </div>
             </div>
             <div>
@@ -715,17 +715,17 @@ export default function BloomgardLanding() {
           <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="portal-title">
             <div className={styles.dialogHead}>
               <div>
-                <h2 id="portal-title" className={styles.dialogTitle}>Sign in</h2>
-                <p className={styles.dialogText}>Choose where you are going.</p>
+                <h2 id="portal-title" className={styles.dialogTitle}>Welcome</h2>
+                <p className={styles.dialogText}>Log in, or start a workspace for your company.</p>
               </div>
               <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.iconBtn}`} onClick={() => setShowPortal(false)} aria-label="Close"><X /></button>
             </div>
             <button type="button" className={styles.choice} onClick={() => router.push("/login")} autoFocus>
-              <span><span className={styles.choiceTitle} style={{ display: "block" }}>Client portal</span><span className={styles.choiceText}>Open your workspace.</span></span>
+              <span><span className={styles.choiceTitle} style={{ display: "block" }}>Log in</span><span className={styles.choiceText}>Open your workspace.</span></span>
               <ArrowRight aria-hidden="true" />
             </button>
-            <button type="button" className={styles.choice} onClick={() => router.push("/boss/login")}>
-              <span><span className={styles.choiceTitle} style={{ display: "block" }}>Bloomgard Suite</span><span className={styles.choiceText}>Admin identity required.</span></span>
+            <button type="button" className={styles.choice} onClick={() => router.push("/signup")}>
+              <span><span className={styles.choiceTitle} style={{ display: "block" }}>Create account</span><span className={styles.choiceText}>A new workspace, with you as its admin.</span></span>
               <ArrowRight aria-hidden="true" />
             </button>
           </div>

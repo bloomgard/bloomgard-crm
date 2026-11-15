@@ -9,11 +9,14 @@ section: Introduction
 
 ## Signing in
 
-- **Client portal** – `/login`. Your company's users sign in with email and password.
-- **Platform admin ("Boss") portal** – `/boss/login`. For Bloomgard operators only; see [Platform admin](./platform-admin.md).
+- **Log in** at `/login` with your email and password. A device that is already signed in opens straight into
+  the workspace when you visit the main address.
+- **Create account** (`/signup`, or *Create account* on the home page) makes a new workspace for your company and
+  makes you its **admin**. From there you can shape the quote form and add your team yourself, or simply ask
+  Bloomgard AI ("add Priya as a manager", "create an Action log with Call, Visit and Meeting").
 
-New users are created by a workspace Manager or Admin from **Settings → User Access**
-(see [Settings](./settings.md)). A Manager can also issue a password reset for a user.
+Admins and Managers add users from **Settings → User Access** or through Bloomgard AI; a generated password is
+shown once. Signing out signs out only the device you are on.
 
 ## Roles and what they see
 

@@ -10,6 +10,8 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import Handlebars from "handlebars";
 import BrandLockup from '@/components/BrandLockup';
 import AgentHome from '@/components/AgentHome';
+import FieldConfigurator from '@/components/FieldConfigurator';
+import LogModule from '@/components/LogModule';
 
 // BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
@@ -157,6 +159,7 @@ export default function ClientDashboard() {
   const [profileForm, setProfileForm] = useState({ full_name: '', job_title: '', phone: '', signature: '' });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [dispatchingId, setDispatchingId] = useState(null); // Track AI Agent dispatch
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [emailSenderPref, setEmailSenderPref] = useState<'personal' | 'common'>('personal');
 
   const [emailDraft, setEmailDraft] = useState({ to: "", subject: "", message: "", attachmentBase64: "", filename: "" });
@@ -210,17 +213,13 @@ export default function ClientDashboard() {
   const [draggedFieldInfo, setDraggedFieldInfo] = useState<{ sIdx: number, fIdx: number } | null>(null);
 
   const handleCreateUser = async () => {
-    if (!onboardEmail || !onboardPassword) return alert("Credentials required.");
+    if (!onboardEmail || !onboardPassword) return alert("Enter an email and a password.");
     try {
+      const { data: sess } = await supabase.auth.getSession();
       const res = await fetch('/api/create-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: onboardEmail,
-          password: onboardPassword,
-          role: onboardRole,
-          tenantId: user?.tenant_id || tenantId
-        })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess.session?.access_token || ''}` },
+        body: JSON.stringify({ email: onboardEmail, password: onboardPassword, role: onboardRole })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -236,14 +235,44 @@ export default function ClientDashboard() {
     } catch (err: any) { alert("Auth Error: " + err.message); }
   };
 
+  const [blueprintSaved, setBlueprintSaved] = useState("");
+  const [blueprintSaving, setBlueprintSaving] = useState(false);
   const handleSaveBlueprint = async () => {
+    setBlueprintSaving(true);
     try {
-      const { error } = await supabase.from("tenant_schemas").update({ schema_config: blueprint }).eq("tenant_id", user?.tenant_id || tenantId);
+      const tid = user?.tenant_id || tenantId;
+      // schema_config also holds the AI settings, follow-up agents and branding: keep them, only replace the modules
+      const { data: current } = await supabase.from("tenant_schemas").select("schema_config").eq("tenant_id", tid).maybeSingle();
+      const special = (Array.isArray(current?.schema_config) ? current.schema_config : []).filter((x: any) => x && (x.is_agent_config || x.is_ai_settings || x.is_branding));
+      const modules = blueprint.map((m: any) => (m.is_log ? { ...m, allow_multiple: false } : m));
+      const { error } = await supabase.from("tenant_schemas").update({ schema_config: [...modules, ...special] }).eq("tenant_id", tid);
       if (error) throw error;
-      alert("Schema updated successfully!");
+      setBlueprintSaved(JSON.stringify(blueprint));
     } catch (e: any) {
       alert("Failed to update schema: " + e.message);
+    } finally {
+      setBlueprintSaving(false);
     }
+  };
+
+  /** Append an entry to a log module on a quote. A Master Status field in the entry also moves the quote's status. */
+  const addLogEntry = async (rec: any, section: any, values: Record<string, any>) => {
+    const entry = { ...values, _at: new Date().toISOString(), _by: user?.email || "" };
+    const { data: fresh, error: readErr } = await supabase.from("quotations").select("custom_metadata, status").eq("id", rec.id).single();
+    if (readErr) throw readErr;
+    const meta = { ...(fresh?.custom_metadata || {}) };
+    meta[section.title] = [...(Array.isArray(meta[section.title]) ? meta[section.title] : []), entry];
+    const statusField = (section.fields || []).find((f: any) => f.type === "master_status" && values[f.name]);
+    const newStatus = statusField ? String(values[statusField.name]) : null;
+    const patch: any = { custom_metadata: meta, last_contact_date: new Date().toISOString() };
+    if (newStatus && newStatus !== fresh?.status) patch.status = newStatus;
+    const { error } = await supabase.from("quotations").update(patch).eq("id", rec.id);
+    if (error) throw error;
+    if (patch.status) {
+      await supabase.from("status_logs").insert([{ quotation_id: rec.id, old_status: fresh?.status || null, new_status: newStatus, comments: `Logged in ${section.title} by ${user?.email}` }]);
+    }
+    setSelectedRecord((prev: any) => (prev && prev.id === rec.id ? { ...prev, custom_metadata: meta, ...(patch.status ? { status: patch.status } : {}) } : prev));
+    if (tenantId) fetchRecords(tenantId);
   };
 
   const handleQuoteReply = async (quote: any) => {
@@ -444,8 +473,9 @@ export default function ClientDashboard() {
 
             const actualBlueprint = schema.schema_config.filter(s => !s.is_agent_config && !s.is_ai_settings && !s.is_branding);
             setBlueprint(actualBlueprint);
+            setBlueprintSaved(JSON.stringify(actualBlueprint));
             const init = {};
-            actualBlueprint.forEach(s => { init[s.title] = s.allow_multiple ? [{}] : {}; });
+            actualBlueprint.forEach(s => { init[s.title] = s.is_log ? [] : s.allow_multiple ? [{}] : {}; });
             setDynamicData(init);
           }
 
@@ -478,6 +508,7 @@ export default function ClientDashboard() {
       let updated = false;
       const newData = JSON.parse(JSON.stringify(prev));
       blueprint.forEach(section => {
+        if (section.is_log) return; // log entries are stamped when they are added
         section.fields.forEach(field => {
           if (field.type === 'logged_in') {
             if (section.allow_multiple && newData[section.title]) {
@@ -853,7 +884,7 @@ export default function ClientDashboard() {
     blueprint.forEach(sec => {
       sec.fields.forEach(f => {
         if (f.type === 'master_status') {
-          if (!sec.allow_multiple && dynamicData[sec.title] && dynamicData[sec.title][f.name]) {
+          if (!sec.is_log && !sec.allow_multiple && dynamicData[sec.title] && dynamicData[sec.title][f.name]) {
             masterStatusValue = dynamicData[sec.title][f.name];
           }
         }
@@ -1023,10 +1054,11 @@ export default function ClientDashboard() {
   const handleResetPassword = async (targetUserId) => {
     if (!confirm("Are you sure you want to reset this user's password? The new password will be shown once.")) return;
     try {
+      const { data: sess } = await supabase.auth.getSession();
       const res = await fetch(getApiUrl('/api/reset-password'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: targetUserId, tenantId: tenantId, requesterId: user.id })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess.session?.access_token || ''}` },
+        body: JSON.stringify({ userId: targetUserId })
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Reset failed");
@@ -1058,7 +1090,7 @@ export default function ClientDashboard() {
     let updatedMetadata = { ...(targetRec.custom_metadata || {}) };
     blueprint.forEach(sec => {
       sec.fields.forEach(f => {
-        if (f.type === 'master_status' && updatedMetadata[sec.title]) {
+        if (f.type === 'master_status' && updatedMetadata[sec.title] && !Array.isArray(updatedMetadata[sec.title])) {
           updatedMetadata[sec.title][f.name] = newStatus;
         }
       });
@@ -1594,6 +1626,7 @@ Command: ${dashCommand}`;
     let d = { ...(rec.custom_metadata || {}) };
 
     blueprint.forEach(sec => {
+      if (sec.is_log) { d[sec.title] = Array.isArray(rec.custom_metadata?.[sec.title]) ? rec.custom_metadata[sec.title] : []; return; }
       if (sec.allow_multiple) {
         d[sec.title] = extractArray(rec, sec.title).map(item => {
           let meta = item.custom_metadata;
@@ -1678,9 +1711,7 @@ Command: ${dashCommand}`;
         </div>
       </aside>
 
-      <main className={`flex-1 w-full px-3 py-4 pt-24 md:ml-60 md:px-6 md:pt-6 lg:px-8 min-h-screen relative z-10 transition-all duration-500 ${isGlass ? '!bg-transparent' : ''}`}
-        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 6rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
-      >
+      <main className={`flex-1 min-w-0 w-full px-3 md:ml-60 md:px-6 lg:px-8 pt-[calc(env(safe-area-inset-top)+5rem)] md:pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] min-h-screen relative z-10 transition-all duration-500 ${isGlass ? '!bg-transparent' : ''}`}>
         {isGlass && (
           <>
             {isDark && <div className="fixed inset-0 z-[-1] bg-black/30 transition-opacity duration-700"></div>}
@@ -1705,15 +1736,24 @@ Command: ${dashCommand}`;
             onNewQuote={() => {
               setEditingId(null);
               setQn("");
-              setDynamicData(blueprint.reduce((acc, s) => ({ ...acc, [s.title]: s.allow_multiple ? [{}] : {} }), {}));
+              setDynamicData(blueprint.reduce((acc, s) => ({ ...acc, [s.title]: s.is_log ? [] : s.allow_multiple ? [{}] : {} }), {}));
               setCurrentView('new_entry');
             }}
             onOpenQuote={(qnNumber: string) => {
               const rec = records.find((r: any) => (r.qn_number || r.qn) === qnNumber);
               if (rec) setSelectedRecord(rec); else setCurrentView('pipeline');
             }}
-            onNavigate={(v: string) => setCurrentView(v)}
-            onChanged={() => { if (tenantId) fetchRecords(tenantId); fetchInboxLogs(); }}
+            onNavigate={(v: string) => { if (v.startsWith('settings:')) { setSettingsSubView(v.split(':')[1]); setCurrentView('settings'); } else setCurrentView(v); }}
+            onChanged={async (kinds: string[]) => {
+              if (tenantId) fetchRecords(tenantId);
+              fetchInboxLogs();
+              if (kinds.includes('form') && tenantId) {
+                // the AI changed the quote form: load it again so every screen uses the new modules
+                const { data } = await supabase.from('tenant_schemas').select('schema_config').eq('tenant_id', tenantId).maybeSingle();
+                const bp = (data?.schema_config || []).filter((x: any) => !x.is_agent_config && !x.is_ai_settings && !x.is_branding);
+                setBlueprint(bp); setBlueprintSaved(JSON.stringify(bp));
+              }
+            }}
           />
         )}
 
@@ -2130,59 +2170,14 @@ Command: ${dashCommand}`;
             )}
 
             {settingsSubView === 'blueprint' && (
-              <div className="space-y-6">
-                <div className="flex justify-end mb-4">
-                  <button onClick={handleSaveBlueprint} className="bg-black text-white px-8 py-3 rounded-xl font-bold text-sm shadow-md hover:bg-gray-800 transition-colors">Save Blueprint Schema</button>
-                </div>
-                {blueprint.map((section, sIdx) => (
-                  <div key={`s-${sIdx}`} draggable onDragStart={() => setDraggedSectionIdx(sIdx)} onDragOver={e => e.preventDefault()} onDrop={() => {
-                    const nc = [...blueprint]; const [m] = nc.splice(draggedSectionIdx!, 1); nc.splice(sIdx, 0, m); setBlueprint(nc); setDraggedSectionIdx(null);
-                  }} className={`bg-white border border-gray-200 p-8 rounded-3xl relative shadow-sm group transition-all ${draggedSectionIdx === sIdx ? 'opacity-50 border-dashed' : ''}`}>
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab text-gray-300 hover:text-black text-2xl transition-all">≡</div>
-                    <div className="flex justify-between items-center mb-6">
-                      <input className="text-xl font-bold outline-none bg-transparent w-1/2 border-b border-transparent focus:border-gray-200 pb-1" value={section.title} onChange={e => { const nc = [...blueprint]; nc[sIdx].title = e.target.value; setBlueprint(nc); }} />
-                      <div className="flex items-center gap-6">
-                        <label className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest cursor-pointer">
-                          <input type="checkbox" checked={section.allow_multiple} onChange={e => { const nc = [...blueprint]; nc[sIdx].allow_multiple = e.target.checked; setBlueprint(nc); }} className="accent-black w-3.5 h-3.5" />
-                          Allow Multiple Rows
-                        </label>
-                        <button onClick={() => { const nc = [...blueprint]; nc.splice(sIdx, 1); setBlueprint(nc); }} className="text-red-400 hover:text-red-600 font-bold text-xs transition-colors">Delete</button>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      {section.fields?.map((f: any, fIdx: number) => (
-                        <div key={`f-${fIdx}`} draggable onDragStart={(e) => { e.stopPropagation(); setDraggedFieldInfo({ sIdx, fIdx }); }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => {
-                          e.preventDefault(); e.stopPropagation();
-                          if (!draggedFieldInfo || draggedFieldInfo.sIdx !== sIdx) return;
-                          const nc = [...blueprint]; const [m] = nc[sIdx].fields.splice(draggedFieldInfo.fIdx, 1); nc[sIdx].fields.splice(fIdx, 0, m); setBlueprint(nc); setDraggedFieldInfo(null);
-                        }} className="grid grid-cols-12 gap-4 bg-gray-50 p-4 rounded-2xl items-center border border-transparent hover:border-gray-200 transition-colors">
-                          <div className="col-span-1 text-gray-300 hover:text-black cursor-grab text-center text-lg">≡</div>
-                          <input placeholder="Label" className="col-span-3 bg-transparent font-bold text-sm outline-none" value={f.label} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].label = e.target.value; setBlueprint(nc); }} />
-                          <input placeholder="db_key" className="col-span-2 font-mono text-xs outline-none bg-transparent text-blue-600" value={f.name} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].name = e.target.value; setBlueprint(nc); }} />
-
-                          <select className="col-span-2 text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 outline-none" value={f.type} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].type = e.target.value; setBlueprint(nc); }}>
-                            <option value="text">Text</option>
-                            <option value="paragraph">Paragraph (Long Text)</option>
-                            <option value="number">Number</option>
-                            <option value="date">Date</option>
-                            <option value="dropdown">Dropdown</option>
-                            <option value="master_status">Master Status</option>
-                            <option value="attachment">Attachment</option>
-                            <option value="calculated">Formula</option>
-                            <option value="logged_in">Logged In User</option>
-                          </select>
-
-                          <input placeholder={f.type === 'calculated' ? "e.g. SUM[Products.item_br]" : f.type === 'master_status' ? "Inquiry, Approved..." : "Options..."} className="col-span-3 bg-white border border-gray-200 text-xs p-2 rounded-lg outline-none disabled:opacity-50" value={f.options || ""} onChange={e => { const nc = [...blueprint]; nc[sIdx].fields[fIdx].options = e.target.value; setBlueprint(nc); }} disabled={f.type !== "dropdown" && f.type !== "calculated" && f.type !== "master_status"} />
-
-                          <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.splice(fIdx, 1); setBlueprint(nc); }} className="col-span-1 text-red-300 hover:text-red-500 font-bold text-right pr-2"><X className="w-4 h-4" /></button>
-                        </div>
-                      ))}
-                      <button onClick={() => { const nc = [...blueprint]; nc[sIdx].fields.push({ label: "", name: "", type: "text" }); setBlueprint(nc); }} className="text-[10px] font-black uppercase text-blue-600 tracking-widest mt-4 ml-4 hover:text-blue-800">+ Add Field</button>
-                    </div>
-                  </div>
-                ))}
-                <button onClick={() => setBlueprint([...blueprint, { title: "New Section", fields: [], allow_multiple: false }])} className="w-full py-8 border-2 border-dashed border-gray-200 rounded-3xl text-gray-300 font-bold uppercase tracking-widest text-xs hover:border-black hover:text-black transition-all">+ Create New Module</button>
-              </div>
+              <FieldConfigurator
+                blueprint={blueprint}
+                setBlueprint={setBlueprint}
+                onSave={handleSaveBlueprint}
+                saving={blueprintSaving}
+                dirty={JSON.stringify(blueprint) !== blueprintSaved}
+                statuses={allStatuses}
+              />
             )}
 
             {settingsSubView === 'profile' && (
@@ -2338,7 +2333,9 @@ Command: ${dashCommand}`;
                         onClick={async () => {
                           if (!user?.id) return;
                           setIsSavingSettings(true);
-                          const newInbound = `${userRoutingSlug}@inbound.bloomgard.co`;
+                          // an empty box means "use the workspace address", never "@inbound.bloomgard.co"
+                          const slug = String(userRoutingSlug || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+                          const newInbound = slug ? `${slug}@inbound.bloomgard.co` : null;
                           const { error } = await supabase.from('profiles').update({ inbound_email: newInbound }).eq('id', user.id);
                           setIsSavingSettings(false);
                           if (error) alert("Failed to save: " + error.message);
@@ -2956,7 +2953,7 @@ Command: ${dashCommand}`;
                     onClick={() => {
                       setEditingId(null);
                       setQn("");
-                      setDynamicData(blueprint.reduce((acc, s) => ({ ...acc, [s.title]: s.allow_multiple ? [{}] : {} }), {}));
+                      setDynamicData(blueprint.reduce((acc, s) => ({ ...acc, [s.title]: s.is_log ? [] : s.allow_multiple ? [{}] : {} }), {}));
                       setCurrentView('new_entry');
                     }}
                     className="bg-gray-900 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-gray-800 active:scale-95 transition-transform"
@@ -3258,7 +3255,7 @@ Command: ${dashCommand}`;
             </div>
 
             <div className="space-y-8 pb-20">
-              {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => (
+              {blueprint.filter(s => s.title.toLowerCase() !== "status logs" && !s.is_log).map((section, sIdx) => (
                 <div key={sIdx} className="pt-4 pb-8 border-b border-gray-200">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
                     <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[var(--sindoor)] rounded-full"></span>{section.title}</h3>
@@ -3596,6 +3593,16 @@ Command: ${dashCommand}`;
               </div>
             </div>
 
+            {blueprint.filter(s => s.is_log).map(sec => (
+              <LogModule
+                key={sec.title}
+                section={sec}
+                entries={Array.isArray(selectedRecord?.custom_metadata?.[sec.title]) ? selectedRecord.custom_metadata[sec.title] : []}
+                statuses={allStatuses}
+                onAdd={(values) => addLogEntry(selectedRecord, sec, values)}
+              />
+            ))}
+
             <div className="mb-8">
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3 px-2">Manifest Audit Log</h4>
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -3684,7 +3691,7 @@ Command: ${dashCommand}`;
                 </div>
               )}
 
-              {blueprint.filter(s => s.title.toLowerCase() !== "status logs").map((section, sIdx) => {
+              {blueprint.filter(s => s.title.toLowerCase() !== "status logs" && !s.is_log).map((section, sIdx) => {
                 return (
                   <div key={sIdx} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-4 border-b border-gray-100 pb-2">{section.title}</h4>
@@ -3782,51 +3789,57 @@ Command: ${dashCommand}`;
       )}
 
       {showEmailModal && (
-        <div className="fixed inset-0 z-[300] bg-gray-900/60 backdrop-blur-sm flex justify-center items-center p-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-200 max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-gray-900">Deploy Email</h3>
-              <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-red-500 font-bold w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform"><X className="w-4 h-4" /></button>
+        <div className="fixed inset-0 z-[300] bg-gray-900/40 backdrop-blur-[2px] flex justify-center items-end sm:items-center p-0 sm:p-6 animate-in fade-in duration-200" onMouseDown={e => { if (e.target === e.currentTarget) setShowEmailModal(false); }}>
+          <div className="compose w-full sm:max-w-2xl bg-white sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 max-h-[100dvh] sm:max-h-[90vh] animate-in slide-in-from-bottom-4 duration-300" role="dialog" aria-label="New message">
+            <div className="flex items-center gap-3 px-5 pt-4 pb-3">
+              <span className="agent-orb agent-orb--sm" aria-hidden />
+              <h3 className="compose__title">New message</h3>
+              <button onClick={() => setShowEmailModal(false)} className="fc-icon ml-auto" aria-label="Close"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-6 space-y-5 flex-1 overflow-y-auto">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Send As</label>
-                <select value={emailSenderPref} onChange={e => setEmailSenderPref(e.target.value as 'personal' | 'common')} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400">
-                  <option value="personal">Personal ({user?.email})</option>
-                  {customSender && <option value="common">Common Workspace Email ({customSender})</option>}
+            <div className="flex-1 overflow-y-auto">
+              <div className="compose__row">
+                <span className="compose__label">From</span>
+                <select value={emailSenderPref} onChange={e => setEmailSenderPref(e.target.value as 'personal' | 'common')} className="compose__field compose__select" aria-label="Send as">
+                  <option value="personal">{user?.email} (personal)</option>
+                  {customSender && <option value="common">{customSender} (workspace)</option>}
                 </select>
               </div>
-              <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Recipient</label><input type="email" value={emailDraft.to} onChange={e => setEmailDraft({ ...emailDraft, to: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="client@company.com" /></div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">CC</label><input type="text" value={emailDraft.cc || ""} onChange={e => setEmailDraft({ ...emailDraft, cc: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="Optional" /></div>
-                <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">BCC</label><input type="text" value={emailDraft.bcc || ""} onChange={e => setEmailDraft({ ...emailDraft, bcc: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" placeholder="Optional" /></div>
+              <div className="compose__row">
+                <span className="compose__label">To</span>
+                <input type="email" value={emailDraft.to} onChange={e => setEmailDraft({ ...emailDraft, to: e.target.value })} placeholder="client@company.com" className="compose__field" aria-label="Recipient" />
+                {!(showCcBcc || emailDraft.cc || emailDraft.bcc) && <button type="button" onClick={() => setShowCcBcc(true)} className="compose__link">Cc / Bcc</button>}
               </div>
-              <div className="space-y-1.5"><label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Subject</label><input value={emailDraft.subject} onChange={e => setEmailDraft({ ...emailDraft, subject: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm font-medium outline-none focus:border-gray-400" /></div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Message</label>
-                  <button onClick={handleGenerateEmailDraft} disabled={isGeneratingDraft} className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 active:scale-95">
-                    {isGeneratingDraft ? <div className="w-3 h-3 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin"></div> : <Sparkles className="w-4 h-4 inline" />} Generate Draft
-                  </button>
-                </div>
-                <textarea rows={5} value={emailDraft.message} onChange={e => setEmailDraft({ ...emailDraft, message: e.target.value })} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-lg text-sm outline-none focus:border-gray-400 resize-none" />
+              {(showCcBcc || emailDraft.cc || emailDraft.bcc) && (
+                <>
+                  <div className="compose__row"><span className="compose__label">Cc</span><input type="text" value={emailDraft.cc || ""} onChange={e => setEmailDraft({ ...emailDraft, cc: e.target.value })} placeholder="Optional" className="compose__field" aria-label="CC" /></div>
+                  <div className="compose__row"><span className="compose__label">Bcc</span><input type="text" value={emailDraft.bcc || ""} onChange={e => setEmailDraft({ ...emailDraft, bcc: e.target.value })} placeholder="Optional" className="compose__field" aria-label="BCC" /></div>
+                </>
+              )}
+              <div className="compose__row">
+                <input value={emailDraft.subject} onChange={e => setEmailDraft({ ...emailDraft, subject: e.target.value })} placeholder="Subject" className="compose__field compose__subject" aria-label="Subject" />
+              </div>
+              <div className="px-5 pt-3 pb-2 relative">
+                <textarea rows={10} value={emailDraft.message} onChange={e => setEmailDraft({ ...emailDraft, message: e.target.value })} placeholder="Write your message, or let Bloomgard AI draft it…" className="compose__body" aria-label="Message" />
+                <button onClick={handleGenerateEmailDraft} disabled={isGeneratingDraft} className="agent-chip compose__ai" type="button">
+                  {isGeneratingDraft ? <span className="w-3.5 h-3.5 border-2 border-[var(--neelam)] border-t-transparent rounded-full animate-spin inline-block" /> : <Sparkles className="w-3.5 h-3.5" />} {isGeneratingDraft ? "Drafting…" : "Draft with AI"}
+                </button>
               </div>
 
-              <div className="space-y-1.5 pt-2">
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Attachments</label>
+              <div className="px-5 pb-4 space-y-2">
+                <label className="agent-label">Attachments</label>
 
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col md:flex-row gap-3">
                     <button
                       onClick={() => document.getElementById('email-file-upload').click()}
-                      className="flex-1 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 font-semibold text-xs py-2.5 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2"
+                      className="agent-btn flex-1 justify-center"
                     >
                       <div className="flex items-center justify-center gap-2"><Laptop className="w-4 h-4" /> Upload from Device</div>
                     </button>
 
                     <div className="flex-1 relative">
                       <select
-                        className="w-full bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 font-semibold text-xs py-2.5 px-3 rounded-xl shadow-sm transition-colors appearance-none cursor-pointer outline-none focus:border-indigo-400"
+                        className="agent-btn w-full appearance-none cursor-pointer pr-8"
                         onChange={async (e) => {
                           const id = e.target.value;
                           if (!id) return;
@@ -3888,7 +3901,7 @@ Command: ${dashCommand}`;
                 {emailDraft.attachments && emailDraft.attachments.length > 0 && (
                   <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
                     {emailDraft.attachments.map((att, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 p-2.5 rounded-xl shadow-sm">
+                      <div key={idx} className="flex items-center justify-between bg-white border border-gray-200 px-3 py-2 rounded-xl">
                         <div className="flex items-center gap-3 overflow-hidden">
                           <div className="w-7 h-7 bg-white rounded flex items-center justify-center text-xs shadow-sm border border-gray-100 shrink-0"><Paperclip className="w-4 h-4" /></div>
                           <p className="text-[11px] font-semibold text-gray-800 truncate">{att.filename}</p>
@@ -3901,9 +3914,9 @@ Command: ${dashCommand}`;
                               attachments: p.attachments.filter((_, i) => i !== idx)
                             }));
                           }}
-                          className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2.5 py-1.5 rounded-lg active:scale-95 transition-transform shrink-0 border border-red-100"
+                          className="fc-icon fc-icon--danger shrink-0" aria-label={`Remove ${att.filename}`}
                         >
-                          <X className="w-4 h-4" /> Remove
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
                     ))}
@@ -3911,9 +3924,10 @@ Command: ${dashCommand}`;
                 )}
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 items-center">
-              <button onClick={() => setShowEmailModal(false)} className="text-[11px] font-semibold text-gray-500 hover:text-gray-800 px-3 py-2 active:scale-95 transition-transform">Cancel</button>
-              <button onClick={sendDraftedEmail} disabled={isSending} className={`px-5 py-2.5 rounded-lg text-xs font-semibold text-white shadow-sm active:scale-95 transition-transform ${isSending ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-800'}`}>{isSending ? 'Sending...' : 'Approve & Send'}</button>
+            <div className="px-5 py-3 border-t border-gray-200 flex items-center gap-3">
+              <button onClick={() => setShowEmailModal(false)} className="agent-btn">Discard</button>
+              <span className="text-[11px] text-gray-500 hidden sm:inline">{emailDraft.attachments?.length ? `${emailDraft.attachments.length} attachment${emailDraft.attachments.length === 1 ? "" : "s"}` : "Replies come back to your Inbox"}</span>
+              <button onClick={sendDraftedEmail} disabled={isSending} className="agent-create !py-2.5 !px-6 ml-auto disabled:opacity-60">{isSending ? 'Sending…' : 'Send'}</button>
             </div>
           </div>
         </div>

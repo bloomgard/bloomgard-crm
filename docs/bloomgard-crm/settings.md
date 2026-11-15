@@ -35,11 +35,39 @@ the AI uses to sign emails "as you" and they are saved to your profile.
 
 ## Field Configurator
 
-Design the quote form without code. Define **sections** (such as *Client Information*,
-*Products*) and **fields** with a label, a database key (`db_key`) and a type:
-**Text, Number, Dropdown, Paragraph (long text), Attachment, Formula**. Fields can pull their
-values from [Master Data](./master-data.md). **Save Blueprint Schema** applies your design to
-the new-quote form.
+Design the quote form without code. The form is made of **modules** (sections such as *Client Information*,
+*Products*). Each module has fields with a **label**, a **key** (filled in from the label automatically) and a **type**:
+**Text, Paragraph, Number, Date, Dropdown, Master Status, Attachment, Formula, Logged In User**.
+
+- **Multiple rows** turns a module into a table, like Products.
+- **Log?** turns a module into a timeline kept on each quote (see below).
+- Drag the handles to reorder modules and fields. Problems such as duplicate keys or a dropdown without options are
+  shown before you save, and the save bar stays at the top of the screen. Saving changes only the form: AI settings,
+  follow-up agents and branding are kept.
+- **Add module** offers templates: a blank module, a **Status log**, an **Action log** and a **Remark log**.
+
+### Master Status
+
+A dropdown whose options are your pipeline stages (for example *Inquiry, Quotation Given, PO Received, Lost*).
+Whatever it is set to **becomes the quote's status**, the one Quotes, Follow ups, the Home stats and the AI all use.
+Changing it records a line in the quote's status history. Keep one in the quote form. A Status log module can hold one
+too, so every logged entry moves the status.
+
+### Log modules
+
+A module with **Log?** turned on is not filled in the quote form. Each quote keeps a list of entries instead, and every
+entry records **who** added it and **when** automatically. Typical logs:
+
+| Log | Fields | Use |
+|---|---|---|
+| Status log | Status (Master Status), Remark | Every entry moves the quote's status. |
+| Action log | Action, Outcome, Next step, Follow-up on | Calls, visits, samples, meetings. |
+| Remark log | Category, Remark | Free notes. |
+
+Open a quote to see each log as a table (newest first), filter it by any dropdown, and use **Add entry**. You can
+also ask Bloomgard AI, for example "log a call on QN-2026-014, positive, sending samples"; it prepares the entry for
+your OK. On [Home](../ai/ai-home/), the **Logs** stat counts entries: pick a module in the big dropdown, then narrow it
+with a small dropdown for each of its dropdown fields, who logged it, and a period.
 
 ## Email Settings
 

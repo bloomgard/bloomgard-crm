@@ -129,6 +129,23 @@ test.describe.serial('Bloomgard AI agent', () => {
     expect(out.message).not.toMatch(/no (recorded )?value/i);
   });
 
+  test('add_log_entry: refuses unknown modules, and appends a stamped entry to a log module', async ({ request }) => {
+    const before = (await admin().from('tenant_schemas').select('schema_config').eq('tenant_id', actor.tenantId).single()).data!.schema_config as any[];
+    try {
+      const bad = await request.post(`${ENV.baseUrl}/api/agent/execute`, { headers: authed(token), data: { kind: 'add_log_entry', payload: { qn: q.qn, module: 'Nope Log', values: { x: '1' } } } });
+      expect(bad.status()).toBe(400);
+      await admin().from('tenant_schemas').update({ schema_config: [...before, { title: `E2E Remark Log ${tag}`, is_log: true, fields: [{ label: 'Remark', name: 'remark', type: 'paragraph' }] }] }).eq('tenant_id', actor.tenantId);
+      await new Promise((r) => setTimeout(r, 6_000)); // the module list is cached for 5 s per server process
+      const ok = await request.post(`${ENV.baseUrl}/api/agent/execute`, { headers: authed(token), data: { kind: 'add_log_entry', payload: { qn: q.qn, module: `E2E Remark Log ${tag}`, values: { remark: 'Called, wants revised price' } } } });
+      expect(ok.status(), await ok.text()).toBe(200);
+      const meta = (await admin().from('quotations').select('custom_metadata').eq('id', q.id).single()).data!.custom_metadata as any;
+      expect(meta[`E2E Remark Log ${tag}`][0]).toMatchObject({ remark: 'Called, wants revised price', _by: actor.email });
+      expect(meta[`E2E Remark Log ${tag}`][0]._at).toBeTruthy();
+    } finally {
+      await admin().from('tenant_schemas').update({ schema_config: before }).eq('tenant_id', actor.tenantId);
+    }
+  });
+
   test('chat: grounds a catalogue price in Master Data', async ({ request }) => {
     test.setTimeout(150_000);
     const out = await ask(request, token, `What is the unit and the current rate of catalogue item ${code()}?`);

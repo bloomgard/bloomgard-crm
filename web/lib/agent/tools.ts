@@ -1,6 +1,7 @@
 import { db, AgentCtx, buildOverview, visibleQuotes, quoteCard, quoteValue, clientName, temperature, daysSince, metaPlan } from './core';
 import { sendEmail } from '@/lib/email';
 import { logEmailSent } from '@/utils/usageLogger';
+import { createWorkspaceUser, ROLES } from '@/lib/users';
 
 /* ------------------------------------------------------------------ */
 /* Tool schemas (OpenAI function-calling format, via OpenRouter)       */
@@ -69,13 +70,38 @@ export const TOOLS = [
   fn('add_master_item', 'Prepare a new catalogue item (managers/admins only). The user must confirm.', {
     item_code: { type: 'string' }, item_name: { type: 'string' }, uom: { type: 'string' }, item_rate: { type: 'string' },
   }, ['item_code', 'item_name', 'uom', 'item_rate']),
+  fn('add_log_entry', 'Prepare a new entry in one of the workspace\'s log modules (e.g. Status Log, Action Log, Remark Log) on a quote. Who and when are recorded automatically. A Master Status value also moves the quote\'s status. The user must confirm.', {
+    qn: { type: 'string' }, module: { type: 'string', description: 'Log module name, see get_settings.' },
+    values: { type: 'object', description: 'Field key -> value, using the module\'s field keys.' },
+  }, ['qn', 'module', 'values']),
+  fn('change_form', 'Prepare changes to the quote form (the Field Configurator): add, rename, reconfigure or delete modules and fields, including turning a module into a log ("Log?"). Managers/admins only. The user must confirm. Use get_settings first to see the current modules and field keys.', {
+    operations: {
+      type: 'array', description: 'Applied in order.',
+      items: {
+        type: 'object',
+        properties: {
+          op: { type: 'string', enum: ['add_module', 'update_module', 'delete_module', 'add_field', 'update_field', 'delete_field'] },
+          module: { type: 'string', description: 'Module name (the new name for add_module).' },
+          new_title: { type: 'string' }, is_log: { type: 'boolean' }, allow_multiple: { type: 'boolean' },
+          fields: { type: 'array', description: 'add_module only', items: { type: 'object', properties: { label: { type: 'string' }, key: { type: 'string' }, type: { type: 'string' }, options: { type: 'string' } } } },
+          key: { type: 'string', description: 'Field key for update_field / delete_field.' },
+          label: { type: 'string' }, type: { type: 'string', enum: ['text', 'paragraph', 'number', 'date', 'dropdown', 'master_status', 'attachment', 'calculated', 'logged_in'] },
+          options: { type: 'string', description: 'Comma-separated options, or a formula for calculated.' }, new_key: { type: 'string' },
+        },
+        required: ['op', 'module'],
+      },
+    },
+  }, ['operations']),
+  fn('add_user', 'Prepare a new user in this workspace with a generated password, shown once to the person asking. Managers/admins only; only an admin can add an admin. The user must confirm.', {
+    email: { type: 'string' }, role: { type: 'string', enum: ['agent', 'manager', 'admin'] }, full_name: { type: 'string' },
+  }, ['email', 'role']),
   fn('update_settings', 'Prepare a settings change. scope "profile" edits the caller\'s own profile/forwarding address; scope "ai" edits workspace AI behaviour (managers/admins). The user must confirm.', {
     scope: { type: 'string', enum: ['profile', 'ai'] },
     changes: { type: 'object', description: 'profile: full_name, job_title, phone, signature, inbound_email. ai: tone (Professional|Casual|Friendly|Aggressive), englishLevel (Native|Simple / Basic|Corporate Jargon), desperation (Low (Confident)|Medium (Eager)|High (Need the deal)), instructions.' },
   }, ['scope', 'changes']),
 ];
 
-const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings']);
+const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings', 'add_log_entry', 'change_form', 'add_user']);
 export const isWriteTool = (name: string) => WRITE_TOOLS.has(name);
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -84,7 +110,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_master_data: 'Reading catalogue', get_settings: 'Reading settings', get_followups: 'Scoring follow-ups',
   make_chart: 'Building chart', send_email: 'Drafting email', create_quote: 'Preparing quote',
   update_quote_status: 'Preparing status change', update_master_item: 'Preparing catalogue change',
-  add_master_item: 'Preparing catalogue item', update_settings: 'Preparing settings change',
+  add_master_item: 'Preparing catalogue item', update_settings: 'Preparing settings change', add_log_entry: 'Preparing log entry', change_form: 'Preparing form changes', add_user: 'Preparing new user',
 };
 
 /* ------------------------------------------------------------------ */
@@ -293,6 +319,7 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
           ...quoteCard(q), contact: q.clients?.contact_person, follow_up_due: q.follow_up_due_date,
           items: (q.quotation_items || []).map((i: any) => ({ code: i.item_code, name: i.item_name, qty: i.quantity, uom: i.uom, rate: i.item_rate })),
           conversation: convo, status_history: logs || [], thread: thread ? { state: thread.triage_status, has_ai_draft: !!thread.ai_draft_text } : null,
+          log_modules: Object.fromEntries((await metaPlan(ctx.tenantId)).logs.map((l) => [l.title, (Array.isArray(q.custom_metadata?.[l.title]) ? q.custom_metadata[l.title] : []).slice(-10)])),
         },
         blocks: [{ type: 'quotes', title: q.qn_number, quotes: [quoteCard(q)] }],
       };
@@ -338,6 +365,9 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
             workspace_inbound_address: t.inbound_routing_id ? `${t.inbound_routing_id}@inbound.bloomgard.co` : null,
             how_it_works: 'Client mail forwarded to an @inbound.bloomgard.co address is filed in the Inbox; replies are sent from the workspace sender with Reply-To set to the inbound address.',
           },
+          form_modules: ((schema?.schema_config || []) as any[]).filter((m: any) => m?.title && Array.isArray(m.fields) && !m.is_ai_settings && !m.is_agent_config && !m.is_branding)
+            .map((m: any) => ({ module: m.title, log: !!m.is_log, multiple_rows: !!m.allow_multiple, fields: m.fields.map((f: any) => `${f.label} [${f.name}] ${f.type}${f.options ? `: ${f.options}` : ''}`) })),
+          log_modules: (await metaPlan(ctx.tenantId)).logs.map((l) => ({ module: l.title, fields: l.fields.map((f) => ({ key: f.name, label: f.label, type: f.type, options: f.options || undefined })) })),
           ai: { enabled: !!t.ai_enabled, tone: ai.tone || 'Professional', englishLevel: ai.englishLevel || 'Native', desperation: ai.desperation || 'Low (Confident)', instructions: ai.instructions || '', routing_rules: (ai.emailRouting || []).length },
         },
       };
@@ -362,6 +392,102 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
       if (isWriteTool(name)) return prepare(name, a, ctx);
       return { result: { error: `Unknown tool ${name}` } };
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Form (Field Configurator) changes                                    */
+/* ------------------------------------------------------------------ */
+
+const FIELD_TYPES = ['text', 'paragraph', 'number', 'date', 'dropdown', 'master_status', 'attachment', 'calculated', 'logged_in'];
+const keyOf = (s: string) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+const isSpecial = (m: any) => m && (m.is_ai_settings || m.is_agent_config || m.is_branding);
+
+async function loadForm(ctx: AgentCtx) {
+  const { data } = await db.from('tenant_schemas').select('schema_config').eq('tenant_id', ctx.tenantId).maybeSingle();
+  const all: any[] = Array.isArray(data?.schema_config) ? data!.schema_config : [];
+  return { exists: !!data, modules: all.filter((m) => !isSpecial(m)), special: all.filter(isSpecial) };
+}
+
+/** Apply operations to a copy of the modules. Throws a readable error on anything invalid. */
+function applyFormOps(modules: any[], ops: any[]) {
+  const next = JSON.parse(JSON.stringify(modules));
+  const lines: Array<[string, string]> = [];
+  const find = (t: string) => {
+    const m = next.find((x: any) => String(x.title).toLowerCase() === String(t || '').trim().toLowerCase());
+    if (!m) throw new Error(`There is no module "${t}". Modules: ${next.map((x: any) => x.title).join(', ')}.`);
+    return m;
+  };
+  const makeField = (f: any) => {
+    const type = f.type || 'text';
+    if (!FIELD_TYPES.includes(type)) throw new Error(`"${type}" is not a field type. Types: ${FIELD_TYPES.join(', ')}.`);
+    const name = keyOf(f.key || f.new_key || f.label);
+    if (!name) throw new Error('A field needs a label or a key.');
+    if ((type === 'dropdown' || type === 'master_status' || type === 'calculated') && !String(f.options || '').trim()) throw new Error(`"${f.label || name}" (${type}) needs ${type === 'calculated' ? 'a formula' : 'options'}.`);
+    return { label: f.label || name, name, type, ...(f.options ? { options: String(f.options) } : {}) };
+  };
+  if (!Array.isArray(ops) || ops.length === 0) throw new Error('No changes given.');
+  for (const o of ops) {
+    switch (o.op) {
+      case 'add_module': {
+        const title = String(o.module || '').trim();
+        if (!title) throw new Error('A new module needs a name.');
+        if (next.some((x: any) => String(x.title).toLowerCase() === title.toLowerCase())) throw new Error(`A module called "${title}" already exists.`);
+        const fields = (o.fields || []).map(makeField);
+        if (new Set(fields.map((f: any) => f.name)).size !== fields.length) throw new Error(`Two fields in "${title}" have the same key.`);
+        next.push({ title, fields, allow_multiple: !o.is_log && !!o.allow_multiple, ...(o.is_log ? { is_log: true } : {}) });
+        lines.push(['Add module', `${title}${o.is_log ? ' (log)' : o.allow_multiple ? ' (multiple rows)' : ''}: ${fields.map((f: any) => `${f.label} (${f.type})`).join(', ') || 'no fields yet'}`]);
+        break;
+      }
+      case 'update_module': {
+        const m = find(o.module); const what: string[] = [];
+        if (o.new_title && o.new_title !== m.title) {
+          if (next.some((x: any) => x !== m && String(x.title).toLowerCase() === String(o.new_title).toLowerCase())) throw new Error(`A module called "${o.new_title}" already exists.`);
+          what.push(`rename to "${o.new_title}" (existing data stays under the old name)`); m.title = String(o.new_title);
+        }
+        if (typeof o.is_log === 'boolean') { m.is_log = o.is_log; if (o.is_log) m.allow_multiple = false; what.push(o.is_log ? 'turn Log? on' : 'turn Log? off'); }
+        if (typeof o.allow_multiple === 'boolean' && !m.is_log) { m.allow_multiple = o.allow_multiple; what.push(o.allow_multiple ? 'multiple rows on' : 'multiple rows off'); }
+        if (!what.length) throw new Error(`Nothing to change on "${m.title}".`);
+        lines.push(['Change module', `${o.module}: ${what.join(', ')}`]);
+        break;
+      }
+      case 'delete_module': {
+        const m = find(o.module);
+        next.splice(next.indexOf(m), 1);
+        lines.push(['Delete module', `${m.title} (values already saved on quotes are kept, but no longer shown)`]);
+        break;
+      }
+      case 'add_field': {
+        const m = find(o.module); const f = makeField(o);
+        if (m.fields.some((x: any) => x.name === f.name)) throw new Error(`"${m.title}" already has a field with the key "${f.name}".`);
+        m.fields.push(f);
+        lines.push(['Add field', `${m.title} › ${f.label} (${f.type}${f.options ? `: ${f.options}` : ''})`]);
+        break;
+      }
+      case 'update_field': {
+        const m = find(o.module);
+        const f = m.fields.find((x: any) => x.name === o.key) || m.fields.find((x: any) => String(x.label).toLowerCase() === String(o.key || '').toLowerCase());
+        if (!f) throw new Error(`"${m.title}" has no field "${o.key}". Fields: ${m.fields.map((x: any) => x.name).join(', ')}.`);
+        const what: string[] = [];
+        if (o.label) { what.push(`label "${o.label}"`); f.label = o.label; }
+        if (o.type) { if (!FIELD_TYPES.includes(o.type)) throw new Error(`"${o.type}" is not a field type.`); what.push(`type ${o.type}`); f.type = o.type; }
+        if (o.options != null) { what.push(`options "${o.options}"`); f.options = String(o.options); }
+        if (o.new_key) { const k = keyOf(o.new_key); if (m.fields.some((x: any) => x !== f && x.name === k)) throw new Error(`Key "${k}" is taken.`); what.push(`key ${k} (values saved under the old key are not moved)`); f.name = k; }
+        if (!what.length) throw new Error(`Nothing to change on "${f.label}".`);
+        lines.push(['Change field', `${m.title} › ${o.key}: ${what.join(', ')}`]);
+        break;
+      }
+      case 'delete_field': {
+        const m = find(o.module);
+        const i = m.fields.findIndex((x: any) => x.name === o.key || String(x.label).toLowerCase() === String(o.key || '').toLowerCase());
+        if (i < 0) throw new Error(`"${m.title}" has no field "${o.key}".`);
+        const [f] = m.fields.splice(i, 1);
+        lines.push(['Delete field', `${m.title} › ${f.label}`]);
+        break;
+      }
+      default: throw new Error(`Unknown operation "${o.op}".`);
+    }
+  }
+  return { next, lines };
 }
 
 /* ------------------------------------------------------------------ */
@@ -441,6 +567,57 @@ async function prepare(name: string, a: any, ctx: AgentCtx): Promise<ToolOutput>
         };
         break;
       }
+      case 'add_log_entry': {
+        const plan = await metaPlan(ctx.tenantId);
+        const mod = plan.logs.find((l) => l.title.toLowerCase() === String(a.module || '').trim().toLowerCase());
+        if (!mod) throw new Error(`No log module "${a.module}". Log modules: ${plan.logs.map((l) => l.title).join(', ') || 'none yet (turn on "Log?" for a module in Settings > Field Configurator)'}.`);
+        const q = await findQuote(ctx, a.qn);
+        if (!q) throw new Error(`No quote "${a.qn}" that you can access.`);
+        const keys = new Set(mod.fields.map((f) => f.name));
+        const values: Record<string, string> = {};
+        for (const [k, v] of Object.entries(a.values || {})) {
+          if (!keys.has(k)) throw new Error(`${mod.title} has no field "${k}". Fields: ${[...keys].join(', ')}.`);
+          if (v != null && String(v).trim() !== '') values[k] = String(v);
+        }
+        if (!Object.keys(values).length) throw new Error('A log entry needs at least one value.');
+        const statusField = mod.fields.find((f) => f.type === 'master_status' && values[f.name]);
+        action = {
+          kind: 'add_log_entry', title: `Add to ${mod.title}`, risk: 'data',
+          summary: `${q.qn_number} · ${Object.values(values).join(' · ').slice(0, 80)}`,
+          details: [['Quote', q.qn_number], ...mod.fields.filter((f) => values[f.name]).map((f) => [f.label || f.name, values[f.name]]), ...(statusField ? [['Status', `${q.status} → ${values[statusField.name]}`]] : [])],
+          payload: { qn: q.qn_number, module: mod.title, values },
+        };
+        break;
+      }
+      case 'change_form': {
+        needManager(ctx);
+        const form = await loadForm(ctx);
+        const { lines } = applyFormOps(form.modules, a.operations);
+        action = {
+          kind: 'change_form', title: 'Change the quote form', risk: 'data',
+          summary: lines.map(([k, v]) => `${k}: ${v}`).join('; ').slice(0, 120),
+          details: lines,
+          payload: { operations: a.operations },
+        };
+        break;
+      }
+      case 'add_user': {
+        needManager(ctx);
+        const role = String(a.role || '').toLowerCase();
+        if (!(ROLES as readonly string[]).includes(role)) throw new Error(`Role must be one of ${ROLES.join(', ')}.`);
+        if (role === 'admin' && ctx.role !== 'admin') throw new Error('Only an Admin can add another Admin.');
+        const email = String(a.email || '').trim().toLowerCase();
+        if (!EMAIL_RE.test(email)) throw new Error(`"${a.email}" is not a valid email address.`);
+        const { data: taken } = await db.from('profiles').select('id').ilike('email', email).maybeSingle();
+        if (taken) throw new Error(`${email} already has a Bloomgard account.`);
+        action = {
+          kind: 'add_user', title: 'Add a user', risk: 'access',
+          summary: `${email} as ${role}`,
+          details: [['Email', email], ['Role', role], ...(a.full_name ? [['Name', a.full_name]] : []), ['Password', 'generated and shown once after you confirm']],
+          payload: { email, role, full_name: a.full_name || '' },
+        };
+        break;
+      }
       case 'update_settings': {
         const changes = a.changes || {};
         if (a.scope === 'profile') {
@@ -477,7 +654,7 @@ async function prepare(name: string, a: any, ctx: AgentCtx): Promise<ToolOutput>
 /* Execute a confirmed action. Re-checks permissions; never trusts the UI. */
 /* ------------------------------------------------------------------ */
 
-export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Promise<{ ok: true; message: string; refresh?: string[] }> {
+export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Promise<{ ok: true; message: string; refresh?: string[]; secret?: string }> {
   // The client sends back what the AI prepared, but it is only a request: validate it again exactly as a
   // fresh tool call would be (fields, enums, permissions) and run the sanitised payload, never the raw one.
   if (!isWriteTool(kind)) throw new Error(`Unknown action ${kind}.`);
@@ -552,6 +729,39 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
       }));
       if (!res.ok) throw new Error(`Could not add the item (${res.status}).`);
       return { ok: true, message: `Added ${p.item_code} to the catalogue.` };
+    }
+    case 'add_log_entry': {
+      const q = await findQuote(ctx, p.qn);
+      if (!q) throw new Error('Quote not found.');
+      const plan = await metaPlan(ctx.tenantId);
+      const mod = plan.logs.find((l) => l.title === p.module)!;
+      const { data: fresh, error: readErr } = await db.from('quotations').select('custom_metadata, status').eq('id', q.id).single();
+      if (readErr) throw new Error(readErr.message);
+      const meta = { ...(fresh?.custom_metadata || {}) };
+      meta[mod.title] = [...(Array.isArray(meta[mod.title]) ? meta[mod.title] : []), { ...p.values, _at: new Date().toISOString(), _by: ctx.email }];
+      const statusField = mod.fields.find((f) => f.type === 'master_status' && p.values[f.name]);
+      const patch: any = { custom_metadata: meta, last_contact_date: new Date().toISOString() };
+      if (statusField && p.values[statusField.name] !== fresh?.status) patch.status = p.values[statusField.name];
+      const { error } = await db.from('quotations').update(patch).eq('id', q.id);
+      if (error) throw new Error(error.message);
+      if (patch.status) await db.from('status_logs').insert([{ quotation_id: q.id, old_status: fresh?.status || null, new_status: patch.status, comments: `Logged in ${mod.title} by ${ctx.email} via Bloomgard AI` }]);
+      return { ok: true, message: `Added to ${mod.title} on ${q.qn_number}${patch.status ? `; status is now ${patch.status}` : ''}.`, refresh: ['quotes'] };
+    }
+    case 'change_form': {
+      needManager(ctx);
+      const form = await loadForm(ctx);
+      const { next, lines } = applyFormOps(form.modules, p.operations);
+      const config = [...next.map((m: any) => (m.is_log ? { ...m, allow_multiple: false } : m)), ...form.special];
+      const { error } = form.exists
+        ? await db.from('tenant_schemas').update({ schema_config: config }).eq('tenant_id', ctx.tenantId)
+        : await db.from('tenant_schemas').insert({ tenant_id: ctx.tenantId, schema_config: config });
+      if (error) throw new Error(error.message);
+      return { ok: true, message: `Updated the quote form (${lines.length} change${lines.length === 1 ? '' : 's'}).`, refresh: ['form'] };
+    }
+    case 'add_user': {
+      needManager(ctx);
+      const u = await createWorkspaceUser({ tenantId: ctx.tenantId, email: p.email, role: p.role, fullName: p.full_name });
+      return { ok: true, message: `Added ${u.email} as ${u.role}. Share the password securely; it is only shown here, once.`, secret: u.password, refresh: ['users'] };
     }
     case 'update_settings': {
       if (p.scope === 'profile') {
