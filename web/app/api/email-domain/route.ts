@@ -1,14 +1,16 @@
 import { authenticate, db } from '@/lib/agent/core';
 import {
   loadState, saveState, startDomainSetup, refreshDomain, withDnsChecks, dnsHost, enableBrandedReplies,
-  addRecordsAtCloudflare, ensureRoutingId, domainOfEmail, resend,
+  addRecordsAtCloudflare, ensureRoutingId, domainOfEmail, resend, adoptExistingDomain,
 } from '@/lib/emailDomain';
 import { sendEmail } from '@/lib/email';
 
 export const maxDuration = 60;
 
-async function view(tenantId: string, check: boolean) {
-  const { tenant, state: stored } = await loadState(tenantId);
+async function view(tenantId: string, check: boolean, askerEmail?: string) {
+  let { tenant, state: stored } = await loadState(tenantId);
+  // already verified with our provider before this screen existed? show it as connected, not "Set up"
+  if (!stored) { const adopted = await adoptExistingDomain(tenantId, askerEmail).catch(() => null); if (adopted) ({ tenant, state: stored } = await loadState(tenantId)); }
   const state = check && stored?.resend_id ? await refreshDomain(tenantId).catch(() => stored) : stored;
   const routing = tenant?.inbound_routing_id || await ensureRoutingId(tenantId, tenant?.company_name || 'workspace');
   return {
@@ -31,7 +33,7 @@ export async function GET(request: Request) {
     return Response.json({ arrived: !!data?.length });
   }
   try {
-    return Response.json({ ...(await view(ctx.tenantId, url.searchParams.get('check') === '1')), can_manage: ctx.isManager, suggested: domainOfEmail(ctx.email) });
+    return Response.json({ ...(await view(ctx.tenantId, url.searchParams.get('check') === '1', ctx.email)), can_manage: ctx.isManager, suggested: domainOfEmail(ctx.email) });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

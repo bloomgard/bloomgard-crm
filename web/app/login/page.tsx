@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
 import BrandLockup from "@/components/BrandLockup";
+import JaaliLoader from "@/components/JaaliLoader";
 
 /**
  * Log in, and create account (?mode=signup). Split layout from the Bloomgard family: a Raat panel with the
@@ -58,7 +59,7 @@ export default function Login() {
   };
 
   if (checking) {
-    return <div className="jaali min-h-screen" aria-busy="true" />;
+    return <JaaliLoader label="Checking your session" />;
   }
 
   return (

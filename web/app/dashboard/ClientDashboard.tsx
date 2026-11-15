@@ -1,7 +1,7 @@
 
 // @ts-nocheck
 "use client";
-import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File, ChevronRight, BookOpen, ExternalLink } from 'lucide-react';
+import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File, ChevronRight, BookOpen, ExternalLink, CornerUpLeft } from 'lucide-react';
 import { useState, useEffect, useRef } from "react";
 import MasterDataUI from "@/components/MasterDataUI";
 import { supabase } from "@/utils/supabaseClient";
@@ -13,6 +13,8 @@ import AgentHome from '@/components/AgentHome';
 import FieldConfigurator from '@/components/FieldConfigurator';
 import LogModule from '@/components/LogModule';
 import EmailDomainSetup from '@/components/EmailDomainSetup';
+import JaaliLoader from '@/components/JaaliLoader';
+import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
 
 // BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
@@ -215,6 +217,9 @@ export default function ClientDashboard() {
 
   const [onboardName, setOnboardName] = useState("");
   const [userSecret, setUserSecret] = useState<null | { email: string; password: string; kind: 'new' | 'reset' }>(null);
+  // the editor's contents before a starter template was loaded, so it can be put back
+  const [templateBefore, setTemplateBefore] = useState<string | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<null | { name: string; html: string }>(null);
   const reloadUsers = async () => {
     const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", tenantId);
     setTenantUsers(users || []);
@@ -1657,11 +1662,7 @@ Command: ${dashCommand}`;
     setCurrentView("new_entry");
   };
 
-  if (authState === 'checking' || loading) return (
-    <div className="h-screen flex items-center justify-center bg-gray-50">
-      <p className="font-semibold text-[12px] tracking-widest text-gray-500 uppercase animate-pulse">Initializing Workspace...</p>
-    </div>
-  );
+  if (authState === 'checking' || loading) return <JaaliLoader />;
 
   if (authState === 'unauthed') return (
     <div className="h-screen flex items-center justify-center bg-gray-50">
@@ -2074,51 +2075,38 @@ Command: ${dashCommand}`;
             </header>
 
             {settingsSubView === 'menu' && (
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mb-8 divide-y divide-gray-100">
+              <nav className="set-list mb-8" aria-label="Settings">
                 {[
-                  { key: 'profile', icon: ClipboardList, bg: 'bg-violet-50', color: 'text-violet-600', title: 'Your Profile', desc: 'Your name, title, and contact details — used by the AI to sign emails as you.', managerOnly: false },
-                  { key: 'master-data', icon: Database, bg: 'bg-blue-50', color: 'text-blue-600', title: 'Master Data', desc: 'Manage hierarchical dropdowns, auto-extracted AI knowledge, and catalog options.', managerOnly: true },
-                  { key: 'users', icon: Users, bg: 'bg-indigo-50', color: 'text-indigo-600', title: 'User Access', desc: 'Onboard new agents, managers, and admins to this workspace.', managerOnly: true },
-                  { key: 'blueprint', icon: Wrench, bg: 'bg-gray-900', color: 'text-gray-200', title: 'Field Configurator', desc: 'Customize quote form fields and dynamic blueprint schemas.', managerOnly: true },
-                  { key: 'email', icon: Mail, bg: 'bg-emerald-50', color: 'text-emerald-600', title: 'Email Settings', desc: 'Configure workspace-wide and personal email routing.', managerOnly: false },
-                  { key: 'personalization', icon: Sparkles, bg: 'bg-pink-50', color: 'text-pink-600', title: 'Personalization', desc: 'Switch between the light and dark Jaali themes.', managerOnly: false },
-                  { key: 'ai-personality', icon: Bot, bg: 'bg-amber-50', color: 'text-amber-600', title: 'AI Settings', desc: 'Adjust the agent tone, style, instructions and routing rules.', managerOnly: true },
-                  { key: 'quote-template', icon: Palette, bg: 'bg-red-50', color: 'text-red-600', title: 'Quote Template', desc: 'Manage brand identity, logos, and HTML generation template.', managerOnly: true },
+                  { key: 'profile', icon: ClipboardList, title: 'Your Profile', desc: 'Your name, title and contact details, used by the AI to sign emails as you.', managerOnly: false },
+                  { key: 'master-data', icon: Database, title: 'Master Data', desc: 'Your product catalogue: linked columns, Excel import and the values the AI quotes from.', managerOnly: true },
+                  { key: 'users', icon: Users, title: 'User Access', desc: 'Add agents, managers and admins, and reset their passwords.', managerOnly: true },
+                  { key: 'blueprint', icon: Wrench, title: 'Field Configurator', desc: 'Design the quote form: modules, fields and log modules.', managerOnly: true },
+                  { key: 'email', icon: Mail, title: 'Email Settings', desc: 'Connect your company domain and set where client replies arrive.', managerOnly: false },
+                  { key: 'personalization', icon: Sparkles, title: 'Personalization', desc: 'Switch between the light and dark Jaali themes.', managerOnly: false },
+                  { key: 'ai-personality', icon: Bot, title: 'AI Settings', desc: 'Tone, English level, instructions and email routing rules.', managerOnly: true },
+                  { key: 'quote-template', icon: Palette, title: 'Quote Template', desc: 'Brand identity and the HTML your quote PDFs are built from.', managerOnly: true },
                 ].filter(item => !item.managerOnly || isManager).map(item => {
                   const Icon = item.icon;
                   return (
-                    <button
-                      key={item.key}
-                      onClick={() => setSettingsSubView(item.key)}
-                      className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors group"
-                    >
-                      <div className={`w-10 h-10 shrink-0 ${item.bg} rounded-xl flex items-center justify-center`}>
-                        <Icon className={`w-5 h-5 ${item.color}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-bold text-gray-900">{item.title}</h3>
-                        <p className="text-xs text-gray-500 truncate">{item.desc}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
+                    <button key={item.key} onClick={() => setSettingsSubView(item.key)} className="set-row">
+                      <Icon className="set-row__icon" aria-hidden />
+                      <span className="set-row__text">
+                        <span className="set-row__title">{item.title}</span>
+                        <span className="set-row__desc">{item.desc}</span>
+                      </span>
+                      <ChevronRight className="set-row__go" aria-hidden />
                     </button>
                   );
                 })}
-                <a
-                  href={DOCS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors group"
-                >
-                  <div className="w-10 h-10 shrink-0 bg-sky-50 rounded-xl flex items-center justify-center">
-                    <BookOpen className="w-5 h-5 text-sky-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-bold text-gray-900">Docs</h3>
-                    <p className="text-xs text-gray-500 truncate">Guides for every feature, setup steps and troubleshooting at docs.bloomgard.co.</p>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
+                <a href={DOCS_URL} target="_blank" rel="noopener noreferrer" className="set-row">
+                  <BookOpen className="set-row__icon" aria-hidden />
+                  <span className="set-row__text">
+                    <span className="set-row__title">Docs</span>
+                    <span className="set-row__desc">Guides for every feature, setup steps and troubleshooting at docs.bloomgard.co.</span>
+                  </span>
+                  <ExternalLink className="set-row__go" aria-hidden />
                 </a>
-              </div>
+              </nav>
             )}
 
             {settingsSubView === 'master-data' && tenantId && (
@@ -2275,103 +2263,47 @@ Command: ${dashCommand}`;
 
             {settingsSubView === 'email' && <EmailDomainSetup />}
             {settingsSubView === 'email' && (
-              <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
-                <div className="set-head flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
-                  <Mail className="w-6 h-6" />
+              <section className="ed-card" data-testid="personal-routing">
+                <div className="flex items-center gap-3">
+                  <CornerUpLeft className="w-5 h-5 text-[var(--neelam)]" />
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">Email Routing Settings</h3>
-                    <p className="text-xs text-gray-500 mt-1">Configure your workspace and personal dispatch emails.</p>
+                    <h3 className="text-base font-semibold text-gray-900">Your own forwarding address</h3>
+                    <p className="text-xs text-gray-500">Personal to you: mail sent here is filed to you and assigned to you. Leave it empty to use the workspace address above.</p>
                   </div>
                 </div>
-
-                <div className="space-y-6">
-                  {/* Common Workspace Email */}
-                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                    <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Common Workspace Email</label>
-                    <p className="text-xs text-gray-500 mb-4">Any agent can use this verified domain address to dispatch manual or AI-generated emails.</p>
-                    <input
-                      type="email"
-                      value={customSender} aria-label="Common workspace email"
-                      onChange={e => setCustomSender(e.target.value)}
-                      className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors"
-                    />
-                    <div className="mt-6">
-                      <button
-                        onClick={async () => {
-                          if (!tenantId) return;
-                          setIsSavingSettings(true);
-                          const { error } = await supabase.from('tenants').update({ custom_email_sender: customSender }).eq('id', tenantId);
-                          setIsSavingSettings(false);
-                          if (error) alert("Failed to save: " + error.message);
-                          else alert("Workspace Email Settings updated successfully!");
-                        }}
-                        disabled={isSavingSettings}
-                        className="agent-btn agent-btn--primary"
-                      >
-                        {isSavingSettings ? "Saving..." : "Save Workspace Email"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Personal Email */}
-                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                    <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Your Personal Email</label>
-                    <p className="text-xs text-gray-500 mb-4">Used by default when you dispatch quotes. Replies to your quotes will also be tied to this identity.</p>
-                    <input
-                      type="email"
-                      value={user?.email || ''}
-                      disabled
-                      className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none opacity-70 cursor-not-allowed"
-                    />
-                  </div>
-
-                  {/* Forwarded Email */}
-                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                    <label className="text-[10px] font-bold text-gray-900 uppercase tracking-widest mb-2 block">Your Unique Forwarding Address</label>
-                    <p className="text-xs text-gray-500 mb-4">Set up an auto-forwarding rule in your personal inbox (Gmail/Outlook) to route replies here.</p>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden focus-within:border-emerald-400 transition-colors">
-                        <input
-                          type="text"
-                          value={userRoutingSlug} aria-label="Your forwarding address"
-                          onChange={e => setUserRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                          className="w-1/2 bg-transparent px-4 py-3 text-sm font-medium outline-none text-blue-600 font-mono text-right"
-                        />
-                        <span className="text-sm font-medium text-gray-500 pr-4 py-3 font-mono">@inbound.bloomgard.co</span>
-                      </div>
-                      <button 
-                        onClick={() => { if(userRoutingSlug) { navigator.clipboard.writeText(`${userRoutingSlug}@inbound.bloomgard.co`); alert("Copied!"); } }}
-                        className="bg-gray-200 text-gray-800 px-4 py-3 rounded-xl text-xs font-bold shadow-sm hover:bg-gray-300 active:scale-95 transition-transform"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={async () => {
-                          if (!user?.id) return;
-                          setIsSavingSettings(true);
-                          // an empty box means "use the workspace address", never "@inbound.bloomgard.co"
-                          const slug = String(userRoutingSlug || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
-                          const newInbound = slug ? `${slug}@inbound.bloomgard.co` : null;
-                          const { error } = await supabase.from('profiles').update({ inbound_email: newInbound }).eq('id', user.id);
-                          setIsSavingSettings(false);
-                          if (error) alert("Failed to save: " + error.message);
-                          else {
-                            setUser({ ...user, inbound_email: newInbound });
-                            alert("Personal Routing Slug updated successfully!");
-                          }
-                        }}
-                        disabled={isSavingSettings}
-                        className="agent-btn agent-btn--primary"
-                      >
-                        {isSavingSettings ? "Saving..." : "Save Routing Address"}
-                      </button>
-                    </div>
-                  </div>
-
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <label className="ua-field" style={{ flex: '1 1 20rem' }}>
+                    <span>Address</span>
+                    <span className="ed-input flex items-center !py-0">
+                      <input type="text" value={userRoutingSlug} aria-label="Your forwarding address"
+                        onChange={e => setUserRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                        className="flex-1 min-w-0 py-2 bg-transparent outline-none font-mono text-[var(--neelam)]" />
+                      <span className="text-sm text-gray-500 font-mono shrink-0">@inbound.bloomgard.co</span>
+                    </span>
+                  </label>
+                  <button
+                    onClick={async () => {
+                      if (!user?.id) return;
+                      setIsSavingSettings(true);
+                      // an empty box means "use the workspace address", never "@inbound.bloomgard.co"
+                      const slug = String(userRoutingSlug || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+                      const newInbound = slug ? `${slug}@inbound.bloomgard.co` : null;
+                      const { error } = await supabase.from('profiles').update({ inbound_email: newInbound }).eq('id', user.id);
+                      setIsSavingSettings(false);
+                      if (error) alert("Failed to save: " + error.message);
+                      else { setUser({ ...user, inbound_email: newInbound }); alert("Personal Routing Slug updated successfully!"); }
+                    }}
+                    disabled={isSavingSettings}
+                    className="agent-btn agent-btn--primary h-[38px]"
+                  >
+                    {isSavingSettings ? "Saving…" : "Save Routing Address"}
+                  </button>
+                  {userRoutingSlug && (
+                    <button onClick={() => { navigator.clipboard.writeText(`${userRoutingSlug}@inbound.bloomgard.co`); alert("Copied!"); }} className="agent-btn h-[38px]">Copy</button>
+                  )}
                 </div>
-              </div>
+                <p className="text-[11px] text-gray-500 mt-3">You sign in as <b>{user?.email}</b>. Set an auto-forwarding rule in your own inbox to send client mail here.</p>
+              </section>
             )}
 
             {settingsSubView === 'personalization' && (
@@ -2592,6 +2524,41 @@ Command: ${dashCommand}`;
                       Accessible in the template as <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-500">{"{{company_logo}}"}</code>
                     </p>
                   </div>
+                </div>
+
+                {/* STARTER TEMPLATES — a choice, never applied on their own */}
+                <div className="mb-8" data-testid="template-gallery">
+                  <h3 className="text-base font-semibold text-gray-900">Start from a template</h3>
+                  <p className="text-xs text-gray-500 mt-1">Optional. Picking one loads it into the editor below, where you can change it; nothing is saved until you press Save Template &amp; Logo. Your current template stays untouched until then.</p>
+                  <div className="tpl-grid mt-4">
+                    {QUOTE_TEMPLATES.map(t => (
+                      <div key={t.id} className="tpl">
+                        <div className="tpl__thumb" aria-hidden><iframe title="" srcDoc={t.html} scrolling="no" /></div>
+                        <div className="tpl__body">
+                          <h4>{t.name}</h4>
+                          <p>{t.blurb}</p>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={() => {
+                                const hasWork = (htmlTemplate || '').trim().length > 0 && htmlTemplate !== templateBefore;
+                                if (hasWork && !confirm(`Replace what is in the editor with the "${t.name}" template? Your saved template is not changed until you save.`)) return;
+                                if (templateBefore === null) setTemplateBefore(htmlTemplate || '');
+                                setHtmlTemplate(t.html);
+                              }}
+                              className="agent-btn"
+                            >Use this</button>
+                            <button onClick={() => setPreviewTemplate(t)} className="agent-btn">Preview</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {templateBefore !== null && (
+                    <p className="text-xs text-gray-600 mt-3">
+                      A starter template is loaded in the editor.{' '}
+                      <button onClick={() => { setHtmlTemplate(templateBefore); setTemplateBefore(null); }} className="font-semibold text-[var(--neelam)] hover:underline">Put my own template back</button>
+                    </p>
+                  )}
                 </div>
 
                 {/* HTML TEMPLATE EDITOR */}
@@ -3797,6 +3764,19 @@ Command: ${dashCommand}`;
                 />
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {previewTemplate && (
+        <div className="fixed inset-0 z-[300] bg-gray-900/50 backdrop-blur-[2px] flex items-center justify-center p-6" onMouseDown={e => { if (e.target === e.currentTarget) setPreviewTemplate(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden border border-gray-200">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">{previewTemplate.name}</h3>
+              <span className="agent-label">preview with placeholder tags</span>
+              <button onClick={() => setPreviewTemplate(null)} className="fc-icon ml-auto" aria-label="Close"><X className="w-4 h-4" /></button>
+            </div>
+            <iframe title={`${previewTemplate.name} preview`} srcDoc={previewTemplate.html} className="flex-1 w-full bg-white" />
           </div>
         </div>
       )}

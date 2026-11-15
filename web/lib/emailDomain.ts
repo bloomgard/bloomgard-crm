@@ -149,6 +149,45 @@ export async function ensureInboundWebhook() {
   }
 }
 
+/**
+ * A domain that is ALREADY registered with our email provider (set up before this screen existed, or by hand)
+ * should show as connected, not offer "Set up". Adopt it for a workspace when the link is not in doubt:
+ * the workspace already sends from an address on that domain, or the person asking has an email on it.
+ * Never adopt a domain another workspace has claimed.
+ */
+// Skip asking the provider again for a set of candidates we have just checked and not found.
+// Keyed by the candidates themselves, so changing the sender re-checks immediately.
+const noMatchUntil = new Map<string, number>();
+export async function adoptExistingDomain(tenantId: string, askerEmail?: string): Promise<DomainState | null> {
+  const { tenant, state } = await loadState(tenantId);
+  if (state) return state;
+  const candidates = Array.from(new Set([domainOfEmail(tenant?.custom_email_sender || ''), domainOfEmail(askerEmail || '')]
+    .filter((d) => d && !isFreeEmailDomain(d) && !isTestDomain(d) && d !== 'bloomgard.co' && !d.endsWith('.bloomgard.co'))));
+  if (!candidates.length) return null;
+  const cacheKey = `${tenantId}:${candidates.sort().join(',')}`;
+  if ((noMatchUntil.get(cacheKey) || 0) > Date.now()) return null;
+  noMatchUntil.set(cacheKey, Date.now() + 10 * 60_000);
+  let list: any;
+  try { list = await resend('/domains'); } catch { return null; }
+  for (const name of candidates) {
+    const found = (list.data || []).find((d: any) => String(d.name).toLowerCase() === name);
+    if (!found) continue;
+    const { data: claimed } = await db.from('tenants').select('id').eq('features_jsonb->email_domain->>name', name).neq('id', tenantId).limit(1);
+    if (claimed && claimed.length) continue;
+    const full = await resend(`/domains/${found.id}`).catch(() => found);
+    const senderOnIt = domainOfEmail(tenant?.custom_email_sender || '') === name;
+    const adopted: DomainState = {
+      name, resend_id: found.id, status: full.status, region: full.region, records: toRecords(full.records, name),
+      sender_local: senderOnIt ? String(tenant!.custom_email_sender).split('@')[0] : undefined,
+      created_at: found.created_at || new Date().toISOString(), checked_at: new Date().toISOString(),
+    };
+    await saveState(tenantId, adopted);
+    noMatchUntil.delete(cacheKey);
+    return adopted;
+  }
+  return null;
+}
+
 /** Register the sending domain in Resend (or find it if this workspace already did). */
 export async function startDomainSetup(tenantId: string, domainName: string) {
   const name = String(domainName || '').trim().toLowerCase().replace(/^@/, '');
@@ -165,6 +204,18 @@ export async function startDomainSetup(tenantId: string, domainName: string) {
   try {
     created = await resend('/domains', { method: 'POST', body: JSON.stringify({ name, region: RESEND_REGION, capabilities: { sending: 'enabled', receiving: 'disabled' } }) });
   } catch (e: any) {
+    if (/registered already/i.test(e.message)) {
+      // registered in OUR provider account already (e.g. set up by hand earlier): link it instead of failing
+      const list = await resend('/domains').catch(() => ({ data: [] }));
+      const found = (list.data || []).find((d: any) => String(d.name).toLowerCase() === name);
+      const { data: claimed } = await db.from('tenants').select('id').eq('features_jsonb->email_domain->>name', name).neq('id', tenantId).limit(1);
+      if (found && !(claimed && claimed.length)) {
+        const full = await resend(`/domains/${found.id}`).catch(() => found);
+        const linked: DomainState = { name, resend_id: found.id, status: full.status, region: full.region, records: toRecords(full.records, name), created_at: new Date().toISOString(), checked_at: new Date().toISOString() };
+        await saveState(tenantId, linked);
+        return linked;
+      }
+    }
     const s: DomainState = { name, status: 'error', error: /registered already/i.test(e.message) ? `${name} is already registered with our email provider. If it belongs to another Bloomgard workspace, ask its admin; otherwise contact support.` : e.message, created_at: new Date().toISOString() };
     await saveState(tenantId, s);
     return s;

@@ -2,7 +2,7 @@ import { db, AgentCtx, buildOverview, visibleQuotes, quoteCard, quoteValue, clie
 import { sendEmail } from '@/lib/email';
 import { logEmailSent } from '@/utils/usageLogger';
 import { createWorkspaceUser, ROLES } from '@/lib/users';
-import { loadState, refreshDomain, withDnsChecks, dnsHost } from '@/lib/emailDomain';
+import { loadState, refreshDomain, withDnsChecks, dnsHost, adoptExistingDomain } from '@/lib/emailDomain';
 
 /* ------------------------------------------------------------------ */
 /* Tool schemas (OpenAI function-calling format, via OpenRouter)       */
@@ -442,7 +442,8 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
       };
     }
     case 'check_email_domain': {
-      const { tenant, state } = await loadState(ctx.tenantId);
+      let { tenant, state } = await loadState(ctx.tenantId);
+      if (!state) { const adopted = await adoptExistingDomain(ctx.tenantId, ctx.email).catch(() => null); if (adopted) state = adopted; }
       if (!state) return { result: { connected: false, note: 'No company domain set up. An admin can add one in Settings > Email Settings.', routing_address: tenant?.inbound_routing_id ? `${tenant.inbound_routing_id}@inbound.bloomgard.co` : null } };
       const fresh = state.resend_id ? await refreshDomain(ctx.tenantId).catch(() => state) : state;
       const full = await withDnsChecks(fresh!);

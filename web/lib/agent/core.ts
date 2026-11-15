@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { domainSummary, refreshDomain } from '../emailDomain';
+import { domainSummary, refreshDomain, adoptExistingDomain } from '../emailDomain';
 
 /** Service-role client. Every query made through it MUST be scoped to ctx.tenantId. */
 export const db = createClient(
@@ -220,6 +220,7 @@ export async function buildOverview(ctx: AgentCtx) {
   // A company domain that is not connected yet comes first: nothing looks right until mail sends from it.
   // The chip disappears once the domain verifies: if the stored status is stale, ask Resend again first.
   let emailState = (ctx.tenant.features_jsonb || {}).email_domain;
+  if (!emailState) emailState = await adoptExistingDomain(ctx.tenantId, ctx.email).catch(() => null);
   if (emailState?.resend_id && emailState.status !== 'verified' && (!emailState.checked_at || Date.now() - Date.parse(emailState.checked_at) > 10 * 60_000)) {
     emailState = (await refreshDomain(ctx.tenantId).catch(() => null)) || emailState;
   }

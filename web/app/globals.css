@@ -594,3 +594,41 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 .auth__switch button:hover { text-decoration: underline; }
 .auth__note { margin-top: 18px; font-size: 12px; line-height: 1.5; color: #6f685d; }
 .auth__note a { color: #2747d8; }
+
+/* ---- Settings: flat list ---- */
+.set-list { border-top: 1px solid var(--color-gray-200); }
+.set-row { display: flex; align-items: flex-start; gap: 14px; width: 100%; text-align: left; padding: 15px 4px; border-bottom: 1px solid var(--color-gray-200); transition: background .15s; }
+.set-row:hover { background: color-mix(in srgb, var(--color-gray-100) 55%, transparent); }
+.set-row__icon { width: 18px; height: 18px; flex: none; margin-top: 2px; color: var(--color-gray-500); }
+.set-row:hover .set-row__icon { color: var(--sindoor); }
+.set-row__text { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.set-row__title { font-size: 15px; font-weight: 600; color: var(--color-gray-900); }
+.set-row__desc { font-size: 13px; color: var(--color-gray-600); }
+.set-row__go { width: 16px; height: 16px; flex: none; margin-top: 4px; color: var(--color-gray-300); transition: color .15s, transform .15s; }
+.set-row:hover .set-row__go { color: var(--color-gray-600); transform: translateX(2px); }
+
+/* ---- Jaali loading screen ---- */
+.jl { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 26px; background: var(--kora, #fffefc); z-index: 50; }
+.jl__art { position: relative; width: 132px; height: 132px; }
+.jl__art svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; }
+.jl__mandala { stroke: var(--kajal, #15120e); stroke-width: 0.6; opacity: 0.16; animation: jl-spin 24s linear infinite; }
+.jl__lattice { stroke: var(--neelam, #2747d8); stroke-width: 1.1; overflow: visible; }
+.jl__lattice circle { stroke-dasharray: 189; stroke-dashoffset: 189; animation: jl-draw 2.8s cubic-bezier(.45,0,.2,1) infinite; }
+.jl__label { font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--kajal-mute, #8c8478); animation: jl-pulse 2.4s ease-in-out infinite; }
+@keyframes jl-draw { 0% { stroke-dashoffset: 189; opacity: 0; } 35% { opacity: 0.85; } 70%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes jl-spin { to { transform: rotate(360deg); } }
+@keyframes jl-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.jaali.dark .jl, .jl.jl--dark { background: #0b0e1a; }
+.jaali.dark .jl__mandala { stroke: #f3ede1; }
+.jaali.dark .jl__lattice { stroke: #7f9bff; }
+@media (prefers-reduced-motion: reduce) { .jl__mandala, .jl__lattice circle, .jl__label { animation: none; } .jl__lattice circle { stroke-dashoffset: 0; opacity: 0.5; } }
+
+/* ---- starter quote templates ---- */
+.tpl-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.tpl { border: 1px solid var(--color-gray-200); border-radius: 14px; overflow: hidden; background: var(--color-white); transition: border-color .15s, box-shadow .15s; }
+.tpl:hover { border-color: color-mix(in srgb, var(--neelam) 45%, var(--color-gray-200)); box-shadow: var(--shadow-md); }
+.tpl__thumb { height: 150px; overflow: hidden; border-bottom: 1px solid var(--color-gray-200); background: #fff; position: relative; }
+.tpl__thumb iframe { width: 820px; height: 1000px; border: 0; transform: scale(0.26); transform-origin: top left; pointer-events: none; }
+.tpl__body { padding: 12px 14px 14px; }
+.tpl__body h4 { font-size: 14px; font-weight: 600; color: var(--color-gray-900); }
+.tpl__body p { font-size: 12px; color: var(--color-gray-600); margin-top: 3px; line-height: 1.45; }
