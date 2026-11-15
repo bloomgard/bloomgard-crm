@@ -30,6 +30,9 @@ Open **Settings → Email Settings** to finish:
 5. **Branded replies (optional).** Receive on `reply.acme.com` instead, with one MX record on that subdomain. Your
    main mailbox is not affected.
 
+If your domain was already verified with Bloomgard before this screen existed, it is picked up automatically and
+shown as verified: you are not asked to set it up again.
+
 The records never change your main MX, so Google Workspace or Microsoft 365 keep working. You can also ask
 Bloomgard AI "which DNS records are still missing?" and it checks live.
 

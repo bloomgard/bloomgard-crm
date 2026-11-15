@@ -9,7 +9,7 @@ section: Introduction
 
 ## Signing in
 
-- **Log in** at `/login` with your email and password. A device that is already signed in opens straight into
+- **Log in** at `/login` with your email and password. The page has **Log in** and **Create an account** on it; there is no separate portal chooser. A device that is already signed in opens straight into
   the workspace when you visit the main address.
 - **Create account** (`/signup`, or *Create account* on the home page) makes a new workspace for your company and
   makes you its **admin**. From there you can shape the quote form and add your team yourself, or simply ask

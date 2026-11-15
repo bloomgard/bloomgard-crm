@@ -28,10 +28,15 @@ the AI uses to sign emails "as you" and they are saved to your profile.
 
 ## User Access
 
-- **Onboard User**: enter an email and password and pick a role: **Agent**, **Manager** or **Admin**. The user can sign in immediately.
-- Change a user's role from the list.
-- **Reset password** (Managers/Admins only, within the same workspace) generates a new password you can **Copy Password** and share securely.
-- **Revoke** removes a user's access.
+- **Add someone**: enter their email, optionally their name, and pick a role: **Agent**, **Manager** or **Admin**.
+  Leave the password empty and a strong one is generated. It is shown **once**, on the screen, for you to copy and
+  share privately. Only an Admin can add another Admin.
+- **People** lists everyone with their role, which you can change inline, and their forwarding address.
+- **Reset password** generates a new one, shown once in the same way.
+- **Remove** takes someone out of the workspace.
+
+You can also ask Bloomgard AI, for example "add priya@acme.com as a manager"; the password appears on the
+confirmation card.
 
 ## Field Configurator
 
@@ -84,7 +89,25 @@ See [AI replies and settings](./ai-assistant.md#ai-settings-managersadmins).
 
 ## Quote Template
 
-The **Quotation Template Editor** lets you paste your own HTML for the quote PDF, with an
-**A4 Live Preview** that renders as you type (**Live Document Engine**). Insert quote values with `{{field_name}}` placeholders (the field's name from the
-[Field Configurator](#field-configurator)); `{{company_logo}}` inserts your company logo.
-Placeholders are replaced when a PDF is generated.
+Set your **Company Logo URL** (available in the template as `{{company_logo}}`), then edit the HTML your quote
+PDFs are built from. The **A4 Live Preview** renders as you type.
+
+### Starter templates
+
+**Start from a template** offers four ready-made layouts: **Classic** (logo, address block, clean item table),
+**Minimal** (typographic and quiet), **GST (India)** (HSN and GST columns for a tax-style quotation) and
+**Editorial** (serif headings with a vermilion rule).
+
+They are a choice, never applied for you:
+
+- **Preview** opens a full-size view without touching anything.
+- **Use this** loads it into the editor. Your saved template is unchanged until you press **Save Template & Logo**.
+- If the editor already has work in it, you are asked before it is replaced, and **Put my own template back**
+  restores what was there.
+
+### Placeholders
+
+Insert quote values with the field keys from the [Field Configurator](#field-configurator), for example
+`{{client_name}}`, `{{qn_number}}`, `{{date}}` and `{{subtotal}}`. Line items repeat inside
+`{{#each quotation_items}} … {{/each}}`, where `{{item_code}}`, `{{item_name}}`, `{{quantity}}`, `{{uom}}`,
+`{{item_rate}}` and `{{item_br}}` are available.
