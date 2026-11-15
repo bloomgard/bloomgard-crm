@@ -21,9 +21,9 @@ test.describe.serial('Settings persist', () => {
     const dialogs = captureDialogs(page);
     await openApp(page);
     await openSetting(page, 'Your Profile');
-    await page.getByPlaceholder('e.g. Priya Sharma', { exact: true }).fill(`E2E Name ${tag}`);
-    await page.getByPlaceholder('e.g. Sales Manager', { exact: true }).fill('E2E Title');
-    await page.getByPlaceholder('e.g. +91 98765 43210', { exact: true }).fill('+91 90000 11111');
+    await page.getByLabel('Full name', { exact: true }).fill(`E2E Name ${tag}`);
+    await page.getByLabel('Job title', { exact: true }).fill('E2E Title');
+    await page.getByLabel('Phone', { exact: true }).fill('+91 90000 11111');
     await expect(page.getByText(actor.tenant.company_name).first()).toBeVisible();   // company comes from the workspace record
     await page.getByRole('button', { name: 'Save Profile' }).click();
     await expect.poll(() => dialogs.join('|')).toMatch(/Profile updated/);
@@ -32,14 +32,14 @@ test.describe.serial('Settings persist', () => {
     await page.reload();
     await openApp(page);
     await openSetting(page, 'Your Profile');
-    await expect(page.getByPlaceholder('e.g. Priya Sharma', { exact: true })).toHaveValue(`E2E Name ${tag}`);
+    await expect(page.getByLabel('Full name', { exact: true })).toHaveValue(`E2E Name ${tag}`);
   });
 
   test('Email Settings saves a personal forwarding address', async ({ page }) => {
     const dialogs = captureDialogs(page);
     await openApp(page);
     await openSetting(page, 'Email Settings');
-    await page.getByPlaceholder('your-name').fill(`E2E-Fwd_${tag}!`);                 // the field keeps only a-z, 0-9 and hyphens
+    await page.getByLabel('Your forwarding address').fill(`E2E-Fwd_${tag}!`);                 // the field keeps only a-z, 0-9 and hyphens
     await page.getByRole('button', { name: 'Save Routing Address' }).click();
     await expect.poll(() => dialogs.join('|')).toMatch(/Routing Slug updated/);
     const { data } = await admin().from('profiles').select('inbound_email').eq('id', actor.userId).single();
@@ -51,7 +51,7 @@ test.describe.serial('Settings persist', () => {
     await openApp(page);
     await openSetting(page, 'AI Settings');
     await page.locator('select').nth(0).selectOption('Friendly');
-    await page.getByPlaceholder(/Provide specific instructions/).fill(`E2E instruction ${tag}`);
+    await page.getByLabel('System instructions').fill(`E2E instruction ${tag}`);
     await page.getByRole('button', { name: '+ Add Rule' }).click();
     await page.getByRole('button', { name: /Save AI Settings/ }).click();
     await expect.poll(() => dialogs.join('|'), { timeout: 20_000 }).toMatch(/saved|updated|success/i);

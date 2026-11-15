@@ -98,7 +98,6 @@ export default function FieldConfigurator({
       {/* sticky save bar: always reachable, whatever the zoom */}
       <div className="fc-bar">
         <div className="min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900">Field configurator</h3>
           <p className="text-xs text-gray-500">Modules are the sections of your quote form. Turn on <b>Log?</b> to make a module a timeline of entries on each quote.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

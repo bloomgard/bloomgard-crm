@@ -213,27 +213,28 @@ export default function ClientDashboard() {
   const [draggedSectionIdx, setDraggedSectionIdx] = useState<number | null>(null);
   const [draggedFieldInfo, setDraggedFieldInfo] = useState<{ sIdx: number, fIdx: number } | null>(null);
 
+  const [onboardName, setOnboardName] = useState("");
+  const [userSecret, setUserSecret] = useState<null | { email: string; password: string; kind: 'new' | 'reset' }>(null);
+  const reloadUsers = async () => {
+    const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", tenantId);
+    setTenantUsers(users || []);
+  };
   const handleCreateUser = async () => {
-    if (!onboardEmail || !onboardPassword) return alert("Enter an email and a password.");
+    if (!onboardEmail) return alert("Enter the person's email.");
     try {
       const { data: sess } = await supabase.auth.getSession();
       const res = await fetch('/api/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess.session?.access_token || ''}` },
-        body: JSON.stringify({ email: onboardEmail, password: onboardPassword, role: onboardRole })
+        // no password typed: the server generates a strong one and returns it once
+        body: JSON.stringify({ email: onboardEmail, password: onboardPassword || undefined, role: onboardRole, fullName: onboardName || undefined })
       });
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to create user");
-      }
-
-      setPasswordCache(prev => ({ ...prev, [onboardEmail]: onboardPassword }));
-      alert(`Success!\nEmail: ${onboardEmail}\nRole: ${onboardRole}`);
-
-      // Refresh users list if possible, or just reset form
-      setOnboardEmail("");
-      setOnboardPassword("");
-    } catch (err: any) { alert("Auth Error: " + err.message); }
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to create user");
+      setUserSecret({ email: onboardEmail.trim().toLowerCase(), password: data.password, kind: 'new' });
+      setOnboardEmail(""); setOnboardPassword(""); setOnboardName(""); setOnboardRole("agent");
+      reloadUsers();
+    } catch (err: any) { alert(err.message); }
   };
 
   const [blueprintSaved, setBlueprintSaved] = useState("");
@@ -1053,7 +1054,7 @@ export default function ClientDashboard() {
   };
 
   const handleResetPassword = async (targetUserId) => {
-    if (!confirm("Are you sure you want to reset this user's password? The new password will be shown once.")) return;
+    if (!confirm("Reset this person's password? The new one is shown once.")) return;
     try {
       const { data: sess } = await supabase.auth.getSession();
       const res = await fetch(getApiUrl('/api/reset-password'), {
@@ -1063,7 +1064,8 @@ export default function ClientDashboard() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Reset failed");
-      alert(`Password reset successful!\nNew Password: ${data.newPassword}\n\nPlease copy this now, it won't be shown again.`);
+      const who = tenantUsers.find(u => u.id === targetUserId);
+      setUserSecret({ email: who?.email || 'user', password: data.newPassword, kind: 'reset' });
     } catch (err) {
       alert("Error resetting password: " + err.message);
     }
@@ -2061,14 +2063,14 @@ Command: ${dashCommand}`;
         )}
 
         {currentView === "settings" && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-8">
-            <header className="mb-8 flex flex-col items-start gap-3">
+          <div className="settings-page animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto space-y-5">
+            <header className="mb-1 flex flex-col items-start gap-2">
               {settingsSubView !== 'menu' && (
                 <button onClick={() => setSettingsSubView('menu')} className="text-gray-500 hover:text-gray-900 text-sm font-semibold">
                   ← Back to Menu
                 </button>
               )}
-              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Workspace Settings</h2><DocsLink view="settings" sub={settingsSubView} /></div>
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{({ profile: "Your Profile", "master-data": "Master Data", users: "User Access", blueprint: "Field Configurator", email: "Email Settings", personalization: "Personalization", "ai-personality": "AI Settings", "quote-template": "Quote Template" } as Record<string, string>)[settingsSubView] || "Workspace Settings"}</h2><DocsLink view="settings" sub={settingsSubView} /></div>
             </header>
 
             {settingsSubView === 'menu' && (
@@ -2124,49 +2126,69 @@ Command: ${dashCommand}`;
             )}
 
             {settingsSubView === 'users' && (
-              <div className="bg-white border border-gray-200 p-10 rounded-3xl shadow-sm">
-                <div className="flex flex-col md:flex-row gap-4 mb-10 bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <input placeholder="Email" className="flex-1 bg-white border border-gray-200 p-3.5 rounded-xl text-sm outline-none" value={onboardEmail} onChange={e => setOnboardEmail(e.target.value)} />
-                  <input placeholder="Password" type="text" className="flex-1 bg-white border border-gray-200 p-3.5 rounded-xl text-sm outline-none" value={onboardPassword} onChange={e => setOnboardPassword(e.target.value)} />
-                  <select className="bg-white border border-gray-200 px-4 py-3.5 rounded-xl font-bold text-xs uppercase" value={onboardRole} onChange={e => setOnboardRole(e.target.value)}>
-                    <option value="agent">Agent</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <button onClick={handleCreateUser} className="bg-black text-white px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors">Onboard User</button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {tenantUsers.map(u => (
-                    <div key={u.id} className="p-6 border border-gray-100 bg-gray-50/50 rounded-2xl flex justify-between items-center group hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all">
-                      <div>
-                        <p className="font-bold text-sm text-gray-800">{u.email}</p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-400'}`}>{u.role}</span>
-                          <button onClick={() => {
-                            const p = passwordCache[u.email];
-                            if (p) { navigator.clipboard.writeText(p); alert("Copied!"); }
-                            else alert("Not in session. Reset user to change pass.");
-                          }} className="text-[10px] font-bold text-blue-600 hover:underline">Copy Password</button>
-                        </div>
-                        {u.inbound_email && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className="text-[10px] text-gray-500">Fwd to:</span>
-                            <code className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{u.inbound_email}</code>
-                            <button onClick={() => { navigator.clipboard.writeText(u.inbound_email); alert("Forwarding address copied!"); }} className="text-[10px] font-bold text-blue-600 hover:underline">Copy</button>
-                          </div>
-                        )}
-                      </div>
-                      <button onClick={async () => {
-                        if (confirm("Revoke Access?")) {
-                          await supabase.rpc('decommission_employee', { target_email: u.email });
-                          // Simple refresh
-                          const { data: users } = await supabase.from("profiles").select("*").eq("tenant_id", tenantId);
-                          setTenantUsers(users || []);
-                        }
-                      }} className="text-red-400 hover:text-red-600 font-bold text-xs transition-colors">Revoke</button>
+              <div className="space-y-6" data-testid="user-access">
+                <section className="ed-card">
+                  <h3 className="text-base font-semibold text-gray-900">Add someone</h3>
+                  <p className="text-xs text-gray-500">They sign in with this email. Leave the password empty and a strong one is generated; it is shown once, here.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-[2fr_1.5fr_1fr_1.5fr_auto] gap-3 mt-4 items-end">
+                    <label className="ua-field"><span>Email</span><input type="email" value={onboardEmail} onChange={e => setOnboardEmail(e.target.value)} autoComplete="off" /></label>
+                    <label className="ua-field"><span>Name</span><input value={onboardName} onChange={e => setOnboardName(e.target.value)} autoComplete="off" /></label>
+                    <label className="ua-field"><span>Role</span>
+                      <select value={onboardRole} onChange={e => setOnboardRole(e.target.value)}>
+                        <option value="agent">Agent</option>
+                        <option value="manager">Manager</option>
+                        {user?.role?.toLowerCase() === 'admin' && <option value="admin">Admin</option>}
+                      </select>
+                    </label>
+                    <label className="ua-field"><span>Password <em>(optional)</em></span><input type="text" value={onboardPassword} onChange={e => setOnboardPassword(e.target.value)} autoComplete="new-password" /></label>
+                    <button onClick={handleCreateUser} className="agent-btn agent-btn--primary h-[38px]">Add user</button>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-2"><b>Agent</b>: own quotes. <b>Manager</b>: every quote, catalogue, users, AI settings. <b>Admin</b>: everything, including other admins.</p>
+                  {userSecret && (
+                    <div className="agent-secret">
+                      <span className="agent-label">{userSecret.kind === 'new' ? 'New user' : 'New password'}</span>
+                      <span className="text-sm">{userSecret.email}</span>
+                      <code>{userSecret.password}</code>
+                      <button type="button" className="agent-btn" onClick={() => { navigator.clipboard.writeText(`${userSecret.email} / ${userSecret.password}`); }}>Copy</button>
+                      <span className="text-[11px] text-gray-500">Shown once. Share it privately.</span>
+                      <button type="button" className="fc-icon ml-auto" aria-label="Hide" onClick={() => setUserSecret(null)}><X className="w-4 h-4" /></button>
                     </div>
-                  ))}
-                </div>
+                  )}
+                </section>
+
+                <section>
+                  <div className="flex items-baseline gap-3 mb-2"><h3 className="text-base font-semibold text-gray-900">People</h3><span className="agent-label">{tenantUsers.length}</span></div>
+                  <div className="overflow-x-auto">
+                    <table className="ed-table ua-table">
+                      <thead><tr><th>Person</th><th>Role</th><th>Forwarding address</th><th /></tr></thead>
+                      <tbody>
+                        {tenantUsers.map(u => (
+                          <tr key={u.id}>
+                            <td><div className="font-medium text-gray-900">{u.full_name || u.email}</div>{u.full_name && <div className="text-[11px] text-gray-500">{u.email}</div>}</td>
+                            <td>
+                              {u.id === user?.id ? <span className="ed-type">{u.role}</span> : (
+                                <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)} className="ed-input !py-1 text-xs" aria-label={`Role for ${u.email}`}>
+                                  <option value="agent">agent</option><option value="manager">manager</option>
+                                  {(user?.role?.toLowerCase() === 'admin' || u.role === 'admin') && <option value="admin">admin</option>}
+                                </select>
+                              )}
+                            </td>
+                            <td>{u.inbound_email ? <code className="text-[11px]">{u.inbound_email}</code> : <span className="text-[11px] text-gray-400">uses the workspace address</span>}</td>
+                            <td className="text-right whitespace-nowrap">
+                              {u.id !== user?.id && <button onClick={() => handleResetPassword(u.id)} className="agent-btn mr-2">Reset password</button>}
+                              {u.id !== user?.id && <button onClick={async () => {
+                                if (confirm(`Remove ${u.email} from this workspace?`)) {
+                                  await supabase.rpc('decommission_employee', { target_email: u.email });
+                                  reloadUsers();
+                                }
+                              }} className="agent-btn">Remove</button>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </div>
             )}
 
@@ -2183,7 +2205,7 @@ Command: ${dashCommand}`;
 
             {settingsSubView === 'profile' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
-                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
+                <div className="set-head flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
                   <ClipboardList className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Your Profile</h3>
@@ -2197,9 +2219,8 @@ Command: ${dashCommand}`;
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Full Name</label>
                       <input
                         type="text"
-                        value={profileForm.full_name}
+                        value={profileForm.full_name} aria-label="Full name"
                         onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                        placeholder="e.g. Priya Sharma"
                         className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
                       />
                     </div>
@@ -2207,9 +2228,8 @@ Command: ${dashCommand}`;
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Job Title</label>
                       <input
                         type="text"
-                        value={profileForm.job_title}
+                        value={profileForm.job_title} aria-label="Job title"
                         onChange={e => setProfileForm({ ...profileForm, job_title: e.target.value })}
-                        placeholder="e.g. Sales Manager"
                         className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
                       />
                     </div>
@@ -2217,15 +2237,14 @@ Command: ${dashCommand}`;
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Phone</label>
                       <input
                         type="text"
-                        value={profileForm.phone}
+                        value={profileForm.phone} aria-label="Phone"
                         onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                        placeholder="e.g. +91 98765 43210"
                         className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400"
                       />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Name</label>
-                      <input type="text" readOnly value={companyName || ''} className="w-full bg-gray-100 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
+                      <input type="text" readOnly value={companyName || ''} aria-label="Company name" className="w-full bg-gray-100 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
                       <p className="text-[10px] text-gray-400 ml-1">Set by your workspace admin.</p>
                     </div>
                   </div>
@@ -2234,9 +2253,8 @@ Command: ${dashCommand}`;
                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Email Sign-Off (optional)</label>
                     <p className="text-xs text-gray-500 mb-1">Overrides the default Name / Title / Company sign-off with your own exact wording. Leave blank to use the fields above.</p>
                     <textarea
-                      value={profileForm.signature}
+                      value={profileForm.signature} aria-label="Email sign-off"
                       onChange={e => setProfileForm({ ...profileForm, signature: e.target.value })}
-                      placeholder={"e.g.\nWarm regards,\nPriya Sharma\nSales Manager, Acme Textiles\n+91 98765 43210"}
                       rows={4}
                       className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 resize-y"
                     />
@@ -2246,7 +2264,7 @@ Command: ${dashCommand}`;
                     <button
                       onClick={handleSaveProfile}
                       disabled={isSavingProfile}
-                      className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-indigo-400"
+                      className="agent-btn agent-btn--primary"
                     >
                       {isSavingProfile ? "Saving..." : "Save Profile"}
                     </button>
@@ -2258,7 +2276,7 @@ Command: ${dashCommand}`;
             {settingsSubView === 'email' && <EmailDomainSetup />}
             {settingsSubView === 'email' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
-                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
+                <div className="set-head flex items-center gap-3 mb-8 pb-4 border-b border-gray-100">
                   <Mail className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Email Routing Settings</h3>
@@ -2273,9 +2291,8 @@ Command: ${dashCommand}`;
                     <p className="text-xs text-gray-500 mb-4">Any agent can use this verified domain address to dispatch manual or AI-generated emails.</p>
                     <input
                       type="email"
-                      value={customSender}
+                      value={customSender} aria-label="Common workspace email"
                       onChange={e => setCustomSender(e.target.value)}
-                      placeholder="quotes@yourdomain.com"
                       className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors"
                     />
                     <div className="mt-6">
@@ -2289,7 +2306,7 @@ Command: ${dashCommand}`;
                           else alert("Workspace Email Settings updated successfully!");
                         }}
                         disabled={isSavingSettings}
-                        className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-700 active:scale-95 transition-transform disabled:bg-emerald-400"
+                        className="agent-btn agent-btn--primary"
                       >
                         {isSavingSettings ? "Saving..." : "Save Workspace Email"}
                       </button>
@@ -2316,9 +2333,8 @@ Command: ${dashCommand}`;
                       <div className="flex-1 flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden focus-within:border-emerald-400 transition-colors">
                         <input
                           type="text"
-                          value={userRoutingSlug}
+                          value={userRoutingSlug} aria-label="Your forwarding address"
                           onChange={e => setUserRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                          placeholder="your-name"
                           className="w-1/2 bg-transparent px-4 py-3 text-sm font-medium outline-none text-blue-600 font-mono text-right"
                         />
                         <span className="text-sm font-medium text-gray-500 pr-4 py-3 font-mono">@inbound.bloomgard.co</span>
@@ -2347,7 +2363,7 @@ Command: ${dashCommand}`;
                           }
                         }}
                         disabled={isSavingSettings}
-                        className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-700 active:scale-95 transition-transform disabled:bg-emerald-400"
+                        className="agent-btn agent-btn--primary"
                       >
                         {isSavingSettings ? "Saving..." : "Save Routing Address"}
                       </button>
@@ -2360,7 +2376,7 @@ Command: ${dashCommand}`;
 
             {settingsSubView === 'personalization' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
-                <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <div className="set-head flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
                   <Sparkles className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">UI & Personalization</h3>
@@ -2388,7 +2404,7 @@ Command: ${dashCommand}`;
                       alert("Personalization settings saved successfully!");
                     }}
                     disabled={isSavingPrefs}
-                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-semibold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-indigo-400"
+                    className="agent-btn agent-btn--primary"
                   >
                     {isSavingPrefs ? "Saving..." : "Save UI Preferences"}
                   </button>
@@ -2398,7 +2414,7 @@ Command: ${dashCommand}`;
 
             {settingsSubView === 'ai-personality' && isManager && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-3xl">
-                <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <div className="set-head flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
                   <Bot className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">AI Settings</h3>
@@ -2436,10 +2452,9 @@ Command: ${dashCommand}`;
                 <div className="mb-8">
                   <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 mb-2 block">System Instructions</label>
                   <textarea
-                    value={aiSettings.instructions || ''}
+                    value={aiSettings.instructions || ''} aria-label="System instructions"
                     onChange={e => setAiSettings({ ...aiSettings, instructions: e.target.value })}
                     className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-indigo-400 min-h-[100px] resize-y"
-                    placeholder="Provide specific instructions for the AI on how to craft messages, its core objective, constraints, etc."
                   />
                 </div>
 
@@ -2469,13 +2484,12 @@ Command: ${dashCommand}`;
                             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-1">Condition (Look For)</label>
                             <input
                               type="text"
-                              value={rule.lookFor}
+                              value={rule.lookFor} aria-label="Condition"
                               onChange={e => {
                                 const newRouting = [...aiSettings.emailRouting];
                                 newRouting[idx].lookFor = e.target.value;
                                 setAiSettings({ ...aiSettings, emailRouting: newRouting });
                               }}
-                              placeholder="e.g. Invoices, support, urgent complaints..."
                               className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm outline-none focus:border-indigo-400"
                             />
                           </div>
@@ -2483,13 +2497,12 @@ Command: ${dashCommand}`;
                             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1 block mb-1">Route To (Email ID)</label>
                             <input
                               type="email"
-                              value={rule.routeTo}
+                              value={rule.routeTo} aria-label="Route to"
                               onChange={e => {
                                 const newRouting = [...aiSettings.emailRouting];
                                 newRouting[idx].routeTo = e.target.value;
                                 setAiSettings({ ...aiSettings, emailRouting: newRouting });
                               }}
-                              placeholder="support@company.com"
                               className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm outline-none focus:border-indigo-400"
                             />
                           </div>
@@ -2512,14 +2525,13 @@ Command: ${dashCommand}`;
                         {rule.sendRouteMessage && (
                           <div>
                             <textarea
-                              value={rule.routeMessage}
+                              value={rule.routeMessage} aria-label="Message to prepend"
                               onChange={e => {
                                 const newRouting = [...aiSettings.emailRouting];
                                 newRouting[idx].routeMessage = e.target.value;
                                 setAiSettings({ ...aiSettings, emailRouting: newRouting });
                               }}
                               className="w-full bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm outline-none focus:border-indigo-400 min-h-[60px]"
-                              placeholder="Message to prepend when routing (e.g., 'Hey team, please look at this urgent invoice...')"
                             />
                           </div>
                         )}
@@ -2551,7 +2563,7 @@ Command: ${dashCommand}`;
                       else alert("AI Settings saved successfully!");
                     }}
                     disabled={isSavingSettings}
-                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-gray-400"
+                    className="agent-btn agent-btn--primary"
                   >
                     {isSavingSettings ? "Saving..." : "Save AI Settings"}
                   </button>
@@ -2561,7 +2573,7 @@ Command: ${dashCommand}`;
             {settingsSubView === 'quote-template' && isManager && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
                 {/* BRANDING / LOGO CONFIGURATION */}
-                <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <div className="set-head flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
                   <Palette className="w-6 h-6" />
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Brand Identity</h3>
@@ -2572,9 +2584,8 @@ Command: ${dashCommand}`;
                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">Company Logo URL</label>
                     <input
                       type="url"
-                      value={logoUrl}
+                      value={logoUrl} aria-label="Company logo URL"
                       onChange={e => setLogoUrl(e.target.value)}
-                      placeholder="https://example.com/logo.png"
                       className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-indigo-400 transition-colors"
                     />
                     <p className="text-[10px] text-gray-400 mt-1 ml-1 leading-relaxed">
@@ -2611,7 +2622,7 @@ Command: ${dashCommand}`;
                       else alert("Template and Logo saved successfully!");
                     }}
                     disabled={isSavingSettings}
-                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 active:scale-95 transition-transform disabled:bg-gray-400"
+                    className="agent-btn agent-btn--primary"
                   >
                     {isSavingSettings ? "Saving..." : "Save Template & Logo"}
                   </button>

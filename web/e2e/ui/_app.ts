@@ -18,7 +18,7 @@ export async function openAppFresh(page: Page) {
   await page.goto('/login');
   await page.locator('input[type="email"]').fill(ENV.email);
   await page.locator('input[type="password"]').fill(ENV.password);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  await page.getByRole('button', { name: /^log in$/i }).click();
   await page.waitForURL(/\/dashboard/, { timeout: 40_000 });
   await expect(page.getByText('Initializing Workspace...')).toBeHidden({ timeout: 45_000 });
   await expect(page.locator('nav').getByText('Follow ups', { exact: true })).toBeVisible();

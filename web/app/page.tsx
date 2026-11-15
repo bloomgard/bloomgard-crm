@@ -262,6 +262,15 @@ const hasStoredSession = () => {
 };
 const SIGNED_IN_REDIRECT = `(function(){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i)||"";if(!/^sb-.+-auth-token$/.test(k))continue;var v=JSON.parse(localStorage.getItem(k)||"null");if(v&&(v.refresh_token||(v.currentSession&&v.currentSession.refresh_token))){document.documentElement.style.visibility="hidden";location.replace("/dashboard");return;}}}catch(e){}})();`;
 
+const AGENT_POWERS = [
+  { t: "Answers from your data", d: "Reads quotes, clients, emails and the catalogue, and shows which tools it used.", q: "Which pending quotes over ₹50,000 went quiet this month?" },
+  { t: "Acts, with your OK", d: "Sends email, creates quotes, edits prices and moves statuses. Every change waits on a card and is re-checked on the server.", q: "Reply to Priya with the revised rate." },
+  { t: "Builds your workspace", d: "Adds modules, fields and log modules to the quote form, and adds teammates with a generated password.", q: "Create an Action log with Call, Visit and Meeting." },
+  { t: "Charts and exports", d: "Draws charts from live numbers and hands you CSV or Excel files in the chat.", q: "Export October's Approved quotes to Excel." },
+  { t: "Reads your spreadsheets", d: "Upload a price list: it matches columns by their values, orders the chain, and asks when unsure.", q: "Import this sheet into the catalogue." },
+  { t: "Connects your domain", d: "Registers your email domain, lists every DNS record, checks them live and tells you what is missing.", q: "Which DNS records am I still missing?" },
+];
+
 export default function BloomgardLanding() {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -370,6 +379,7 @@ export default function BloomgardLanding() {
             <BrandLockup height={30} tone={isDark ? "onDark" : "onLight"} style={{ color: "var(--ink)" }} />
           </a>
           <nav className={styles.navLinks} aria-label="Sections">
+            <a href="#agent">AI agent</a>
             <a href="#platform">Platform</a>
             <a href="#email">Email and AI</a>
             <a href="#features">Features</a>
@@ -385,7 +395,7 @@ export default function BloomgardLanding() {
             >
               {isDark ? <Sun /> : <Moon />}
             </button>
-            <button type="button" className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => setShowPortal(true)}>Log in</button>
+            <button type="button" className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => router.push("/login")}>Log in</button>
             <button type="button" className={`${styles.btn} ${styles.btnPrimary} ${styles.navHide}`} onClick={openContact}>Book a demo</button>
           </div>
         </div>
@@ -401,21 +411,22 @@ export default function BloomgardLanding() {
             <div className={styles.heroGrid}>
               <div className={styles.heroCopy}>
                 <div className={`${styles.heroEyebrow} ${styles.heroIn}`}>
-                  <span className={styles.eyebrow}>(01) Bloomgard CMA</span>
+                  <span className={styles.eyebrow}>(01) Bloomgard CMA · the agentic CRM</span>
                 </div>
                 <h1 className={`${styles.display} ${styles.h1} ${styles.heroIn} ${styles.d1}`}>
-                  From first email to signed quote, <em>without re-typing.</em>
+                  Your sales desk, <em>run by AI.</em>
                 </h1>
                 <p className={`${styles.lede} ${styles.heroIn} ${styles.d2}`}>
-                  Bloomgard runs your quotations, inbox and follow-ups in one workspace. The AI reads every client
-                  email, drafts the reply from your own catalogue, and leaves the send button to you.
+                  Bloomgard runs your quotations, inbox and follow-ups in one workspace, with an AI agent at its centre.
+                  Ask in plain words: it reads every quote, email and price, drafts the reply, builds the quote, and
+                  waits for your OK before anything changes.
                 </p>
                 <div className={`${styles.ctaRow} ${styles.heroIn} ${styles.d3}`}>
-                  <button type="button" className={`${styles.btn} ${styles.btnLg} ${styles.btnPrimary}`} onClick={openContact}>
-                    Book a demo <ArrowRight />
+                  <button type="button" className={`${styles.btn} ${styles.btnLg} ${styles.btnPrimary}`} onClick={() => router.push("/signup")}>
+                    Create your workspace <ArrowRight />
                   </button>
-                  <button type="button" className={`${styles.btn} ${styles.btnLg} ${styles.btnSecondary}`} onClick={() => setShowPortal(true)}>
-                    Log in
+                  <button type="button" className={`${styles.btn} ${styles.btnLg} ${styles.btnSecondary}`} onClick={openContact}>
+                    Book a demo
                   </button>
                 </div>
                 <p className={`${styles.heroNote} ${styles.heroIn} ${styles.d4}`}>Built for teams that quote for a living</p>
@@ -463,10 +474,51 @@ export default function BloomgardLanding() {
         <MotifBelt />
 
         {/* Platform */}
+        <section id="agent" className={styles.section}>
+          <div className={styles.wrap}>
+            <div className={styles.split}>
+              <div className={styles.labelCol}><span className={styles.eyebrow}>(02) The AI agent</span></div>
+              <div className={styles.bodyCol}>
+                <div data-reveal>
+                  <h2 className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "20ch" }}>Tell it what you need. <em>It does the work.</em></h2>
+                  <p className={styles.sectionIntro}>
+                    Bloomgard opens on a conversation, not a dashboard. The agent reads your whole workspace with tools you can
+                    see, and anything that changes data waits on a card for your OK.
+                  </p>
+                </div>
+                <div className={styles.agentLayout} data-reveal>
+                  <div className={styles.agentChat} role="img" aria-label="Example: the agent preparing a status change and an email for approval">
+                    <div className={styles.agentUser}>Mark QN-2026-014 approved and email Priya the PO confirmation.</div>
+                    <div className={styles.agentSteps}>
+                      <span>✓ Opening quote <em>180ms</em></span><span>✓ Preparing status change ✎</span><span>✓ Drafting email ✎</span>
+                    </div>
+                    <div className={styles.agentCard}>
+                      <div className={styles.agentCardHead}><b>Change quote status</b><span className={styles.mono}>needs your OK</span></div>
+                      <div className={styles.agentCardRow}><span>Quote</span><span>QN-2026-014 · Apex Packaging</span></div>
+                      <div className={styles.agentCardRow}><span>Status</span><span>Quotation Given → Approved</span></div>
+                      <div className={styles.agentCardBtns}><span className={styles.agentOk}>Confirm</span><span className={styles.agentNo}>Dismiss</span></div>
+                    </div>
+                    <p className={styles.agentReply}>Both are ready. Nothing changes until you confirm.</p>
+                  </div>
+                  <ul className={styles.agentGrid}>
+                    {AGENT_POWERS.map((p) => (
+                      <li key={p.t} className={styles.agentPower}>
+                        <h3>{p.t}</h3>
+                        <p>{p.d}</p>
+                        <span className={styles.mono}>“{p.q}”</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="platform" className={styles.section}>
           <div className={styles.wrap}>
             <div className={styles.split}>
-              <div className={styles.labelCol}><span className={styles.eyebrow}>(02) Platform</span></div>
+              <div className={styles.labelCol}><span className={styles.eyebrow}>(03) Platform</span></div>
               <div className={styles.bodyCol}>
                 <div data-reveal>
                   <h2 className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "20ch" }}>One workspace for the whole quote.</h2>
@@ -493,7 +545,7 @@ export default function BloomgardLanding() {
         <section id="email" className={styles.section} style={{ paddingTop: 0 }}>
           <div className={styles.wrap}>
             <div className={styles.split}>
-              <div className={styles.labelCol}><span className={styles.eyebrow}>(03) Email and AI</span></div>
+              <div className={styles.labelCol}><span className={styles.eyebrow}>(04) Email and AI</span></div>
               <div className={styles.bodyCol}>
                 <div data-reveal>
                   <h2 className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "20ch" }}>Every email, read and answered.</h2>
@@ -553,7 +605,7 @@ export default function BloomgardLanding() {
           <div className={styles.bandMandala} aria-hidden="true" />
           <div className={styles.wrap} style={{ position: "relative" }}>
             <div className={styles.split}>
-              <div className={styles.labelCol}><span className={styles.eyebrow}>(04) How the AI behaves</span></div>
+              <div className={styles.labelCol}><span className={styles.eyebrow}>(05) How the AI behaves</span></div>
               <div className={styles.bodyCol} data-reveal>
                 <h2 id="band-title" className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "16ch" }}>
                   The AI drafts. <em>You decide.</em>
@@ -575,7 +627,7 @@ export default function BloomgardLanding() {
         <section id="features" className={styles.section}>
           <div className={styles.wrap}>
             <div className={styles.split}>
-              <div className={styles.labelCol}><span className={styles.eyebrow}>(05) Features</span></div>
+              <div className={styles.labelCol}><span className={styles.eyebrow}>(06) Features</span></div>
               <div className={styles.bodyCol}>
                 <div data-reveal>
                   <h2 className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "20ch" }}>Everything in the workspace.</h2>
@@ -601,7 +653,7 @@ export default function BloomgardLanding() {
         <section id="pricing" className={styles.section} style={{ paddingTop: 0 }}>
           <div className={styles.wrap}>
             <div className={styles.split}>
-              <div className={styles.labelCol}><span className={styles.eyebrow}>(06) Plans</span></div>
+              <div className={styles.labelCol}><span className={styles.eyebrow}>(07) Plans</span></div>
               <div className={styles.bodyCol}>
                 <div data-reveal>
                   <h2 className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "18ch" }}>Two plans, priced to your team.</h2>
@@ -640,7 +692,7 @@ export default function BloomgardLanding() {
         <section id="faq" className={styles.section} style={{ paddingTop: 0 }}>
           <div className={styles.wrap}>
             <div className={styles.split}>
-              <div className={styles.labelCol}><span className={styles.eyebrow}>(07) Questions</span></div>
+              <div className={styles.labelCol}><span className={styles.eyebrow}>(08) Questions</span></div>
               <div className={styles.bodyCol}>
                 <h2 className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "18ch", marginBottom: 48 }} data-reveal>Before you ask.</h2>
                 <div className={styles.faq} data-reveal>
@@ -663,7 +715,7 @@ export default function BloomgardLanding() {
               <h2 className={`${styles.display} ${styles.h2}`} style={{ maxWidth: "16ch" }}>See it on your own emails.</h2>
               <div className={`${styles.ctaRow}`} style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                 <button type="button" className={`${styles.btn} ${styles.btnLg} ${styles.btnPrimary}`} onClick={openContact}>Book a demo <ArrowRight /></button>
-                <button type="button" className={`${styles.btn} ${styles.btnLg} ${styles.btnSecondary}`} onClick={() => setShowPortal(true)}>Log in</button>
+                <button type="button" className={`${styles.btn} ${styles.btnLg} ${styles.btnSecondary}`} onClick={() => router.push("/login")}>Log in</button>
               </div>
             </div>
           </div>
@@ -681,6 +733,7 @@ export default function BloomgardLanding() {
             <div>
               <p className={styles.footColTitle}>Product</p>
               <div className={styles.footLinks}>
+                <a href="#agent">AI agent</a>
                 <a href="#platform">Platform</a>
                 <a href="#email">Email and AI</a>
                 <a href="#features">Features</a>
@@ -708,29 +761,6 @@ export default function BloomgardLanding() {
           </div>
         </div>
       </footer>
-
-      {/* Sign-in dialog */}
-      {showPortal && (
-        <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) setShowPortal(false); }}>
-          <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="portal-title">
-            <div className={styles.dialogHead}>
-              <div>
-                <h2 id="portal-title" className={styles.dialogTitle}>Welcome</h2>
-                <p className={styles.dialogText}>Log in, or start a workspace for your company.</p>
-              </div>
-              <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.iconBtn}`} onClick={() => setShowPortal(false)} aria-label="Close"><X /></button>
-            </div>
-            <button type="button" className={styles.choice} onClick={() => router.push("/login")} autoFocus>
-              <span><span className={styles.choiceTitle} style={{ display: "block" }}>Log in</span><span className={styles.choiceText}>Open your workspace.</span></span>
-              <ArrowRight aria-hidden="true" />
-            </button>
-            <button type="button" className={styles.choice} onClick={() => router.push("/signup")}>
-              <span><span className={styles.choiceTitle} style={{ display: "block" }}>Create account</span><span className={styles.choiceText}>A new workspace, with you as its admin.</span></span>
-              <ArrowRight aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Contact dialog */}
       {showContact && (

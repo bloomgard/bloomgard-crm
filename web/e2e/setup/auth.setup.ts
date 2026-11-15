@@ -11,7 +11,7 @@ setup('authenticate', async ({ page }) => {
   await emailInput.waitFor({ state: 'visible', timeout: 30_000 });
   await emailInput.fill(ENV.email);
   await page.locator('input[type="password"]').fill(ENV.password);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  await page.getByRole('button', { name: /^log in$/i }).click();
   await page.waitForURL(/\/(dashboard|boss)/, { timeout: 40_000 });
   await expect(page).not.toHaveURL(/\/login/);
   fs.mkdirSync('e2e/.auth', { recursive: true });

@@ -8,8 +8,8 @@ test.describe('Sign in', () => {
     await page.goto('/login');
     await page.locator('input[type="email"]').fill(ENV.email);
     await page.locator('input[type="password"]').fill('definitely-not-the-password');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await expect(page.getByText(/invalid login credentials/i)).toBeVisible();
+    await page.getByRole('button', { name: /^log in$/i }).click();
+    await expect(page.getByText(/don't match/i)).toBeVisible();
     await expect(page).toHaveURL(/\/login/);
   });
 
@@ -22,7 +22,7 @@ test.describe('Sign in', () => {
     await page.goto('/login');
     await page.locator('input[type="email"]').fill(ENV.email);
     await page.locator('input[type="password"]').fill(ENV.password);
-    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.getByRole('button', { name: /^log in$/i }).click();
     await page.waitForURL(/\/dashboard/, { timeout: 40_000 });
     await expect(page.getByText('Initializing Workspace...')).toBeHidden({ timeout: 45_000 });
     await expect(page.locator('nav').getByText('Follow ups', { exact: true })).toBeVisible();
@@ -58,8 +58,8 @@ test('Create account: a new workspace from the sign-up form, signed straight in 
   try {
     await page.goto('/signup');
     await expect(page).toHaveURL(/mode=signup/);
-    await page.getByPlaceholder('Acme Steel Pvt. Ltd.').fill(`E2E UI Signup ${tag}`);
-    await page.getByPlaceholder('Priya Sharma').fill('UI Tester');
+    await page.getByLabel('Company name').fill(`E2E UI Signup ${tag}`);
+    await page.getByLabel('Your name').fill('UI Tester');
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill('kora-neel-12345');
     await page.getByRole('button', { name: 'Create account' }).click();
@@ -85,8 +85,8 @@ test('sign-up refuses a personal email address', async ({ browser }) => {
   const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const page = await ctx.newPage();
   await page.goto('/signup');
-  await page.getByPlaceholder('Acme Steel Pvt. Ltd.').fill('Personal Co');
-  await page.getByPlaceholder('Priya Sharma').fill('Someone');
+  await page.getByLabel('Company name').fill('Personal Co');
+  await page.getByLabel('Your name').fill('Someone');
   await page.locator('input[type="email"]').fill(`someone.${Date.now()}@gmail.com`);
   await page.locator('input[type="password"]').fill('kora-neel-12345');
   await page.getByRole('button', { name: 'Create account' }).click();

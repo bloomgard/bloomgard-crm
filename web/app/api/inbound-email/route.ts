@@ -120,6 +120,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 200 });
     }
 
+    // Production and previews share one database and every Resend webhook receives every email, so the same
+    // message can arrive more than once. A secondary receiver (previews: INBOUND_ROLE=secondary) gives the
+    // primary a head start, and nobody files a Message-ID that is already stored.
+    const incomingMessageId = payload.data?.message_id || '';
+    if (process.env.INBOUND_ROLE === 'secondary') await new Promise((r) => setTimeout(r, 8000));
+    if (incomingMessageId) {
+      const { data: dup } = await supabase.from('inbound_emails').select('id')
+        .eq('tenant_id', tenant.id).eq('message_id', incomingMessageId).limit(1);
+      if (dup && dup.length) return NextResponse.json({ success: true, duplicate: true }, { status: 200 });
+    }
+
     // 4. Fetch Full Email Body & Extract Threading Headers
     const emailId = payload.data?.email_id;
     let bodyText = payload.data?.text || '';

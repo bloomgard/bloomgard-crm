@@ -10,7 +10,7 @@ test.describe('Landing page', () => {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto('/');
     await expect(page).toHaveTitle(/Bloomgard CMA/);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('without re-typing');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('run by AI');
     for (const id of ['platform', 'email', 'features', 'pricing', 'faq']) {
       await expect(page.locator(`#${id}`)).toBeAttached();
     }
@@ -53,22 +53,25 @@ test.describe('Landing page', () => {
     expect(bg).toBe('rgb(11, 14, 26)');
   });
 
-  test('the sign-in dialog offers Log in and Create account, and closes with Escape', async ({ page }) => {
+  test('Log in goes straight to the login page, which offers sign-up; the hero offers Create your workspace', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Log in' }).first().click();
-    const dialog = page.getByRole('dialog', { name: 'Welcome' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/Bloomgard Suite|Admin identity/)).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
-    await page.getByRole('button', { name: 'Log in' }).first().click();
-    await dialog.getByRole('button', { name: /^Log in/ }).click();
     await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+    await expect(page.locator('input[placeholder]')).toHaveCount(0);                 // labels, not placeholders
+    await page.getByRole('button', { name: 'Create an account' }).click();
+    await expect(page.getByLabel('Company name')).toBeVisible();
     await page.goBack();
-    await page.getByRole('button', { name: 'Log in' }).first().click();
-    await page.getByRole('dialog', { name: 'Welcome' }).getByRole('button', { name: /Create account/ }).click();
-    await expect(page).toHaveURL(/\/login\?mode=signup$/);
-    await expect(page.getByText('Company name')).toBeVisible();
+    await page.goto('/');
+    await page.getByRole('button', { name: /Create your workspace/ }).click();
+    await expect(page).toHaveURL(/mode=signup/);
+  });
+
+  test('the landing page explains the AI agent', async ({ page }) => {
+    await page.goto('/');
+    const agent = page.locator('#agent');
+    await expect(agent).toContainText('The AI agent');
+    for (const t of ['Answers from your data', 'Acts, with your OK', 'Builds your workspace', 'Charts and exports', 'Reads your spreadsheets', 'Connects your domain']) await expect(agent).toContainText(t);
   });
 
   test('contact dialog shows support@bloomgard.co, copies it and opens Gmail to that address', async ({ page, context }) => {

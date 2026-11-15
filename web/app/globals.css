@@ -535,3 +535,62 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 .md-conf--hi { background: #dcefe7; color: #0e6b57; }
 .md-choice { font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--color-amber-300, #e5c07a); background: var(--color-white); color: var(--color-gray-900); }
 .md-choice:hover { border-color: var(--neelam); }
+
+/* ---- Settings screens: aligned with the title, no card padding, one field style ---- */
+.jaali main > .animate-in > [class*="rounded-"] { padding-left: 0 !important; padding-right: 0 !important; padding-top: 0 !important; }
+.set-head { margin-bottom: 14px !important; padding-bottom: 0 !important; border: 0 !important; }
+.set-head > svg, .set-head h3 { display: none; }
+.set-head p { margin: 0; font-size: 13px; color: var(--color-gray-600); }
+.settings-page :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) {
+  background-color: var(--color-white) !important; border: 1px solid var(--color-gray-200) !important; border-radius: 10px !important; font-size: 14px;
+}
+.settings-page :is(input, select, textarea):focus { border-color: var(--neelam) !important; outline: none; box-shadow: 0 0 0 3px rgba(39, 71, 216, 0.12); }
+.settings-page .bg-gray-50.rounded-2xl, .settings-page .bg-gray-50.rounded-xl { background: var(--color-white) !important; }
+.ua-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ua-field > span { font-size: 12px; font-weight: 600; color: var(--color-gray-700); }
+.ua-field > span em { font-style: normal; font-weight: 400; color: var(--color-gray-500); }
+.ua-field :is(input, select) { width: 100%; padding: 8px 11px; }
+.ua-table { min-width: 720px; }
+
+/* ---- Log in / Create account ---- */
+.auth { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); background: #fffefc; color: #15120e; font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif; }
+@media (min-width: 960px) { .auth { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.auth__panel { position: relative; display: none; flex-direction: column; justify-content: space-between; padding: 48px; overflow: hidden; isolation: isolate;
+  background: linear-gradient(165deg, #0e1430 0%, #18214a 48%, #2747d8 130%); color: #f3ede1; }
+@media (min-width: 960px) { .auth__panel { display: flex; } }
+.auth__panel::before { /* jaali lattice */
+  content: ""; position: absolute; inset: 0; z-index: -1; background: #f3ede1; opacity: 0.07;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44' fill='none' stroke='black' stroke-width='0.9'%3E%3Ccircle cx='0' cy='0' r='22'/%3E%3Ccircle cx='44' cy='0' r='22'/%3E%3Ccircle cx='0' cy='44' r='22'/%3E%3Ccircle cx='44' cy='44' r='22'/%3E%3Ccircle cx='22' cy='22' r='22'/%3E%3C/svg%3E") 0 0 / 44px 44px;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44' fill='none' stroke='black' stroke-width='0.9'%3E%3Ccircle cx='0' cy='0' r='22'/%3E%3Ccircle cx='44' cy='0' r='22'/%3E%3Ccircle cx='0' cy='44' r='22'/%3E%3Ccircle cx='44' cy='44' r='22'/%3E%3Ccircle cx='22' cy='22' r='22'/%3E%3C/svg%3E") 0 0 / 44px 44px; }
+.auth__panel::after { /* mandala */
+  content: ""; position: absolute; z-index: -1; right: -220px; top: -200px; width: 640px; height: 640px; background: #f3ede1; opacity: 0.08;
+  -webkit-mask: url("/brand/mandala.svg") center / contain no-repeat; mask: url("/brand/mandala.svg") center / contain no-repeat; }
+.auth__headline { font-family: var(--font-display), Georgia, serif; font-size: clamp(2.6rem, 4.2vw, 3.6rem); line-height: 1.04; letter-spacing: -0.015em; }
+.auth__headline em { color: #f0b45a; font-style: italic; }
+.auth__sub { margin-top: 18px; max-width: 30rem; font-size: 16px; line-height: 1.6; color: rgba(243, 237, 225, 0.82); }
+.auth__main { display: flex; align-items: center; justify-content: center; padding: 48px 20px; }
+.auth__form { width: 100%; max-width: 360px; }
+.auth__mobile-brand { margin-bottom: 36px; }
+@media (min-width: 960px) { .auth__mobile-brand { display: none; } }
+.auth__eyebrow { font-family: var(--font-mono), ui-monospace, monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5a534a; }
+.auth__title { margin-top: 14px; font-family: var(--font-display), Georgia, serif; font-size: 2.25rem; line-height: 1.08; letter-spacing: -0.01em; font-weight: 400; }
+.auth__lede { margin-top: 12px; font-size: 14.5px; line-height: 1.55; color: #5a534a; }
+.auth__error { margin-top: 18px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; background: #fde4d8; color: #8f2c09; border: 1px solid #f5b49b; }
+.auth__fields { margin-top: 24px; display: grid; gap: 18px; }
+.auth__field { display: grid; gap: 7px; }
+.auth__field > span:first-child { font-size: 13.5px; font-weight: 500; color: #15120e; }
+.auth__field input { width: 100%; padding: 10px 13px; font-size: 15px; border-radius: 10px; border: 1px solid #c9c2b4; background: #fffefc; color: #15120e; outline: none; transition: border-color .15s, box-shadow .15s; }
+.auth__field input:focus { border-color: #2747d8; box-shadow: 0 0 0 3px rgba(39, 71, 216, 0.15); }
+.auth__field small { font-size: 12px; color: #6f685d; }
+.auth__pw { position: relative; display: block; }
+.auth__pw input { padding-right: 64px; }
+.auth__pw button { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 600; color: #5a534a; padding: 4px 8px; border-radius: 6px; }
+.auth__pw button:hover { background: #f4f1ea; color: #15120e; }
+.auth__submit { margin-top: 6px; width: 100%; padding: 13px 16px; border-radius: 999px; background: #15120e; color: #fffefc; font-size: 15px; font-weight: 600; transition: transform .15s, opacity .15s; }
+.auth__submit:hover:not(:disabled) { transform: translateY(-1px); }
+.auth__submit:disabled { opacity: 0.6; }
+.auth__switch { margin-top: 22px; font-size: 14.5px; color: #15120e; }
+.auth__switch button { color: #2747d8; font-weight: 500; }
+.auth__switch button:hover { text-decoration: underline; }
+.auth__note { margin-top: 18px; font-size: 12px; line-height: 1.5; color: #6f685d; }
+.auth__note a { color: #2747d8; }

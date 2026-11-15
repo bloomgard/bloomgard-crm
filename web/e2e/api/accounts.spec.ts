@@ -81,6 +81,18 @@ test.describe.serial('Accounts and users', () => {
     }
   });
 
+  test('the same inbound email delivered twice (two webhooks) is filed once', async ({ request }) => {
+    const subject = `E2E dedupe ${tag}`;
+    const body = { type: 'email.received', data: { from: `dup-${tag}@e2e-buyer.test`, to: [`${actor.tenant.inbound_routing_id}@inbound.bloomgard.co`], subject, text: 'once', message_id: `<dedupe-${tag}@e2e.test>` } };
+    for (let i = 0; i < 2; i++) {
+      const res = await request.post(`${ENV.baseUrl}/api/inbound-email`, { headers: { ...protectionHeaders(), 'Content-Type': 'application/json' }, data: body });
+      expect(res.status()).toBe(200);
+    }
+    const { data } = await admin().from('inbound_emails').select('id').eq('subject', subject);
+    expect(data).toHaveLength(1);
+    await admin().from('inbound_emails').delete().eq('subject', subject);
+  });
+
   test('create-user needs a signed-in Admin/Manager and never resets an existing account', async ({ request }) => {
     const anon = await request.post(`${ENV.baseUrl}/api/create-user`, { headers: { ...protectionHeaders(), 'Content-Type': 'application/json' }, data: { email: `x-${tag}@e2e-${tag}.test`, password: 'whatever-123', role: 'admin', tenantId: actor.tenantId } });
     expect(anon.status()).toBe(401);
