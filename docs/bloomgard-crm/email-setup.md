@@ -46,15 +46,22 @@ Open **Settings → Email Settings**:
 | Address | What it is |
 |---|---|
 | **Your personal email** | The address quotes are sent from by default ("Send As → Personal"). Replies are tied to your identity. |
-| **Your unique forwarding address** | A personal `@inbound.bloomgard.co` address. Email delivered here is filed to *you* and the conversation is assigned to you. |
+| **Workspace inbound address** | The shared `@inbound.bloomgard.co` address, created with the workspace. Every quote and reply Bloomgard sends sets Reply-To to it, so client replies come back with no DNS work. Mail arriving here is filed to the workspace and lands in the Inbox **unassigned**. |
+| **Your own address (optional)** | A second `@inbound.bloomgard.co` address, personal to you. It behaves exactly like the workspace one, except mail sent to it is **assigned to you** automatically. |
 | **Common workspace email** | A verified company address (set by your admin) that any agent can send from. |
-| **Workspace inbound address** | A tenant-level `@inbound.bloomgard.co` address, used when mail should belong to the workspace rather than one agent. |
+
+Most workspaces need only the first. The personal address earns its keep when several
+people each forward their own client mail into the same workspace and you want each
+person's threads to land on their own plate instead of a shared pile.
 
 ## Receiving email (forwarding)
 
-1. In **Email Settings**, choose your forwarding address (for example `your-name@inbound.bloomgard.co`) and save.
-2. In your own Gmail or Outlook, add an auto-forwarding rule that forwards client mail to that address.
-3. Mail now appears in the [Inbox](./inbox.md) within seconds.
+1. In your own Gmail or Outlook, add an auto-forwarding rule that forwards client mail to
+   the workspace address shown in **Settings → Email Settings**.
+2. Mail now appears in the [Inbox](./inbox.md) within seconds.
+3. Optional: in the same screen choose **Give me my own address**, pick a name and save,
+   then forward to that address instead. Everything works the same way; the threads are
+   assigned to you. **Remove** puts you back on the shared address.
 
 Routing rule when mail arrives (first match wins):
 

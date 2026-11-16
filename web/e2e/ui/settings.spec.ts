@@ -39,9 +39,11 @@ test.describe.serial('Settings persist', () => {
     const dialogs = captureDialogs(page);
     await openApp(page);
     await openSetting(page, 'Email Settings');
+    const reveal = page.getByRole('button', { name: 'Give me my own address' });              // the field is behind a disclosure unless an address is already set
+    if (await reveal.isVisible().catch(() => false)) await reveal.click();
     await page.getByLabel('Your forwarding address').fill(`E2E-Fwd_${tag}!`);                 // the field keeps only a-z, 0-9 and hyphens
-    await page.getByRole('button', { name: 'Save Routing Address' }).click();
-    await expect.poll(() => dialogs.join('|')).toMatch(/Routing Slug updated/);
+    await page.getByRole('button', { name: 'Save my address' }).click();
+    await expect.poll(() => dialogs.join('|')).toMatch(/will now be assigned to you/);
     const { data } = await admin().from('profiles').select('inbound_email').eq('id', actor.userId).single();
     expect(data!.inbound_email).toBe(`e2e-fwd${tag}@inbound.bloomgard.co`);
   });

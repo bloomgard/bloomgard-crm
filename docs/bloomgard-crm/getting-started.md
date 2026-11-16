@@ -41,7 +41,7 @@ The left sidebar is a fixed rail. It opens on **Home** (the [AI command centre](
 
 1. **Settings → Your Profile**: set your full name, job title, phone (and optional sign-off). The AI signs replies with this.
 2. **Settings → Master Data**: import or type your product catalogue.
-3. **Settings → Email Settings**: set your personal forwarding address and set up forwarding in Gmail/Outlook ([Email setup](./email-setup.md)).
+3. **Settings → Email Settings**: connect your company domain, then forward client mail from Gmail/Outlook to the workspace address ([Email setup](./email-setup.md)).
 4. **Settings → AI Settings**: choose tone and add instructions ([AI assistant](./ai-assistant.md)).
 5. **Settings → User Access**: add your team.
 6. Create a test quote and send it to yourself.

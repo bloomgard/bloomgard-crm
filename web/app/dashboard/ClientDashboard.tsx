@@ -157,6 +157,8 @@ export default function ClientDashboard() {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [customSender, setCustomSender] = useState("");
   const [userRoutingSlug, setUserRoutingSlug] = useState("");
+  const [workspaceInbound, setWorkspaceInbound] = useState("");   // the shared address, for context in Email Settings
+  const [personalRoutingOpen, setPersonalRoutingOpen] = useState(false);
   const [aiSettings, setAiSettings] = useState<{ tone: string, englishLevel: string, desperation: string, instructions?: string, emailRouting?: { lookFor: string, routeTo: string, sendRouteMessage: boolean, routeMessage: string }[] }>({ tone: 'Professional', englishLevel: 'Native', desperation: 'Low', instructions: '', emailRouting: [] });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: '', job_title: '', phone: '', signature: '' });
@@ -459,11 +461,13 @@ export default function ClientDashboard() {
         if (profile.tenant_id) {
           setTenantId(profile.tenant_id);
 
-          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled, custom_email_sender, routing_slug").eq("id", profile.tenant_id).maybeSingle();
+          const { data: tenantData } = await supabase.from("tenants").select("company_name, ai_enabled, custom_email_sender, routing_slug, inbound_routing_id").eq("id", profile.tenant_id).maybeSingle();
           if (tenantData) {
             if (tenantData.company_name) setCompanyName(tenantData.company_name);
             if (tenantData.ai_enabled === false) setAiEnabled(false);
             if (tenantData.custom_email_sender) setCustomSender(tenantData.custom_email_sender);
+            const routing = tenantData.inbound_routing_id || tenantData.routing_slug;
+            if (routing) setWorkspaceInbound(`${routing}@inbound.bloomgard.co`);
           }
 
           const { data: schema } = await supabase.from("tenant_schemas").select("schema_config, html_template").eq("tenant_id", profile.tenant_id).maybeSingle();
@@ -2267,42 +2271,83 @@ Command: ${dashCommand}`;
                 <div className="flex items-center gap-3">
                   <CornerUpLeft className="w-5 h-5 text-[var(--neelam)]" />
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">Your own forwarding address</h3>
-                    <p className="text-xs text-gray-500">Personal to you: mail sent here is filed to you and assigned to you. Leave it empty to use the workspace address above.</p>
+                    <h3 className="text-base font-semibold text-gray-900">A second address, just for you (optional)</h3>
+                    <p className="text-xs text-gray-500">
+                      The workspace address above is shared: everything sent to it lands in the Inbox unassigned, for whoever picks it up first.
+                      A personal address works exactly the same way, except mail sent to it is assigned to you automatically — handy when several
+                      people forward their own client mail into the same workspace.
+                    </p>
                   </div>
                 </div>
-                <div className="mt-4 flex flex-wrap items-end gap-3">
-                  <label className="ua-field" style={{ flex: '1 1 20rem' }}>
-                    <span>Address</span>
-                    <span className="ed-input flex items-center !py-0">
-                      <input type="text" value={userRoutingSlug} aria-label="Your forwarding address"
-                        onChange={e => setUserRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                        className="flex-1 min-w-0 py-2 bg-transparent outline-none font-mono text-[var(--neelam)]" />
-                      <span className="text-sm text-gray-500 font-mono shrink-0">@inbound.bloomgard.co</span>
-                    </span>
-                  </label>
-                  <button
-                    onClick={async () => {
-                      if (!user?.id) return;
-                      setIsSavingSettings(true);
-                      // an empty box means "use the workspace address", never "@inbound.bloomgard.co"
-                      const slug = String(userRoutingSlug || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
-                      const newInbound = slug ? `${slug}@inbound.bloomgard.co` : null;
-                      const { error } = await supabase.from('profiles').update({ inbound_email: newInbound }).eq('id', user.id);
-                      setIsSavingSettings(false);
-                      if (error) alert("Failed to save: " + error.message);
-                      else { setUser({ ...user, inbound_email: newInbound }); alert("Personal Routing Slug updated successfully!"); }
-                    }}
-                    disabled={isSavingSettings}
-                    className="agent-btn agent-btn--primary h-[38px]"
-                  >
-                    {isSavingSettings ? "Saving…" : "Save Routing Address"}
-                  </button>
-                  {userRoutingSlug && (
-                    <button onClick={() => { navigator.clipboard.writeText(`${userRoutingSlug}@inbound.bloomgard.co`); alert("Copied!"); }} className="agent-btn h-[38px]">Copy</button>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-500 mt-3">You sign in as <b>{user?.email}</b>. Set an auto-forwarding rule in your own inbox to send client mail here.</p>
+
+                {!userRoutingSlug && !personalRoutingOpen ? (
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <p className="text-xs text-gray-600">
+                      You're on the shared address{workspaceInbound && <> <code className="text-[11px]">{workspaceInbound}</code></>}. Nothing to do here unless you want your mail assigned to you.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setUserRoutingSlug(String(user?.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '') || '');
+                        setPersonalRoutingOpen(true);
+                      }}
+                      className="agent-btn h-[38px]"
+                    >Give me my own address</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-4 flex flex-wrap items-end gap-3">
+                      <label className="ua-field" style={{ flex: '1 1 20rem' }}>
+                        <span>Your address</span>
+                        <span className="ed-input flex items-center !py-0">
+                          <input type="text" value={userRoutingSlug} aria-label="Your forwarding address"
+                            onChange={e => setUserRoutingSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                            className="flex-1 min-w-0 py-2 bg-transparent outline-none font-mono text-[var(--neelam)]" />
+                          <span className="text-sm text-gray-500 font-mono shrink-0">@inbound.bloomgard.co</span>
+                        </span>
+                      </label>
+                      <button
+                        onClick={async () => {
+                          if (!user?.id) return;
+                          setIsSavingSettings(true);
+                          // an empty box means "use the workspace address", never "@inbound.bloomgard.co"
+                          const slug = String(userRoutingSlug || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+                          const newInbound = slug ? `${slug}@inbound.bloomgard.co` : null;
+                          const { error } = await supabase.from('profiles').update({ inbound_email: newInbound }).eq('id', user.id);
+                          setIsSavingSettings(false);
+                          if (error) alert("Failed to save: " + error.message);
+                          else {
+                            setUser({ ...user, inbound_email: newInbound });
+                            setPersonalRoutingOpen(false);
+                            alert(newInbound ? `Mail sent to ${newInbound} will now be assigned to you.` : "You're back on the shared workspace address.");
+                          }
+                        }}
+                        disabled={isSavingSettings || !userRoutingSlug}
+                        className="agent-btn agent-btn--primary h-[38px]"
+                      >
+                        {isSavingSettings ? "Saving…" : "Save my address"}
+                      </button>
+                      {userRoutingSlug && (
+                        <button onClick={() => { navigator.clipboard.writeText(`${userRoutingSlug}@inbound.bloomgard.co`); alert("Copied!"); }} className="agent-btn h-[38px]">Copy</button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (!user?.inbound_email) { setUserRoutingSlug(""); setPersonalRoutingOpen(false); return; }
+                          if (!confirm(`Remove ${user.inbound_email}? Your mail goes back to the shared workspace address and arrives unassigned.`)) return;
+                          setIsSavingSettings(true);
+                          const { error } = await supabase.from('profiles').update({ inbound_email: null }).eq('id', user.id);
+                          setIsSavingSettings(false);
+                          if (error) alert("Failed to save: " + error.message);
+                          else { setUser({ ...user, inbound_email: null }); setUserRoutingSlug(""); setPersonalRoutingOpen(false); }
+                        }}
+                        disabled={isSavingSettings}
+                        className="agent-btn h-[38px]"
+                      >{user?.inbound_email ? "Remove" : "Cancel"}</button>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-3">
+                      You sign in as <b>{user?.email}</b>. Forward client mail here from your own inbox the same way as above — the only difference is who it gets assigned to.
+                    </p>
+                  </>
+                )}
               </section>
             )}
 

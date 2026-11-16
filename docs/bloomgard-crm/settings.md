@@ -76,8 +76,8 @@ with a small dropdown for each of its dropdown fields, who logged it, and a peri
 
 ## Email Settings
 
-Your personal email, your unique forwarding address, and the common workspace email. See
-[Email setup](./email-setup.md).
+Your company email domain, the shared workspace address everything replies to, and — optional —
+a second address personal to you that assigns incoming mail to you. See [Email setup](./email-setup.md).
 
 ## Personalization
 
