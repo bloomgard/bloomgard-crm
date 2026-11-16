@@ -608,20 +608,33 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 .set-row:hover .set-row__go { color: var(--color-gray-600); transform: translateX(2px); }
 
 /* ---- Jaali loading screen ---- */
-.jl { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 26px; background: var(--kora, #fffefc); z-index: 50; }
-.jl__art { position: relative; width: 132px; height: 132px; }
-.jl__art svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; }
-.jl__mandala { stroke: var(--kajal, #15120e); stroke-width: 0.6; opacity: 0.16; animation: jl-spin 24s linear infinite; }
-.jl__lattice { stroke: var(--neelam, #2747d8); stroke-width: 1.1; overflow: visible; }
-.jl__lattice circle { stroke-dasharray: 189; stroke-dashoffset: 189; animation: jl-draw 2.8s cubic-bezier(.45,0,.2,1) infinite; }
-.jl__label { font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--kajal-mute, #8c8478); animation: jl-pulse 2.4s ease-in-out infinite; }
-@keyframes jl-draw { 0% { stroke-dashoffset: 189; opacity: 0; } 35% { opacity: 0.85; } 70%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+.jl { position: fixed; inset: 0; display: grid; place-content: center; background: var(--kora, #fffefc); z-index: 50; }
+
+/* the Bloomgard mark, filled with the AI orb's turning gradient */
+.jl > * { grid-area: 1 / 1; place-self: center; }
+.jl__mark { position: relative; width: clamp(128px, 30vw, 184px); aspect-ratio: 1; overflow: hidden;
+  -webkit-mask: url(/brand/mark.png) center / contain no-repeat; mask: url(/brand/mark.png) center / contain no-repeat;
+  animation: jl-breathe 3.4s ease-in-out infinite; }
+.jl__mark i { position: absolute; inset: -55%; display: block; filter: blur(26px);
+  background:
+    conic-gradient(from 0deg, var(--neelam, #2747d8) 0%, var(--sindoor, #ea5420) 26%,
+      var(--marigold, #e5a03a) 42%, var(--marigold, #e5a03a) 56%, var(--sindoor, #ea5420) 72%,
+      var(--neelam, #2747d8) 94%, var(--neelam, #2747d8) 100%);
+  animation: jl-spin 7s linear infinite; }
+.jl__mark::after { content: ""; position: absolute; inset: 0; border-radius: inherit; mix-blend-mode: screen; opacity: 0.5;
+  background: radial-gradient(42% 42% at 32% 30%, rgba(255, 255, 255, 0.55), transparent 70%); }
+.jl__glow { width: clamp(220px, 46vw, 300px); aspect-ratio: 1; border-radius: 50%; filter: blur(50px);
+  background: radial-gradient(60% 60% at 34% 40%, var(--neelam, #2747d8), transparent 70%),
+              radial-gradient(60% 60% at 66% 62%, var(--sindoor, #ea5420), transparent 70%);
+  animation: jl-glow 3.4s ease-in-out infinite; }
+
 @keyframes jl-spin { to { transform: rotate(360deg); } }
-@keyframes jl-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes jl-breathe { 0%, 100% { transform: scale(0.97); } 50% { transform: scale(1); } }
+@keyframes jl-glow { 0%, 100% { opacity: 0.14; transform: scale(0.94); } 50% { opacity: 0.26; transform: scale(1.04); } }
+
 .jaali.dark .jl, .jl.jl--dark { background: #0b0e1a; }
-.jaali.dark .jl__mandala { stroke: #f3ede1; }
-.jaali.dark .jl__lattice { stroke: #7f9bff; }
-@media (prefers-reduced-motion: reduce) { .jl__mandala, .jl__lattice circle, .jl__label { animation: none; } .jl__lattice circle { stroke-dashoffset: 0; opacity: 0.5; } }
+.jaali.dark .jl__glow { opacity: 0.34; }
+@media (prefers-reduced-motion: reduce) { .jl__mark, .jl__mark i, .jl__glow { animation: none; } }
 
 /* ---- starter quote templates ---- */
 .tpl-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
