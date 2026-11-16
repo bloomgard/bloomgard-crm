@@ -88,7 +88,7 @@ test.describe('Bloomgard AI home', () => {
     const qn = (await first.locator('.font-mono').innerText()).trim();
     await first.click();
     await expect(page.getByText(qn).first()).toBeVisible();
-    await expect(page.getByText('Manifest Audit Log')).toBeVisible();
+    await expect(page.locator('[data-log-module="Status Log"]')).toBeVisible();
   });
 
   test('Ctrl+K focuses the command bar from anywhere on the page', async ({ page }) => {

@@ -73,7 +73,7 @@ export const clientName = (q: any) =>
  * sections exist and which field holds the amount; select just those parts as JSON paths.
  */
 type LogDef = { title: string; fields: Array<{ name: string; label: string; type: string; options?: string }> };
-type MetaPlan = { money: Array<[string, string]>; sections: string[]; logs: LogDef[] };
+type MetaPlan = { money: Array<[string, string]>; sections: string[]; logs: LogDef[]; statuses: string[] };
 const planCache = new Map<string, { at: number; plan: MetaPlan }>();
 const safeKey = (k: string) => String(k).replace(/["\\]/g, '');
 
@@ -86,16 +86,29 @@ export async function metaPlan(tenantId: string): Promise<MetaPlan> {
   const money: Array<[string, string]> = [];
   const keep: string[] = [];
   const logs: LogDef[] = sections.filter((x: any) => x.is_log).map((x: any) => ({ title: x.title, fields: x.fields || [] }));
+  /*
+   * The pipeline is the workspace's own, never a fixed list. It is the Master Status options plus every
+   * stage actually sitting on a quote — workspaces that imported their history have stages nobody typed
+   * into the form, and refusing to move a quote to one of its own stages would be nonsense.
+   */
+  const statuses: string[] = [];
+  const add = (s: string) => { const v = String(s || '').trim(); if (v && !statuses.some((x) => x.toLowerCase() === v.toLowerCase())) statuses.push(v); };
   for (const sec of sections) {
     const fields = sec.fields || [];
     const heavy = /attach|file|document|image|logo/i.test(sec.title) || fields.some((f: any) => /attach|file|image/i.test(String(f.type || '')));
     if (!heavy) keep.push(sec.title);
-    for (const f of fields) if (MONEY_KEYS.includes(norm(f.name))) money.push([sec.title, f.name]);
+    for (const f of fields) {
+      if (MONEY_KEYS.includes(norm(f.name))) money.push([sec.title, f.name]);
+      if (f.type === 'master_status') String(f.options || '').split(',').forEach(add);
+    }
   }
+  const { data: inUse } = await db.from('quotations').select('status').eq('tenant_id', tenantId);
+  (inUse || []).forEach((q: any) => add(q.status));
   const plan: MetaPlan = {
     money: money.length ? money : [['Quote Details', 'subtotal']],
     sections: keep.length ? keep : ['Client Information', 'Quote Details', 'Products'],
     logs,
+    statuses: statuses.length ? statuses : ['Lead', 'Inquiry', 'Draft', 'Pending', 'Approved', 'Rejected', 'Lost'],
   };
   planCache.set(tenantId, { at: Date.now(), plan });
   return plan;
@@ -246,6 +259,7 @@ export async function buildOverview(ctx: AgentCtx) {
       total: quotes.length, totalValue: Math.round(totalValue), byStatus, valueByStatus,
       mine: mine.length, myValue: Math.round(myValue), weeks,
     },
+    stages: plan.statuses,   // this workspace's own pipeline, the only valid values for a status change
     inbox: { unread: unread || 0, waiting },
     followups: temps,
     latest,

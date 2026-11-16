@@ -41,8 +41,10 @@ A quote moves through a status pipeline. The statuses used by the product are:
 | **Rejected** | Declined. |
 | **Lost** | Deal lost. Approved and Lost quotes never appear in Follow ups. |
 
-Every change is recorded in the **Manifest Audit Log** (who moved it and when), shown on
-the quote.
+Every change is recorded in the **Status Log** on the quote: who moved it, when, from what to
+what, and any note. It is a log module like the ones you configure yourself — filter it by
+status, and use **Add entry** to move the quote and write the reason in one step — except that
+every workspace has it from the start and it cannot be renamed or removed.
 
 ## Reviewing a quote
 

@@ -35,7 +35,7 @@ export default function LogModule({ section, entries, statuses, onAdd, readOnly 
 
   const submit = async () => {
     const values: Record<string, any> = {};
-    fields.forEach((f) => { if (f.type !== "logged_in" && draft[f.name] != null && String(draft[f.name]).trim() !== "") values[f.name] = draft[f.name]; });
+    fields.forEach((f) => { if (f.type !== "logged_in" && !f.derived && draft[f.name] != null && String(draft[f.name]).trim() !== "") values[f.name] = draft[f.name]; });
     if (Object.keys(values).length === 0) { setError("Fill in at least one field."); return; }
     setSaving(true); setError("");
     try { await onAdd(values); setDraft({}); setAdding(false); }
@@ -65,7 +65,7 @@ export default function LogModule({ section, entries, statuses, onAdd, readOnly 
         {adding && (
           <div className="log-add">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {fields.filter((f) => f.type !== "logged_in").map((f) => (
+              {fields.filter((f) => f.type !== "logged_in" && !f.derived).map((f) => (
                 <label key={f.name} className={`flex flex-col gap-1 ${f.type === "paragraph" ? "sm:col-span-2 lg:col-span-3" : ""}`}>
                   <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{f.label}</span>
                   {FILTERABLE.has(f.type) ? (

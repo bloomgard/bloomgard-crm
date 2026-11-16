@@ -12,6 +12,7 @@ import BrandLockup from '@/components/BrandLockup';
 import AgentHome from '@/components/AgentHome';
 import FieldConfigurator from '@/components/FieldConfigurator';
 import LogModule from '@/components/LogModule';
+import { STATUS_LOG_TITLE, statusLogEntries, statusLogModule } from '@/lib/statusLog';
 import EmailDomainSetup from '@/components/EmailDomainSetup';
 import JaaliLoader from '@/components/JaaliLoader';
 import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
@@ -264,6 +265,43 @@ export default function ClientDashboard() {
     }
   };
 
+  /** Master Status fields on ordinary modules mirror the quote's status, so keep them in step. */
+  const statusIntoMetadata = (rec: any, newStatus: string) => {
+    const meta = { ...(rec?.custom_metadata || {}) };
+    blueprint.forEach((sec: any) => (sec.fields || []).forEach((f: any) => {
+      if (f.type === 'master_status' && meta[sec.title] && !Array.isArray(meta[sec.title])) meta[sec.title][f.name] = newStatus;
+    }));
+    return meta;
+  };
+
+  /**
+   * An entry in the built-in Status Log. Unlike the configurable log modules it is kept in `status_logs`,
+   * because moving the quote's status is what creates it; the note is the user's own, nothing generated.
+   */
+  const addStatusLogEntry = async (rec: any, values: Record<string, any>) => {
+    const status = String(values.status || '').trim();
+    const note = String(values.note || '').trim();
+    if (!status) throw new Error('Choose a status.');
+    const { data: fresh, error: readErr } = await supabase.from('quotations').select('status, custom_metadata').eq('id', rec.id).single();
+    if (readErr) throw readErr;
+    const old = fresh?.status || null;
+    const { data: row, error } = await supabase.from('status_logs')
+      .insert([{ quotation_id: rec.id, old_status: old, new_status: status, changed_by: user?.email || null, comments: note || null }])
+      .select().single();
+    if (error) throw error;
+    let meta: any = null;
+    if (status !== old) {
+      meta = statusIntoMetadata({ custom_metadata: fresh?.custom_metadata }, status);
+      const { error: upErr } = await supabase.from('quotations')
+        .update({ status, custom_metadata: meta, last_contact_date: new Date().toISOString() }).eq('id', rec.id);
+      if (upErr) throw upErr;
+    }
+    setSelectedRecord((p: any) => (p && p.id === rec.id
+      ? { ...p, ...(meta ? { status, custom_metadata: meta } : {}), status_logs: [...(p.status_logs || []), row] }
+      : p));
+    if (tenantId) fetchRecords(tenantId);
+  };
+
   /** Append an entry to a log module on a quote. A Master Status field in the entry also moves the quote's status. */
   const addLogEntry = async (rec: any, section: any, values: Record<string, any>) => {
     const entry = { ...values, _at: new Date().toISOString(), _by: user?.email || "" };
@@ -278,7 +316,7 @@ export default function ClientDashboard() {
     const { error } = await supabase.from("quotations").update(patch).eq("id", rec.id);
     if (error) throw error;
     if (patch.status) {
-      await supabase.from("status_logs").insert([{ quotation_id: rec.id, old_status: fresh?.status || null, new_status: newStatus, comments: `Logged in ${section.title} by ${user?.email}` }]);
+      await supabase.from("status_logs").insert([{ quotation_id: rec.id, old_status: fresh?.status || null, new_status: newStatus, changed_by: user?.email || null, comments: `Logged in ${section.title}` }]);
     }
     setSelectedRecord((prev: any) => (prev && prev.id === rec.id ? { ...prev, custom_metadata: meta, ...(patch.status ? { status: patch.status } : {}) } : prev));
     if (tenantId) fetchRecords(tenantId);
@@ -728,6 +766,7 @@ export default function ClientDashboard() {
   };
 
   const allStatuses = extractMasterStatuses();
+  const statusLogSection = statusLogModule(allStatuses as string[]);
 
   useEffect(() => {
     if (!statusFilter && allStatuses.length > 0) {
@@ -1097,16 +1136,10 @@ export default function ClientDashboard() {
       quotation_id: id,
       old_status: oldStatus,
       new_status: newStatus,
-      comments: `Status updated by ${user?.email}`
+      changed_by: user?.email || null,
+      comments: null
     }]).select().single();
-    let updatedMetadata = { ...(targetRec.custom_metadata || {}) };
-    blueprint.forEach(sec => {
-      sec.fields.forEach(f => {
-        if (f.type === 'master_status' && updatedMetadata[sec.title] && !Array.isArray(updatedMetadata[sec.title])) {
-          updatedMetadata[sec.title][f.name] = newStatus;
-        }
-      });
-    });
+    let updatedMetadata = statusIntoMetadata(targetRec, newStatus);
 
     // Convert AI Parsed Items to actual Quotation Items when promoting a Lead
     if (oldStatus === 'Lead' && newStatus === 'Draft' && targetRec.custom_metadata?.ai_parsed_items?.length > 0) {
@@ -2192,6 +2225,7 @@ Command: ${dashCommand}`;
                 saving={blueprintSaving}
                 dirty={JSON.stringify(blueprint) !== blueprintSaved}
                 statuses={allStatuses}
+                builtins={[statusLogSection]}
               />
             )}
 
@@ -3618,6 +3652,13 @@ Command: ${dashCommand}`;
               </div>
             </div>
 
+            <LogModule
+              section={statusLogSection}
+              entries={statusLogEntries(selectedRecord?.status_logs || extractArray(selectedRecord, "status_logs") || extractArray(selectedRecord, "status logs"))}
+              statuses={allStatuses}
+              onAdd={(values) => addStatusLogEntry(selectedRecord, values)}
+            />
+
             {blueprint.filter(s => s.is_log).map(sec => (
               <LogModule
                 key={sec.title}
@@ -3627,60 +3668,6 @@ Command: ${dashCommand}`;
                 onAdd={(values) => addLogEntry(selectedRecord, sec, values)}
               />
             ))}
-
-            <div className="mb-8">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3 px-2">Manifest Audit Log</h4>
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left border-collapse">
-                    <thead className="bg-gray-50 border-b border-gray-100">
-                      <tr>
-                        <th className="px-4 py-2.5 text-[9px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">Date & Time</th>
-                        <th className="px-4 py-2.5 text-[9px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">Agent</th>
-                        <th className="px-4 py-2.5 text-[9px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">Transition</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {(() => {
-                        const logs = selectedRecord?.status_logs || extractArray(selectedRecord, "status_logs") || extractArray(selectedRecord, "status logs");
-
-                        if (!logs || logs.length === 0) {
-                          return <tr><td colSpan={3} className="px-4 py-4 text-[10px] text-gray-400 text-center font-medium">No status history found.</td></tr>;
-                        }
-
-                        return [...logs].reverse().map((log, lIdx) => {
-                          let agent = "-";
-                          let comment = log.comments || "";
-
-                          if (comment.includes("by ")) {
-                            const parts = comment.split("by ");
-                            agent = parts[1];
-                          } else if (log.created_by) {
-                            agent = log.created_by;
-                          }
-
-                          return (
-                            <tr key={lIdx} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="px-4 py-3 text-[10px] text-gray-600 whitespace-nowrap">
-                                {log.created_at ? new Date(log.created_at).toLocaleString() : new Date().toLocaleString()}
-                              </td>
-                              <td className="px-4 py-3 text-[10px] font-bold text-gray-900 whitespace-nowrap">
-                                {agent}
-                              </td>
-                              <td className="px-4 py-3 text-[10px] text-gray-600 whitespace-nowrap">
-                                <span className="text-gray-400 strike-through line-through mr-1">{log.old_status || 'Start'}</span>
-                                →
-                                <span className="font-bold text-indigo-600 ml-1">{log.new_status}</span>
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
 
             <div className="space-y-8">
               {selectedRecord.status === 'Lead' && (

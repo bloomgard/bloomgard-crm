@@ -30,7 +30,7 @@ test.describe.serial('Log modules', () => {
     await openApp(page);
     await openSetting(page, 'Field Configurator');
     await expect(page.getByText('All changes saved')).toBeVisible();
-    for (const t of ['Action log', 'Status log']) {
+    for (const t of ['Action log', 'Stage log']) {
       await page.getByRole('button', { name: 'Add module' }).click();
       await page.getByRole('button', { name: new RegExp(`^${t}`) }).click();
     }
@@ -40,10 +40,12 @@ test.describe.serial('Log modules', () => {
 
     const after = await schema();
     const action = after.find((s: any) => s.title === 'Action Log');
-    const status = after.find((s: any) => s.title === 'Status Log');
+    const stage = after.find((s: any) => s.title === 'Stage Log');
     expect(action?.is_log).toBe(true);
-    expect(status?.is_log).toBe(true);
-    expect(status.fields.find((f: any) => f.name === 'status').type).toBe('master_status');
+    expect(stage?.is_log).toBe(true);
+    expect(stage.fields.find((f: any) => f.name === 'stage').type).toBe('master_status');
+    // "Status Log" is the built-in one, so it is never saved as a module of its own
+    expect(after.some((s: any) => String(s.title).toLowerCase() === 'status log')).toBe(false);
     expect(after.filter((s: any) => s.is_ai_settings || s.is_agent_config || s.is_branding).length).toBe(specialBefore);
   });
 
@@ -77,20 +79,62 @@ test.describe.serial('Log modules', () => {
     expect(meta['Action Log'][0]._at).toBeTruthy();
   });
 
-  test('a Status log entry moves the quote status and writes the status history', async ({ page }) => {
+  test('a Stage log entry moves the quote status and writes the status history', async ({ page }) => {
     await openApp(page);
     await go(page, 'Quotes');
     await page.getByText(q.qn, { exact: true }).first().click();
-    const log = page.locator('[data-log-module="Status Log"]');
+    const log = page.locator('[data-log-module="Stage Log"]');
     await log.getByRole('button', { name: 'Add entry' }).click();
     const addRow = log.locator('.log-add');
-    await addRow.locator('label', { hasText: 'Status' }).locator('select').selectOption('Approved');
+    await addRow.locator('label', { hasText: 'Stage' }).locator('select').selectOption('Approved');
     await addRow.locator('label', { hasText: 'Remark' }).locator('textarea').fill('PO received by email');
-    await addRow.getByRole('button', { name: /Add to Status Log/ }).click();
+    await addRow.getByRole('button', { name: /Add to Stage Log/ }).click();
     await expect(log.locator('tbody tr')).toHaveCount(1);
     await expect.poll(async () => (await admin().from('quotations').select('status').eq('id', q.id).single()).data!.status).toBe('Approved');
     const { data: hist } = await admin().from('status_logs').select('old_status, new_status').eq('quotation_id', q.id);
     expect(hist).toContainEqual({ old_status: 'Inquiry', new_status: 'Approved' });
+  });
+
+  test('the built-in Status Log is always there, shows the history and takes a note of its own', async ({ page }) => {
+    await openApp(page);
+    await go(page, 'Quotes');
+    await page.getByText(q.qn, { exact: true }).first().click();
+    const log = page.locator('[data-log-module="Status Log"]');
+    await expect(log).toBeVisible();
+    await expect(log).toContainText('Approved');                  // the move the Stage log made is in here
+
+    await log.getByRole('button', { name: 'Add entry' }).click();
+    const addRow = log.locator('.log-add');
+    await expect(addRow.locator('label', { hasText: 'From' })).toHaveCount(0);   // derived: a column, never an input
+    await addRow.locator('label', { hasText: 'Status' }).locator('select').selectOption('Lost');
+    await addRow.locator('label', { hasText: 'Note' }).locator('input').fill(`Lost on price ${tag}`);
+    await addRow.getByRole('button', { name: /Add to Status Log/ }).click();
+
+    await expect(log).toContainText(`Lost on price ${tag}`);
+    await expect.poll(async () => (await admin().from('quotations').select('status').eq('id', q.id).single()).data!.status).toBe('Lost');
+    const { data: hist } = await admin().from('status_logs')
+      .select('old_status, new_status, changed_by, comments').eq('quotation_id', q.id).eq('new_status', 'Lost').single();
+    expect(hist).toMatchObject({ old_status: 'Approved', new_status: 'Lost', changed_by: actor.email, comments: `Lost on price ${tag}` });
+  });
+
+  test('the Field Configurator shows the Status Log as built in and refuses a second one', async ({ page }) => {
+    await openApp(page);
+    await openSetting(page, 'Field Configurator');
+    const builtin = page.locator('.fc-mod--builtin');
+    await expect(builtin).toContainText('Status Log');
+    await expect(builtin).toContainText('Built in');
+    await expect(builtin.getByRole('button', { name: 'Delete module' })).toHaveCount(0);
+
+    // module names are the values of text inputs, which hasText cannot see
+    const names = page.getByLabel('Module name');
+    let mine = names.first();
+    for (let i = 0; i < await names.count(); i++) {
+      if (await names.nth(i).inputValue() === 'Action Log') { mine = names.nth(i); break; }
+    }
+    await mine.fill('Status Log');
+    await expect(page.getByText(/"Status Log" is the built-in log/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    await mine.fill('Action Log');
   });
 
   test('Home has one Status & logs stat: pick a log module, then filter by its dropdowns', async ({ page }) => {

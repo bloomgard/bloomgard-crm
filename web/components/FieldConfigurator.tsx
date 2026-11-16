@@ -2,9 +2,13 @@
 import React, { useMemo, useState } from "react";
 import { AlertTriangle, ChevronDown, GripVertical, HelpCircle, History, Plus, Rows3, Trash2, X } from "lucide-react";
 
-/* A module (section) of the quote form. `is_log` turns it into a timeline of entries kept on each quote. */
-export type Field = { label: string; name: string; type: string; options?: string };
-export type Module = { title: string; fields: Field[]; allow_multiple?: boolean; is_log?: boolean };
+/*
+ * A module (section) of the quote form. `is_log` turns it into a timeline of entries kept on each quote.
+ * `builtin` marks a module the workspace always has (the Status Log): shown, but not editable or deletable.
+ * `derived` marks a field computed from the entry rather than typed into it — a column, never an input.
+ */
+export type Field = { label: string; name: string; type: string; options?: string; derived?: boolean };
+export type Module = { title: string; fields: Field[]; allow_multiple?: boolean; is_log?: boolean; builtin?: boolean };
 
 const TYPES: Array<[string, string]> = [
   ["text", "Text"], ["paragraph", "Paragraph (Long Text)"], ["number", "Number"], ["date", "Date"],
@@ -17,9 +21,9 @@ const slug = (s: string) => String(s || "").trim().toLowerCase().replace(/[^a-z0
 const TEMPLATES = (statuses: string[]): Array<{ id: string; label: string; hint: string; module: Module }> => [
   { id: "blank", label: "Blank module", hint: "Any group of fields", module: { title: "New module", fields: [], allow_multiple: false } },
   {
-    id: "status", label: "Status log", hint: "Each entry moves the quote's status", module: {
-      title: "Status Log", is_log: true, fields: [
-        { label: "Status", name: "status", type: "master_status", options: statuses.join(", ") },
+    id: "stage", label: "Stage log", hint: "Your own stages, each entry moves the quote", module: {
+      title: "Stage Log", is_log: true, fields: [
+        { label: "Stage", name: "stage", type: "master_status", options: statuses.join(", ") },
         { label: "Remark", name: "remark", type: "paragraph" },
       ],
     },
@@ -62,6 +66,7 @@ function validate(bp: Module[]) {
     const t = (m.title || "").trim();
     if (!t) errors.push(`Module ${i + 1} has no name.`);
     else if (titles.has(t.toLowerCase())) errors.push(`Two modules are called "${t}".`);
+    else if (t.toLowerCase() === "status log") errors.push(`"Status Log" is the built-in log every quote already keeps. Give this module another name.`);
     titles.add(t.toLowerCase());
     const keys = new Set<string>();
     (m.fields || []).forEach((f, j) => {
@@ -79,9 +84,10 @@ function validate(bp: Module[]) {
 }
 
 export default function FieldConfigurator({
-  blueprint, setBlueprint, onSave, saving, dirty, statuses,
+  blueprint, setBlueprint, onSave, saving, dirty, statuses, builtins,
 }: {
-  blueprint: Module[]; setBlueprint: (b: Module[]) => void; onSave: () => void; saving: boolean; dirty: boolean; statuses: string[];
+  blueprint: Module[]; setBlueprint: (b: Module[]) => void; onSave: () => void; saving: boolean; dirty: boolean;
+  statuses: string[]; builtins?: Module[];
 }) {
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const [showHelp, setShowHelp] = useState(false);
@@ -111,7 +117,7 @@ export default function FieldConfigurator({
         <div className="fc-help">
           <div>
             <h4>Master Status</h4>
-            <p>A dropdown whose options are your pipeline stages (e.g. <i>Inquiry, Quotation Given, PO Received, Lost</i>). Whatever it is set to <b>becomes the quote's status</b>: the one Quotes, Follow ups, the Home stats and the AI all read. Changing it records a line in the status history. Keep one in the quote form; a <b>Status log</b> module can also hold one, so every logged entry moves the status.</p>
+            <p>A dropdown whose options are your pipeline stages (e.g. <i>Inquiry, Quotation Given, PO Received, Lost</i>). Whatever it is set to <b>becomes the quote's status</b>: the one Quotes, Follow ups, the Home stats and the AI all read. Changing it records a line in the built-in <b>Status Log</b> above. Keep one in the quote form; any log module can also hold one, so every entry it records moves the status too.</p>
           </div>
           <div>
             <h4>Log modules</h4>
@@ -132,6 +138,30 @@ export default function FieldConfigurator({
       )}
 
       <div className="space-y-4">
+        {(builtins || []).map((m) => (
+          <section key={m.title} className="fc-mod fc-mod--log fc-mod--builtin">
+            <header className="fc-mod__head">
+              <History className="w-4 h-4 text-[var(--sindoor)] shrink-0" />
+              <span className="fc-title fc-title--static">{m.title}</span>
+              <span className="agent-label shrink-0">{m.fields.length} field{m.fields.length === 1 ? "" : "s"}</span>
+              <span className="fc-tag ml-auto shrink-0">Built in · always on</span>
+            </header>
+            <p className="fc-note">
+              Every workspace has this one, so it is not listed as a module you added. Each quote keeps the history of
+              its status: who moved it, when, from what to what, and any note. Entries are written whenever the status
+              changes — from the quote viewer, from a log module carrying a Master Status, or by the AI. It cannot be
+              renamed or removed.
+            </p>
+            <ul className="fc-builtin">
+              {m.fields.map((f) => (
+                <li key={f.name}>
+                  <b>{f.label}</b>
+                  <span>{f.type === "master_status" ? "Master Status" : f.derived ? "Filled in for you" : "Text"}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
         {blueprint.map((m, mi) => (
           <section
             key={mi} className={`fc-mod ${m.is_log ? "fc-mod--log" : ""} ${dragMod === mi ? "opacity-50" : ""}`}

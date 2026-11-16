@@ -49,14 +49,23 @@ Design the quote form without code. The form is made of **modules** (sections su
 - Drag the handles to reorder modules and fields. Problems such as duplicate keys or a dropdown without options are
   shown before you save, and the save bar stays at the top of the screen. Saving changes only the form: AI settings,
   follow-up agents and branding are kept.
-- **Add module** offers templates: a blank module, a **Status log**, an **Action log** and a **Remark log**.
+- **Add module** offers templates: a blank module, a **Stage log**, an **Action log** and a **Remark log**.
+- The **Status Log** is shown at the top as *built in*. Every workspace has it, so it is not a module you add,
+  rename or delete; see below.
 
 ### Master Status
 
 A dropdown whose options are your pipeline stages (for example *Inquiry, Quotation Given, PO Received, Lost*).
 Whatever it is set to **becomes the quote's status**, the one Quotes, Follow ups, the Home stats and the AI all use.
-Changing it records a line in the quote's status history. Keep one in the quote form. A Status log module can hold one
-too, so every logged entry moves the status.
+Changing it records a line in the quote's built-in **Status Log**. Keep one in the quote form. Any log module can
+hold one too, so every entry it records moves the status as well.
+
+### The built-in Status Log
+
+Every quote keeps a Status Log whether or not anyone configured one: who moved it, when, from what to what, and any
+note. It is written whenever the status changes — from the quote viewer, from a log module carrying a Master Status,
+or by the AI — and it behaves like any other log, with a filter and an **Add entry** row that moves the quote and
+records your reason together. Because it always exists, a module of your own cannot be called "Status Log".
 
 ### Log modules
 
@@ -65,7 +74,7 @@ entry records **who** added it and **when** automatically. Typical logs:
 
 | Log | Fields | Use |
 |---|---|---|
-| Status log | Status (Master Status), Remark | Every entry moves the quote's status. |
+| Stage log | Stage (Master Status), Remark | Your own stages; every entry moves the quote's status. |
 | Action log | Action, Outcome, Next step, Follow-up on | Calls, visits, samples, meetings. |
 | Remark log | Category, Remark | Free notes. |
 

@@ -3,6 +3,7 @@ import { sendEmail } from '@/lib/email';
 import { logEmailSent } from '@/utils/usageLogger';
 import { createWorkspaceUser, ROLES } from '@/lib/users';
 import { loadState, refreshDomain, withDnsChecks, dnsHost, adoptExistingDomain } from '@/lib/emailDomain';
+import { STATUS_LOG_TITLE } from '@/lib/statusLog';
 
 /* ------------------------------------------------------------------ */
 /* Tool schemas (OpenAI function-calling format, via OpenRouter)       */
@@ -73,8 +74,8 @@ export const TOOLS = [
     items: { type: 'array', items: { type: 'object', properties: { item_code: { type: 'string' }, item_name: { type: 'string' }, quantity: { type: 'number' } } } },
     source_email_id: { type: 'string', description: 'Inbound email this quote comes from, if any.' },
   }, ['client_name', 'items']),
-  fn('update_quote_status', 'Prepare a status change on a quote. The user must confirm.', {
-    qn: { type: 'string' }, status: { type: 'string', enum: ['Lead', 'Inquiry', 'Draft', 'Pending', 'Approved', 'Rejected', 'Lost'] }, comment: { type: 'string' },
+  fn('update_quote_status', `Prepare a status change on a quote; this is what writes its ${STATUS_LOG_TITLE}. Put any remark in comment. The user must confirm.`, {
+    qn: { type: 'string' }, status: { type: 'string', description: "One of the workspace's own stages (get_overview lists them)." }, comment: { type: 'string' },
   }, ['qn', 'status']),
   fn('update_master_item', 'Prepare a change to one catalogue item (managers/admins only). The user must confirm.', {
     item_code: { type: 'string' }, field: { type: 'string', enum: ['item_name', 'uom', 'item_rate', 'item_code'] }, new_value: { type: 'string' },
@@ -131,7 +132,6 @@ export const TOOL_LABELS: Record<string, string> = {
 
 const clip = (s: any, n: number) => { const t = String(s ?? ''); return t.length > n ? t.slice(0, n) + '…' : t; };
 const strip = (html: string) => String(html || '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-const STATUSES = ['Lead', 'Inquiry', 'Draft', 'Pending', 'Approved', 'Rejected', 'Lost'];
 
 async function findQuote(ctx: AgentCtx, qn: string) {
   const want = String(qn || '').trim().toLowerCase();
@@ -505,6 +505,7 @@ function applyFormOps(modules: any[], ops: any[]) {
       case 'add_module': {
         const title = String(o.module || '').trim();
         if (!title) throw new Error('A new module needs a name.');
+        if (title.toLowerCase() === STATUS_LOG_TITLE.toLowerCase()) throw new Error(`Every workspace already has a built-in ${STATUS_LOG_TITLE} on each quote. Use another name, or just change the quote's status.`);
         if (next.some((x: any) => String(x.title).toLowerCase() === title.toLowerCase())) throw new Error(`A module called "${title}" already exists.`);
         const fields = (o.fields || []).map(makeField);
         if (new Set(fields.map((f: any) => f.name)).size !== fields.length) throw new Error(`Two fields in "${title}" have the same key.`);
@@ -609,14 +610,17 @@ async function prepare(name: string, a: any, ctx: AgentCtx): Promise<ToolOutput>
         break;
       }
       case 'update_quote_status': {
-        if (!STATUSES.includes(a.status)) throw new Error(`Status must be one of ${STATUSES.join(', ')}.`);
+        // the pipeline is the workspace's own, so match its stages rather than a fixed list
+        const stages = (await metaPlan(ctx.tenantId)).statuses;
+        const status = stages.find((s) => s.toLowerCase() === String(a.status || '').trim().toLowerCase());
+        if (!status) throw new Error(`"${a.status}" is not one of this workspace's stages. They are: ${stages.join(', ')}.`);
         const q = await findQuote(ctx, a.qn);
         if (!q) throw new Error(`No quote "${a.qn}" that you can access.`);
         action = {
           kind: 'update_quote_status', title: 'Change quote status', risk: 'internal',
-          summary: `${q.qn_number}: ${q.status} → ${a.status}`,
-          details: [['Quote', q.qn_number], ['Client', clientName(q) || '—'], ['Status', `${q.status} → ${a.status}`], ...(a.comment ? [['Note', a.comment]] : [])],
-          payload: { qn: q.qn_number, status: a.status, comment: a.comment || '' },
+          summary: `${q.qn_number}: ${q.status} → ${status}`,
+          details: [['Quote', q.qn_number], ['Client', clientName(q) || '—'], ['Status', `${q.status} → ${status}`], ...(a.comment ? [['Note', a.comment]] : [])],
+          payload: { qn: q.qn_number, status, comment: a.comment || '' },
         };
         break;
       }
@@ -644,7 +648,12 @@ async function prepare(name: string, a: any, ctx: AgentCtx): Promise<ToolOutput>
       case 'add_log_entry': {
         const plan = await metaPlan(ctx.tenantId);
         const mod = plan.logs.find((l) => l.title.toLowerCase() === String(a.module || '').trim().toLowerCase());
-        if (!mod) throw new Error(`No log module "${a.module}". Log modules: ${plan.logs.map((l) => l.title).join(', ') || 'none yet (turn on "Log?" for a module in Settings > Field Configurator)'}.`);
+        if (!mod) {
+          if (String(a.module || '').trim().toLowerCase() === STATUS_LOG_TITLE.toLowerCase()) {
+            throw new Error(`The ${STATUS_LOG_TITLE} is written by changing the quote's status — use update_quote_status instead, and put any remark in its note.`);
+          }
+          throw new Error(`No log module "${a.module}". Log modules: ${plan.logs.map((l) => l.title).join(', ') || 'none yet (turn on "Log?" for a module in Settings > Field Configurator)'}.`);
+        }
         const q = await findQuote(ctx, a.qn);
         if (!q) throw new Error(`No quote "${a.qn}" that you can access.`);
         const keys = new Set(mod.fields.map((f) => f.name));
@@ -776,8 +785,8 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
     case 'update_quote_status': {
       const q = await findQuote(ctx, p.qn);
       if (!q) throw new Error('Quote not found.');
-      await db.from('quotations').update({ status: p.status }).eq('id', q.id);
-      await db.from('status_logs').insert([{ quotation_id: q.id, old_status: q.status, new_status: p.status, comments: p.comment || 'Changed by Bloomgard AI.' }]);
+      await db.from('quotations').update({ status: p.status, last_contact_date: new Date().toISOString() }).eq('id', q.id);
+      await db.from('status_logs').insert([{ quotation_id: q.id, old_status: q.status, new_status: p.status, changed_by: ctx.email || null, comments: p.comment || null }]);
       return { ok: true, message: `${q.qn_number} is now ${p.status}.`, refresh: ['quotes'] };
     }
     case 'update_master_item': {
@@ -818,7 +827,7 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
       if (statusField && p.values[statusField.name] !== fresh?.status) patch.status = p.values[statusField.name];
       const { error } = await db.from('quotations').update(patch).eq('id', q.id);
       if (error) throw new Error(error.message);
-      if (patch.status) await db.from('status_logs').insert([{ quotation_id: q.id, old_status: fresh?.status || null, new_status: patch.status, comments: `Logged in ${mod.title} by ${ctx.email} via Bloomgard AI` }]);
+      if (patch.status) await db.from('status_logs').insert([{ quotation_id: q.id, old_status: fresh?.status || null, new_status: patch.status, changed_by: ctx.email || null, comments: `Logged in ${mod.title} via Bloomgard AI` }]);
       return { ok: true, message: `Added to ${mod.title} on ${q.qn_number}${patch.status ? `; status is now ${patch.status}` : ''}.`, refresh: ['quotes'] };
     }
     case 'change_form': {
