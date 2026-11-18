@@ -40,8 +40,7 @@ export default function TeamView({ isManager, onOpenQuote }: Props) {
   if (!isManager) {
     return (
       <div className={s.wrap}>
-        <h2 className={s.title}>Team</h2>
-        <p className={s.empty}>Only managers and admins see the team view. Your own tasks are under Tasks.</p>
+        <p className={s.empty}>Only managers and admins see the team view. Your own tasks are on the OK list.</p>
       </div>
     );
   }
@@ -53,8 +52,6 @@ export default function TeamView({ isManager, onOpenQuote }: Props) {
 
   return (
     <div className={s.wrap}>
-      <h2 className={s.title}>Team</h2>
-      <p className={s.lede}>Who is carrying which quotes, what is going quiet, and what everyone did lately.</p>
       {error && <p className={s.error} role="alert">{error}</p>}
 
       <div className={s.grid}>

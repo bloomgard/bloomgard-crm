@@ -213,11 +213,8 @@ export default function TasksView({ isManager, userId, userEmail, onOpenQuote, o
 
   return (
     <div className={s.wrap}>
-      <header className={s.head}>
-        <div>
-          <h2 className={s.title}>Tasks</h2>
-          <p className={s.lede}>Everything waiting on a person. Nothing the AI or a workflow prepares reaches a client or changes a quote until someone approves it here.</p>
-        </div>
+      {/* the page heading ("OK list") is the dashboard's; this row only holds the action */}
+      <header className={s.head} style={{ justifyContent: "flex-end" }}>
         <button type="button" className={s.btn} onClick={() => setAdding((v) => !v)} aria-expanded={adding}>{adding ? "Close" : "New task"}</button>
       </header>
 
