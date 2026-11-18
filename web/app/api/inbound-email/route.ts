@@ -265,6 +265,13 @@ export async function POST(request: Request) {
           }
         }
       }
+
+      // automations and plugins hear about every client email, attached to a quote or not
+      try {
+        const { emit } = await import('@/lib/platform/events');
+        await emit({ type: 'email.received', tenantId: tenant.id, quoteId: quote?.id || null, actorEmail: null,
+          data: { from: clientEmail, subject: subjectLine, qn: quote?.qn_number || null, new_enquiry: !quote } });
+      } catch (err) { console.error('email.received automations failed:', err); }
     });
 
     // Return 200 immediately on success, ensuring Resend doesn't retry

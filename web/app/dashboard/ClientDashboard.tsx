@@ -16,6 +16,15 @@ import { STATUS_LOG_TITLE, mirrorStatusIntoMetadata, statusLogEntries, statusLog
 import EmailDomainSetup from '@/components/EmailDomainSetup';
 import JaaliLoader from '@/components/JaaliLoader';
 import SuggestInput from '@/components/SuggestInput';
+import TasksView from '@/components/platform/TasksView';
+import TeamView from '@/components/platform/TeamView';
+import NotificationBell from '@/components/platform/NotificationBell';
+import QuoteNotes from '@/components/platform/QuoteNotes';
+import PluginsView from '@/components/platform/PluginsView';
+import AutomationsView from '@/components/platform/AutomationsView';
+import StudioView from '@/components/platform/StudioView';
+import { api as platformApi, emitClientEvent } from '@/lib/platform/client';
+import { CheckSquare, UsersRound, Wand2, Workflow, Plug } from 'lucide-react';
 import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
 
 // BULLETPROOF FORMATTER
@@ -95,6 +104,11 @@ const HELP: Record<string, { text: string; href: string }> = {
   'settings:personalization': { text: 'Switch between the light (Kora) and dark (Raat) themes.', href: 'configuration/settings/#personalization' },
   'settings:ai-personality': { text: 'Set tone, English level, how eager the replies sound, and your own instructions. Add routing rules to forward certain mail to a teammate.', href: 'ai/ai-assistant/#ai-settings-managersadmins' },
   'settings:quote-template': { text: 'Set your company name and logo and edit the HTML used for quote PDFs. Use {{field_name}} to insert quote values and {{company_logo}} for your logo.', href: 'configuration/settings/#quote-template' },
+  'settings:automations': { text: 'Rules that run by themselves: when something happens to a quote, check conditions, then act. Anything a client would see waits on the OK list for a person.', href: 'platform/automations/' },
+  'settings:plugins': { text: 'Connect Bloomgard to other tools: a signed webhook, Slack, an inbound API for your website form, and an accounting export.', href: 'platform/plugins/' },
+  tasks: { text: 'Approvals the AI and your automations prepared, and to-dos the team assigned. Approve runs the change exactly as shown; nothing reaches a client without it.', href: 'platform/ok-list/' },
+  team: { text: 'Each person\'s quotes, pipeline value, wins, open tasks and quiet quotes, and a feed of what moved. Managers and admins only.', href: 'platform/team/' },
+  studio: { text: 'Ask Bloomgard AI to build automations, views, skills, form changes and data fixes. Drafts change nothing until applied, and applied changes can be rolled back.', href: 'platform/studio/' },
 };
 
 function DocsLink({ view, sub }: { view: string; sub?: string }) {
@@ -134,7 +148,7 @@ export default function ClientDashboard() {
   const [records, setRecords] = useState([]);
   const [currentView, setCurrentView] = useState("home"); // the AI command centre is the landing view
   useEffect(() => {
-    const names: Record<string, string> = { home: 'Home', pipeline: 'Quotes', inbox: 'Inbox', alerts: 'Follow ups', leadgen: 'Lead Gen', docs: 'Documents', settings: 'Settings', new_entry: 'New quote', agents: 'Agents' };
+    const names: Record<string, string> = { home: 'Home', pipeline: 'Quotes', inbox: 'Inbox', alerts: 'Follow ups', leadgen: 'Lead Gen', docs: 'Documents', settings: 'Settings', new_entry: 'New quote', agents: 'Agents', tasks: 'OK list', team: 'Team', studio: 'Studio' };
     document.title = `${names[currentView] || 'Workspace'} · Bloomgard CMA`;
   }, [currentView]);
   const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint' | 'email'>('menu');
@@ -310,6 +324,7 @@ export default function ClientDashboard() {
       ? { ...p, ...(meta ? { status, custom_metadata: meta } : {}), status_logs: [...(p.status_logs || []), row] }
       : p));
     if (tenantId) fetchRecords(tenantId);
+    if (status !== old) emitClientEvent('quote.status_changed', rec.id, { from: old, to: status });
   };
 
   /** Append an entry to a log module on a quote. A Master Status field in the entry also moves the quote's status. */
@@ -317,12 +332,14 @@ export default function ClientDashboard() {
     const entry = { ...values, _at: new Date().toISOString(), _by: user?.email || "" };
     const { data: fresh, error: readErr } = await supabase.from("quotations").select("custom_metadata, status").eq("id", rec.id).single();
     if (readErr) throw readErr;
-    const meta = { ...(fresh?.custom_metadata || {}) };
-    meta[section.title] = [...(Array.isArray(meta[section.title]) ? meta[section.title] : []), entry];
     const statusField = (section.fields || []).find((f: any) => f.type === "master_status" && values[f.name]);
     const newStatus = statusField ? String(values[statusField.name]) : null;
+    const moves = !!newStatus && newStatus !== fresh?.status;
+    // an entry that moves the status moves every Master Status field in the form with it
+    const meta = moves ? statusIntoMetadata({ custom_metadata: fresh?.custom_metadata }, newStatus) : { ...(fresh?.custom_metadata || {}) };
+    meta[section.title] = [...(Array.isArray(meta[section.title]) ? meta[section.title] : []), entry];
     const patch: any = { custom_metadata: meta, last_contact_date: new Date().toISOString() };
-    if (newStatus && newStatus !== fresh?.status) patch.status = newStatus;
+    if (moves) patch.status = newStatus;
     const { error } = await supabase.from("quotations").update(patch).eq("id", rec.id);
     if (error) throw error;
     if (patch.status) {
@@ -330,6 +347,8 @@ export default function ClientDashboard() {
     }
     setSelectedRecord((prev: any) => (prev && prev.id === rec.id ? { ...prev, custom_metadata: meta, ...(patch.status ? { status: patch.status } : {}) } : prev));
     if (tenantId) fetchRecords(tenantId);
+    emitClientEvent('log.added', rec.id, { module: section.title, entry: values });
+    if (patch.status) emitClientEvent('quote.status_changed', rec.id, { from: fresh?.status || null, to: patch.status });
   };
 
   const handleQuoteReply = async (quote: any) => {
@@ -915,6 +934,26 @@ export default function ClientDashboard() {
 
   const [prefillNote, setPrefillNote] = useState<null | { client: string; qn: string; count: number; before: any }>(null);
 
+  // ── Platform: the OK list badge, requests handed to the AI, saved quote views ──
+  const [taskCounts, setTaskCounts] = useState<{ approvals: number; todos: number }>({ approvals: 0, todos: 0 });
+  const [pendingAsk, setPendingAsk] = useState('');
+  const [savedViews, setSavedViews] = useState<any[]>([]);
+  const [activeViewId, setActiveViewId] = useState('');
+  const loadTaskCounts = async () => {
+    try { const r = await platformApi('/api/tasks?status=open&scope=mine'); setTaskCounts({ approvals: r.counts?.approvals || 0, todos: r.counts?.todos || 0 }); } catch { /* badge is optional */ }
+  };
+  const loadSavedViews = async () => {
+    try { const r = await platformApi('/api/views'); setSavedViews(r.items || []); } catch { setSavedViews([]); }
+  };
+  useEffect(() => {
+    if (!tenantId) return;
+    loadTaskCounts(); loadSavedViews();
+    const t = setInterval(loadTaskCounts, 60_000);
+    return () => clearInterval(t);
+  }, [tenantId]);
+  /** Hand a request to Bloomgard AI on Home, as if it had been typed there. */
+  const askAI = (prompt: string) => { setPendingAsk(prompt); setCurrentView('home'); };
+
   const prefillFromClient = (sectionTitle: string, fieldName: string, clientName: string) => {
     if (editingId) return; // revising a quote: never overwrite what it already says
     const rec = latestByClient.get(String(clientName || '').trim().toLowerCase());
@@ -1090,6 +1129,14 @@ export default function ClientDashboard() {
       if (items.length) await supabase.from('quotation_items').insert(items);
       if (atts.length) await supabase.from('quotation_attachments').insert(atts);
 
+      // automations and plugins: a new quote, an edited one, and a status the form moved
+      const before = editingId ? records.find(r => r.id === editingId) : null;
+      emitClientEvent(editingId ? 'quote.updated' : 'quote.created', quoteId, { qn: finalQn });
+      if (before && before.status !== masterStatusValue) {
+        await supabase.from('status_logs').insert([{ quotation_id: quoteId, old_status: before.status, new_status: masterStatusValue, changed_by: user?.email || null, comments: 'Changed in the quote form' }]);
+        emitClientEvent('quote.status_changed', quoteId, { from: before.status, to: masterStatusValue });
+      }
+
       setEditingId(null);
       alert(`Successfully saved ${finalQn}!`);
       setCurrentView("pipeline");
@@ -1252,20 +1299,14 @@ export default function ClientDashboard() {
     }]).select().single();
     let updatedMetadata = statusIntoMetadata(targetRec, newStatus);
 
-    // Convert AI Parsed Items to actual Quotation Items when promoting a Lead
-    if (oldStatus === 'Lead' && newStatus === 'Draft' && targetRec.custom_metadata?.ai_parsed_items?.length > 0) {
-      const parsedItems = targetRec.custom_metadata.ai_parsed_items.map(ai => ({
-        quotation_id: id,
-        tenant_id: tenantId,
-        item_name: ai.item_name,
-        quantity: ai.quantity || 1,
-        hsn_code: '',
-        unit_price: ai.unit_price || 0,
-        amount: (ai.quantity || 1) * (ai.unit_price || 0),
-        tax_rate: 0,
-        total_amount: (ai.quantity || 1) * (ai.unit_price || 0),
-      }));
-      await supabase.from("quotation_items").insert(parsedItems);
+    // Promoting a Lead to any stage turns its AI-parsed items into real line items
+    if (oldStatus === 'Lead' && newStatus !== 'Lead' && targetRec.custom_metadata?.ai_parsed_items?.length > 0) {
+      const parsedItems = targetRec.custom_metadata.ai_parsed_items.map((ai, i) => {
+        const qty = Number(ai.quantity) || 1, rate = Number(ai.unit_price ?? ai.item_rate) || 0;
+        return { quotation_id: id, tenant_id: tenantId, display_order: i, item_name: ai.item_name || `Item ${i + 1}`, item_code: ai.item_code || '', quantity: qty, uom: ai.uom || '', item_rate: rate, item_br: qty * rate, custom_metadata: ai };
+      });
+      const { error: itemErr } = await supabase.from("quotation_items").insert(parsedItems);
+      if (itemErr) console.error("Lead items:", itemErr);
     }
 
     // Save both the root status and the synchronized metadata back to the database
@@ -1282,6 +1323,7 @@ export default function ClientDashboard() {
       status_logs: p.status_logs ? [...p.status_logs, newLog] : [newLog]
     }) : null);
     await fetchRecords(tenantId);
+    if (oldStatus !== newStatus) emitClientEvent('quote.status_changed', id, { from: oldStatus, to: newStatus });
   };
 
   const handleLogout = async () => {
@@ -1309,13 +1351,55 @@ export default function ClientDashboard() {
 
   const COLORS = ["#1F2937", "#4F46E5", "#10B981", "#F59E0B", "#EF4444"];
   const perfData = Object.entries(visibleRecords.reduce((acc, curr) => { const n = (curr.created_by_email || "").includes('@') ? curr.created_by_email.split('@')[0] : "Agent"; acc[n] = (acc[n] || 0) + 1; return acc; }, {})).map(([name, value]) => ({ name, value: Number(value) }));
+  /** A quote's value as a number: its subtotal, or what its line items add up to. */
+  const amountOf = (r: any) => {
+    const v = extractValue(r, 'subtotal', 'Quote Details');
+    const n = parseFloat(String(v ?? '').replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(n) && n > 0 ? n : (itemsTotal(r) || 0);
+  };
+  const quietDays = (r: any) => {
+    const last = r.last_contact_date || r.date || r.created_at;
+    return last ? (Date.now() - new Date(last).getTime()) / 86400000 : 0;
+  };
+  const activeView = currentView === 'pipeline' ? savedViews.find((v) => v.id === activeViewId) : null;
+  /** A saved view's filters: statuses, owner ("me"), client name, amount range, days quiet. */
+  const inView = (r: any) => {
+    const f = activeView?.filters;
+    if (!f) return true;
+    if (f.statuses?.length && !f.statuses.map((x: string) => x.toLowerCase()).includes(String(r.status || '').toLowerCase())) return false;
+    if (f.created_by) { const who = f.created_by === 'me' ? user?.email : f.created_by; if (String(r.created_by_email || '').toLowerCase() !== String(who || '').toLowerCase()) return false; }
+    if (f.client_contains && !String(extractValue(r, 'client_name', 'Client Information') || r.clients?.company_name || '').toLowerCase().includes(String(f.client_contains).toLowerCase())) return false;
+    if (f.min_amount != null && amountOf(r) < Number(f.min_amount)) return false;
+    if (f.max_amount != null && amountOf(r) > Number(f.max_amount)) return false;
+    if (f.quiet_days != null && quietDays(r) < Number(f.quiet_days)) return false;
+    return true;
+  };
+  const sortKey = activeView?.sort ? ({ date: 'date', amount: 'subtotal', quiet: 'quiet' } as any)[activeView.sort.key] : sortConfig.key;
+  const sortDir = activeView?.sort ? activeView.sort.dir : sortConfig.direction;
   const sortedRecords = [...visibleRecords]
+    .filter(inView)
     .filter(r => JSON.stringify(r).toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => {
-      const av = a[sortConfig.key] || extractValue(a, sortConfig.key) || "";
-      const bv = b[sortConfig.key] || extractValue(b, sortConfig.key) || "";
-      return sortConfig.direction === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+      // numbers compare as numbers: ₹90,000 is less than ₹1,69,000
+      let av: any, bv: any;
+      if (sortKey === 'subtotal') { av = amountOf(a); bv = amountOf(b); }
+      else if (sortKey === 'quiet') { av = quietDays(a); bv = quietDays(b); }
+      else { av = a[sortKey] || extractValue(a, sortKey) || ""; bv = b[sortKey] || extractValue(b, sortKey) || ""; }
+      if (av === bv) return 0;
+      return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
+
+  /** Save the Quotes list as it is filtered now (statuses, search) as a view of your own. */
+  const saveCurrentAsView = async () => {
+    const name = prompt('Name this view (for example "My open quotes"):');
+    if (!name?.trim()) return;
+    try {
+      const filters: any = { ...(activeView?.filters || {}) };
+      if (searchTerm.trim()) filters.client_contains = searchTerm.trim();
+      const r = await platformApi('/api/views', { json: { name: name.trim(), data: { filters, sort: sortConfig.key === 'subtotal' ? { key: 'amount', dir: sortConfig.direction } : undefined, shared: false } } });
+      await loadSavedViews(); setActiveViewId(r.id);
+    } catch (e: any) { alert(e.message); }
+  };
 
   const handleSendChatAI = async (overrideMsg = null) => {
     const msg = typeof overrideMsg === 'string' ? overrideMsg : currentInput;
@@ -1845,12 +1929,18 @@ Command: ${dashCommand}`;
             ['pipeline', <div key='pipeline' className='flex items-center gap-2'><Rocket className='w-4 h-4' /> Quotes</div>],
             ['inbox', <div key='inbox' className='flex items-center gap-2'><Inbox className='w-4 h-4' /> Inbox</div>],
             ['alerts', <div key='alerts' className='flex items-center gap-2'><Bell className='w-4 h-4' /> Follow ups</div>],
+            ['tasks', <div key='tasks' className='flex items-center gap-2'><CheckSquare className='w-4 h-4' /> OK list</div>],
             ['leadgen', <div key='leadgen' className='flex items-center gap-2'><Magnet className='w-4 h-4' /> Lead Gen</div>],
             ['docs', <div key='docs' className='flex items-center gap-2'><FileText className='w-4 h-4' /> Docs</div>],
+            ...(isManager ? [['team', <div key='team' className='flex items-center gap-2'><UsersRound className='w-4 h-4' /> Team</div>]] : []),
+            ['studio', <div key='studio' className='flex items-center gap-2'><Wand2 className='w-4 h-4' /> Studio</div>],
             ['settings', <div key='settings' className='flex items-center gap-2'><Settings className='w-4 h-4' /> Settings</div>]
           ].map(([v, label]) => (
             <div key={v} onClick={() => { setCurrentView(v); setIsMobileMenuOpen(false); }} className={`flex items-center justify-between pl-3 pr-4 py-2.5 rounded-md cursor-pointer transition-colors font-semibold text-sm border-l-2 ${currentView === v ? 'bg-gray-100 text-gray-900 border-[var(--sindoor)]' : 'text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900'}`}>
               <span>{label}</span>
+              {v === 'tasks' && taskCounts.approvals + taskCounts.todos > 0 && (
+                <span className="nav-count" aria-label={`${taskCounts.approvals} approvals and ${taskCounts.todos} to-dos open`}>{taskCounts.approvals + taskCounts.todos}</span>
+              )}
             </div>
           ))}
           {/* The old standalone 'Bloomgard AI' link is gone: Home is the assistant now. */}
@@ -1858,10 +1948,23 @@ Command: ${dashCommand}`;
         <div className="p-4 border-t border-gray-200 space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center text-gray-700 text-xs font-bold uppercase border border-gray-300">{user?.email?.charAt(0) || 'O'}</div>
-            <div className="overflow-hidden">
+            <div className="overflow-hidden flex-1">
               <p className="text-[11px] font-semibold truncate text-gray-900 dark:text-gray-900">{user?.email || 'Operator'}</p>
               <p className="text-[9px] text-gray-500 uppercase font-medium tracking-widest mt-0.5">{user?.role || "Operator"}</p>
             </div>
+            {tenantId && (
+              <NotificationBell onNavigate={(link) => {
+                setIsMobileMenuOpen(false);
+                if (link.quote_id) {
+                  const rec = records.find((r: any) => r.id === link.quote_id);
+                  setCurrentView(link.view === 'pipeline' || !link.view ? 'pipeline' : link.view);
+                  if (rec) setSelectedRecord(rec);
+                  return;
+                }
+                if (link.sub) { setSettingsSubView(link.sub); setCurrentView('settings'); return; }
+                setCurrentView(link.view || 'home');
+              }} />
+            )}
           </div>
           <button onClick={handleLogout} className="w-full py-2.5 rounded-lg bg-red-50 text-red-600 text-[11px] font-bold uppercase tracking-wider border border-red-200 hover:bg-red-100 transition-all shadow-sm active:scale-95">Sign Out</button>
         </div>
@@ -1889,6 +1992,9 @@ Command: ${dashCommand}`;
           <AgentHome
             userEmail={user?.email || ''}
             docsLink={<DocsLink view="home" />}
+            initialPrompt={pendingAsk}
+            onInitialPromptUsed={() => setPendingAsk('')}
+            onOpenStudio={() => setCurrentView('studio')}
             onNewQuote={() => {
               setEditingId(null);
               setQn("");
@@ -1903,6 +2009,7 @@ Command: ${dashCommand}`;
             onChanged={async (kinds: string[]) => {
               if (tenantId) fetchRecords(tenantId);
               fetchInboxLogs();
+              loadTaskCounts(); loadSavedViews();
               if (kinds.includes('form') && tenantId) {
                 // the AI changed the quote form: load it again so every screen uses the new modules
                 const { data } = await supabase.from('tenant_schemas').select('schema_config').eq('tenant_id', tenantId).maybeSingle();
@@ -1911,6 +2018,51 @@ Command: ${dashCommand}`;
               }
             }}
           />
+        )}
+
+        {currentView === "tasks" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
+            <header className="mb-6">
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">OK list</h2><DocsLink view="tasks" /></div>
+              <p className="text-sm text-gray-600 mt-1">What waits on a person: changes the AI and your automations prepared, and to-dos the team gave each other.</p>
+            </header>
+            <TasksView
+              isManager={isManager}
+              userId={user?.id || ''}
+              userEmail={user?.email || ''}
+              onOpenQuote={(id) => { const rec = records.find((r: any) => r.id === id); if (rec) setSelectedRecord(rec); }}
+              onCountsChange={(c) => { setTaskCounts(c); if (tenantId) fetchRecords(tenantId); }}
+            />
+          </div>
+        )}
+
+        {currentView === "team" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
+            <header className="mb-6">
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Team</h2><DocsLink view="team" /></div>
+              <p className="text-sm text-gray-600 mt-1">Who is carrying which quotes, what is waiting on whom, and what moved today.</p>
+            </header>
+            <TeamView isManager={isManager} onOpenQuote={(id) => { const rec = records.find((r: any) => r.id === id); if (rec) setSelectedRecord(rec); }} />
+          </div>
+        )}
+
+        {currentView === "studio" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
+            <StudioView
+              isManager={isManager}
+              onAskAI={askAI}
+              onOpenAutomations={isManager ? () => { setSettingsSubView('automations'); setCurrentView('settings'); } : undefined}
+              onChanged={async (kinds) => {
+                if (tenantId) fetchRecords(tenantId);
+                loadSavedViews();
+                if (kinds.includes('form') && tenantId) {
+                  const { data } = await supabase.from('tenant_schemas').select('schema_config').eq('tenant_id', tenantId).maybeSingle();
+                  const bp = (data?.schema_config || []).filter((x: any) => !x.is_agent_config && !x.is_ai_settings && !x.is_branding);
+                  setBlueprint(bp); setBlueprintSaved(JSON.stringify(bp));
+                }
+              }}
+            />
+          </div>
         )}
 
         {currentView === "alerts" && (
@@ -2186,7 +2338,7 @@ Command: ${dashCommand}`;
                   ← Back to Menu
                 </button>
               )}
-              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{({ profile: "Your Profile", "master-data": "Master Data", users: "User Access", blueprint: "Field Configurator", email: "Email Settings", personalization: "Personalization", "ai-personality": "AI Settings", "quote-template": "Quote Template" } as Record<string, string>)[settingsSubView] || "Workspace Settings"}</h2><DocsLink view="settings" sub={settingsSubView} /></div>
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{({ profile: "Your Profile", "master-data": "Master Data", users: "User Access", blueprint: "Field Configurator", email: "Email Settings", personalization: "Personalization", "ai-personality": "AI Settings", "quote-template": "Quote Template", automations: "Automations", plugins: "Plugins" } as Record<string, string>)[settingsSubView] || "Workspace Settings"}</h2><DocsLink view="settings" sub={settingsSubView} /></div>
             </header>
 
             {settingsSubView === 'menu' && (
@@ -2200,6 +2352,8 @@ Command: ${dashCommand}`;
                   { key: 'personalization', icon: Sparkles, title: 'Personalization', desc: 'Switch between the light and dark Jaali themes.', managerOnly: false },
                   { key: 'ai-personality', icon: Bot, title: 'AI Settings', desc: 'Tone, English level, instructions and email routing rules.', managerOnly: true },
                   { key: 'quote-template', icon: Palette, title: 'Quote Template', desc: 'Brand identity and the HTML your quote PDFs are built from.', managerOnly: true },
+                  { key: 'automations', icon: Workflow, title: 'Automations', desc: 'Rules that chase quiet quotes, hand out tasks and keep the team informed, with every run on record.', managerOnly: false },
+                  { key: 'plugins', icon: Plug, title: 'Plugins', desc: 'Webhook, Slack, an inbound API for your website form, and an accounting export.', managerOnly: false },
                 ].filter(item => !item.managerOnly || isManager).map(item => {
                   const Icon = item.icon;
                   return (
@@ -2462,6 +2616,17 @@ Command: ${dashCommand}`;
                 )}
               </section>
             )}
+
+            {settingsSubView === 'automations' && (
+              <AutomationsView
+                isManager={isManager}
+                userEmail={user?.email || ''}
+                onOpenQuote={(id) => { const rec = records.find((r: any) => r.id === id); if (rec) setSelectedRecord(rec); }}
+                onAskAI={askAI}
+              />
+            )}
+
+            {settingsSubView === 'plugins' && <PluginsView isManager={isManager} />}
 
             {settingsSubView === 'personalization' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
@@ -3124,6 +3289,16 @@ Command: ${dashCommand}`;
             </div>
 
             {/* A workspace with nothing in it yet is the normal first day, not a fault to report. */}
+            {currentView === "pipeline" && records.length > 0 && (
+              <div className="qv-tabs" role="tablist" aria-label="Saved views">
+                <button role="tab" aria-selected={!activeViewId} className={`qv-tab ${!activeViewId ? 'qv-tab--on' : ''}`} onClick={() => setActiveViewId('')}>All quotes</button>
+                {savedViews.map((v) => (
+                  <button key={v.id} role="tab" aria-selected={activeViewId === v.id} className={`qv-tab ${activeViewId === v.id ? 'qv-tab--on' : ''}`} onClick={() => setActiveViewId(v.id)} title={v.shared ? 'Shared with the team' : 'Only you see this view'}>{v.name}</button>
+                ))}
+                <button className="qv-save" onClick={saveCurrentAsView}>+ Save as view</button>
+              </div>
+            )}
+
             {records.length === 0 && currentView === "pipeline" && (
               <div className="border border-dashed border-gray-300 rounded-2xl p-8 mb-6 text-center">
                 <p className="text-sm font-semibold text-gray-900">No quotes yet</p>
@@ -3734,6 +3909,10 @@ Command: ${dashCommand}`;
                 onAdd={(values) => addLogEntry(selectedRecord, sec, values)}
               />
             ))}
+
+            <div className="mb-8">
+              <QuoteNotes key={selectedRecord.id} quoteId={selectedRecord.id} qn={selectedRecord.qn_number || selectedRecord.qn} />
+            </div>
 
             <div className="space-y-8">
               {selectedRecord.status === 'Lead' && (

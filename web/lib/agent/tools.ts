@@ -112,9 +112,42 @@ export const TOOLS = [
     scope: { type: 'string', enum: ['profile', 'ai'] },
     changes: { type: 'object', description: 'profile: full_name, job_title, phone, signature, inbound_email. ai: tone (Professional|Casual|Friendly|Aggressive), englishLevel (Native|Simple / Basic|Corporate Jargon), desperation (Low (Confident)|Medium (Eager)|High (Need the deal)), instructions.' },
   }, ['scope', 'changes']),
+
+  /* ---- the builder: the AI shapes the workspace itself, in a sandbox ---- */
+  fn('diagnose_workspace', 'Health check of this workspace: data that is wrong or stuck (form status out of step with the real status, statuses outside the pipeline, open quotes with no client email or no value, a client spelled several ways, quiet quotes nothing chases, overdue follow-ups) and setup gaps (subtotal typed by hand, no pipeline stages, no PDF template). Each finding has an id; findings with a ready fix can be drafted with propose_changes(from_findings). Read-only.'),
+  fn('list_automations', 'The workspace\'s automations (workflows) with their id, rule in words, on/off and how often they ran. Use before changing or deleting one.'),
+  fn('dry_run_automation', 'Try an automation against the current quotes without doing anything: which quotes it would match and what each step would do. Use it to check a rule before proposing it.', {
+    workflow: { type: 'object', description: 'Same shape as workflow in propose_changes.' },
+  }, ['workflow']),
+  fn('propose_changes', `Draft changes to the workspace in its sandbox. Nothing goes live: the user sees every change and presses Apply (managers/admins for shared changes), and can roll the whole set back later. Use it to build automations, saved quote views, one-click AI skills, AI settings, quote-form changes and data fixes. Batch related changes into one call with one clear summary.
+Change shapes:
+- {type:"workflow.upsert", id?, name, workflow:{enabled, description, trigger:{type: quote.created|quote.status_changed|quote.quiet|quote.due|log.added|email.received|comment.added|schedule.daily|manual, to?, from?, days?, module?}, conditions:[{field: status|amount|client|created_by|days_quiet|qn|"Section.field_key", op: eq|neq|gt|gte|lt|lte|contains|not_contains|empty|not_empty|in, value}], actions:[{type: change_status{status}|add_log_entry{module, values}|create_task{title, assign_to?: email|"owner", due_in_days?, note?}|notify{to: "managers"|"owner"|email, message}|send_email{to:"client"|email, subject, body}|ai_follow_up{to:"client", instructions?}|assign{to: email}|webhook{message}|slack{message}|add_note{body}, params:{...}, approval?:boolean}]}} — send_email and ai_follow_up always wait for a person's OK. Text params may use {{client}} {{contact}} {{qn}} {{amount}} {{status}} {{days_quiet}} {{owner}}.
+- {type:"workflow.delete", id}
+- {type:"view.upsert", id?, name, view:{filters:{statuses?, created_by? (email or "me"), client_contains?, min_amount?, max_amount?, quiet_days?}, sort?:{key: date|amount|quiet, dir: asc|desc}, shared:boolean}} — a saved tab on Quotes.
+- {type:"skill.upsert", id?, name, skill:{prompt, description?, shared:boolean}} — a one-click instruction chip on Home, e.g. "Monday pipeline review".
+- {type:"view.delete"|"skill.delete", id}
+- {type:"ai_settings.update", changes:{tone?, englishLevel?, desperation?, instructions?}}
+- {type:"form.ops", operations:[same operations as change_form]}
+- {type:"data.fix", label, quote_id, set:{status?, meta?:{"Section":{"field_key": value}}}}`, {
+    summary: { type: 'string', description: 'One or two sentences: what this change set does and why.' },
+    changes: { type: 'array', items: { type: 'object' }, description: 'The changes, in order.' },
+    from_findings: { type: 'array', items: { type: 'string' }, description: 'diagnose_workspace finding ids whose ready-made fixes to include.' },
+  }, ['summary']),
+  fn('list_changes', 'Change sets in the workspace sandbox: drafts waiting to be applied, and what was applied or rolled back, newest first.'),
+  fn('list_tasks', 'The OK list: approvals waiting for a person and to-dos, with who they are assigned to and when they are due.', {
+    status: { type: 'string', enum: ['open', 'closed', 'all'], description: 'Default open.' },
+  }),
+  fn('list_team', 'People in this workspace: name, email and role. Use before assigning a task or mentioning someone.'),
+  fn('create_task', 'Prepare a to-do for someone in the workspace (or the user), optionally on a quote and with a due date. The user must confirm.', {
+    title: { type: 'string' }, assign_to: { type: 'string', description: 'Email of a workspace member. Omit to leave it unassigned.' },
+    due_in_days: { type: 'integer' }, note: { type: 'string' }, qn: { type: 'string', description: 'Quote number it is about, if any.' },
+  }, ['title']),
+  fn('add_note', 'Prepare an internal team note on a quote (never sent to the client). @Name mentions notify those people. The user must confirm.', {
+    qn: { type: 'string' }, body: { type: 'string' },
+  }, ['qn', 'body']),
 ];
 
-const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings', 'add_log_entry', 'change_form', 'add_user']);
+const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings', 'add_log_entry', 'change_form', 'add_user', 'create_task', 'add_note']);
 export const isWriteTool = (name: string) => WRITE_TOOLS.has(name);
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -124,6 +157,9 @@ export const TOOL_LABELS: Record<string, string> = {
   make_chart: 'Building chart', check_email_domain: 'Checking email domain', export_quotes: 'Preparing export', send_email: 'Drafting email', create_quote: 'Preparing quote',
   update_quote_status: 'Preparing status change', update_master_item: 'Preparing catalogue change',
   add_master_item: 'Preparing catalogue item', update_settings: 'Preparing settings change', add_log_entry: 'Preparing log entry', change_form: 'Preparing form changes', add_user: 'Preparing new user',
+  diagnose_workspace: 'Checking workspace health', list_automations: 'Reading automations', dry_run_automation: 'Trying the automation in the sandbox',
+  propose_changes: 'Drafting changes in the sandbox', list_changes: 'Reading the sandbox', list_tasks: 'Reading the OK list', list_team: 'Reading the team',
+  create_task: 'Preparing task', add_note: 'Preparing team note',
 };
 
 /* ------------------------------------------------------------------ */
@@ -131,6 +167,11 @@ export const TOOL_LABELS: Record<string, string> = {
 /* ------------------------------------------------------------------ */
 
 const clip = (s: any, n: number) => { const t = String(s ?? ''); return t.length > n ? t.slice(0, n) + '…' : t; };
+
+/** Tell automations and plugins. Inside a workflow step the chain is inherited (see events.ts). */
+async function emitEvent(ev: import('@/lib/platform/types').PlatformEvent) {
+  try { const { emit } = await import('@/lib/platform/events'); await emit(ev); } catch { /* best effort */ }
+}
 const strip = (html: string) => String(html || '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 async function findQuote(ctx: AgentCtx, qn: string) {
@@ -462,6 +503,64 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
       const data = await chartData(ctx, a.metric, a.dimension);
       return { result: { rendered: true, data }, blocks: [{ type: 'chart', title: a.title, chart: a.chart, metric: a.metric, dimension: a.dimension, data }] };
     }
+
+    /* ---- the builder ---- */
+    case 'diagnose_workspace': {
+      const { diagnoseWorkspace } = await import('@/lib/platform/diagnose');
+      const d = await diagnoseWorkspace(ctx);
+      return {
+        result: { quotes_checked: d.checked, findings: d.findings.map(({ fix, ...f }) => ({ ...f, fix: fix ? { summary: fix.summary, changes: fix.ops.length } : undefined })) },
+        blocks: [{ type: 'health', checked: d.checked, findings: d.findings.map(({ fix, ...f }) => ({ ...f, fixable: !!fix, fix_summary: fix?.summary })) }],
+      };
+    }
+    case 'list_automations': {
+      const { listRecs } = await import('@/lib/platform/store');
+      const rows = await listRecs(ctx.tenantId, 'workflow', { limit: 200 });
+      return { result: { automations: rows.map((r: any) => ({ id: r.id, name: r.title, enabled: r.data.enabled, trigger: r.data.trigger, conditions: r.data.conditions, actions: r.data.actions, runs: r.data.runs || 0, last_run_at: r.data.last_run_at || null })) } };
+    }
+    case 'dry_run_automation': {
+      const mod: any = await import('@/lib/platform/workflows');
+      if (typeof mod.dryRunWorkflow !== 'function') return { result: { error: 'Trying automations is not available yet.' } };
+      const out = await mod.dryRunWorkflow(ctx.tenantId, { enabled: true, conditions: [], actions: [], ...(a.workflow || {}) }, { limit: 25 });
+      return { result: out };
+    }
+    case 'propose_changes': {
+      const { createChangeset } = await import('@/lib/platform/changesets');
+      let changes: any[] = Array.isArray(a.changes) ? [...a.changes] : [];
+      if (Array.isArray(a.from_findings) && a.from_findings.length) {
+        const { diagnoseWorkspace } = await import('@/lib/platform/diagnose');
+        const d = await diagnoseWorkspace(ctx);
+        for (const id of a.from_findings) {
+          const f = d.findings.find((x) => x.id === id);
+          if (!f) return { result: { error: `No current finding "${id}". Run diagnose_workspace again.` } };
+          if (!f.fix) return { result: { error: `"${f.title}" has no ready-made fix; describe the changes yourself.` } };
+          changes.push(...f.fix.ops);
+        }
+      }
+      if (!changes.length) return { result: { error: 'No changes given.' } };
+      const cs = await createChangeset(ctx, String(a.summary || 'Workspace changes'), changes, 'ai');
+      return {
+        result: { drafted: true, id: cs.id, changes: cs.data.lines, note: 'Saved as a draft in the sandbox. Nothing is live until the user presses Apply.' },
+        blocks: [{ type: 'changeset', id: cs.id, summary: cs.data.summary, lines: cs.data.lines, status: 'draft', can_apply: ctx.isManager || cs.data.ops.every((o: any) => (o.type === 'view.upsert' && !o.view.shared) || (o.type === 'skill.upsert' && !o.skill.shared)) }],
+      };
+    }
+    case 'list_changes': {
+      const { listChangesets } = await import('@/lib/platform/changesets');
+      const rows = await listChangesets(ctx.tenantId);
+      return { result: { changes: rows.slice(0, 20).map((r) => ({ id: r.id, summary: r.data.summary, status: r.data.status, lines: r.data.lines, by: r.data.created_by, applied_at: r.data.applied_at })) } };
+    }
+    case 'list_tasks': {
+      const { listRecs } = await import('@/lib/platform/store');
+      const rows = await listRecs<any>(ctx.tenantId, 'task', { limit: 300 });
+      const want = a.status || 'open';
+      const mine = (r: any) => ctx.isManager || r.data.assigned_to === ctx.userId || r.data.created_by === ctx.email || !r.data.assigned_to;
+      const tasks = rows.filter(mine).filter((r) => want === 'all' || (want === 'open' ? r.data.status === 'open' : r.data.status !== 'open'));
+      return { result: { count: tasks.length, tasks: tasks.slice(0, 40).map((r) => ({ id: r.id, title: r.title, type: r.data.type, status: r.data.status, assigned_to: r.data.assigned_email, due_at: r.data.due_at, qn: r.data.qn, source: r.data.source_label || r.data.source, summary: r.data.action?.summary || r.data.note })) } };
+    }
+    case 'list_team': {
+      const { teamMembers } = await import('@/lib/platform/store');
+      return { result: { members: (await teamMembers(ctx.tenantId)).map((m) => ({ name: m.full_name, email: m.email, role: m.role })) } };
+    }
     default:
       if (isWriteTool(name)) return prepare(name, a, ctx);
       return { result: { error: `Unknown tool ${name}` } };
@@ -474,16 +573,16 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
 
 const FIELD_TYPES = ['text', 'paragraph', 'number', 'date', 'dropdown', 'master_status', 'attachment', 'calculated', 'logged_in'];
 const keyOf = (s: string) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-const isSpecial = (m: any) => m && (m.is_ai_settings || m.is_agent_config || m.is_branding);
+export const isSpecial = (m: any) => m && (m.is_ai_settings || m.is_agent_config || m.is_branding);
 
-async function loadForm(ctx: AgentCtx) {
+export async function loadForm(ctx: AgentCtx) {
   const { data } = await db.from('tenant_schemas').select('schema_config').eq('tenant_id', ctx.tenantId).maybeSingle();
   const all: any[] = Array.isArray(data?.schema_config) ? data!.schema_config : [];
   return { exists: !!data, modules: all.filter((m) => !isSpecial(m)), special: all.filter(isSpecial) };
 }
 
 /** Apply operations to a copy of the modules. Throws a readable error on anything invalid. */
-function applyFormOps(modules: any[], ops: any[]) {
+export function applyFormOps(modules: any[], ops: any[]) {
   const next = JSON.parse(JSON.stringify(modules));
   const lines: Array<[string, string]> = [];
   const find = (t: string) => {
@@ -573,14 +672,14 @@ const needManager = (ctx: AgentCtx) => {
   if (!ctx.isManager) throw new Error('Only a Manager or Admin can change this.');
 };
 const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
-const AI_ENUMS: Record<string, string[]> = {
+export const AI_ENUMS: Record<string, string[]> = {
   tone: ['Professional', 'Casual', 'Friendly', 'Aggressive'],
   englishLevel: ['Native', 'Simple / Basic', 'Corporate Jargon'],
   desperation: ['Low (Confident)', 'Medium (Eager)', 'High (Need the deal)'],
 };
 const PROFILE_FIELDS = ['full_name', 'job_title', 'phone', 'signature', 'inbound_email'];
 
-async function prepare(name: string, a: any, ctx: AgentCtx): Promise<ToolOutput> {
+export async function prepare(name: string, a: any, ctx: AgentCtx): Promise<ToolOutput> {
   try {
     let action: any;
     switch (name) {
@@ -701,6 +800,40 @@ async function prepare(name: string, a: any, ctx: AgentCtx): Promise<ToolOutput>
         };
         break;
       }
+      case 'create_task': {
+        const title = String(a.title || '').trim();
+        if (!title) throw new Error('A task needs a title.');
+        let assignee: any = null;
+        if (a.assign_to) {
+          const { data: m } = await db.from('profiles').select('id, email, full_name').eq('tenant_id', ctx.tenantId).ilike('email', String(a.assign_to).trim()).maybeSingle();
+          if (!m) throw new Error(`${a.assign_to} is not in this workspace. Use list_team.`);
+          assignee = m;
+        }
+        let q: any = null;
+        if (a.qn) { q = await findQuote(ctx, a.qn); if (!q) throw new Error(`No quote "${a.qn}" that you can access.`); }
+        const days = a.due_in_days != null ? Math.max(0, Math.min(365, Number(a.due_in_days) || 0)) : null;
+        const due = days != null ? new Date(Date.now() + days * 86400000).toISOString().slice(0, 10) : null;
+        action = {
+          kind: 'create_task', title: 'Add to the OK list', risk: 'internal',
+          summary: `${title}${assignee ? ` → ${assignee.full_name || assignee.email}` : ''}`,
+          details: [['Task', title], ...(assignee ? [['For', assignee.email]] : []), ...(due ? [['Due', due]] : []), ...(q ? [['Quote', q.qn_number]] : []), ...(a.note ? [['Note', String(a.note)]] : [])],
+          payload: { title, assign_to: assignee?.email || null, due_at: due, note: a.note ? String(a.note) : null, qn: q?.qn_number || null },
+        };
+        break;
+      }
+      case 'add_note': {
+        const q = await findQuote(ctx, a.qn);
+        if (!q) throw new Error(`No quote "${a.qn}" that you can access.`);
+        const body = String(a.body || '').trim();
+        if (!body) throw new Error('A note needs some text.');
+        action = {
+          kind: 'add_note', title: 'Add a team note', risk: 'internal',
+          summary: `${q.qn_number}: ${clip(body, 80)}`,
+          details: [['Quote', q.qn_number], ['Note', body], ['Seen by', 'your team only, never the client']],
+          payload: { qn: q.qn_number, body },
+        };
+        break;
+      }
       case 'update_settings': {
         const changes = a.changes || {};
         if (a.scope === 'profile') {
@@ -798,6 +931,7 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
         last_contact_date: new Date().toISOString(),
       }).eq('id', q.id);
       await db.from('status_logs').insert([{ quotation_id: q.id, old_status: q.status, new_status: p.status, changed_by: ctx.email || null, comments: p.comment || null }]);
+      if (q.status !== p.status) await emitEvent({ type: 'quote.status_changed', tenantId: ctx.tenantId, quoteId: q.id, actorEmail: ctx.email, data: { from: q.status, to: p.status, qn: q.qn_number } });
       return { ok: true, message: `${q.qn_number} is now ${p.status}.`, refresh: ['quotes'] };
     }
     case 'update_master_item': {
@@ -842,6 +976,8 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
       const { error } = await db.from('quotations').update(patch).eq('id', q.id);
       if (error) throw new Error(error.message);
       if (patch.status) await db.from('status_logs').insert([{ quotation_id: q.id, old_status: fresh?.status || null, new_status: patch.status, changed_by: ctx.email || null, comments: `Logged in ${mod.title} via Bloomgard AI` }]);
+      await emitEvent({ type: 'log.added', tenantId: ctx.tenantId, quoteId: q.id, actorEmail: ctx.email, data: { module: mod.title, entry: p.values, qn: q.qn_number } });
+      if (patch.status) await emitEvent({ type: 'quote.status_changed', tenantId: ctx.tenantId, quoteId: q.id, actorEmail: ctx.email, data: { from: fresh?.status || null, to: patch.status, qn: q.qn_number } });
       return { ok: true, message: `Added to ${mod.title} on ${q.qn_number}${patch.status ? `; status is now ${patch.status}` : ''}.`, refresh: ['quotes'] };
     }
     case 'change_form': {
@@ -859,6 +995,22 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
       needManager(ctx);
       const u = await createWorkspaceUser({ tenantId: ctx.tenantId, email: p.email, role: p.role, fullName: p.full_name });
       return { ok: true, message: `Added ${u.email} as ${u.role}. Share the password securely; it is only shown here, once.`, secret: u.password, refresh: ['users'] };
+    }
+    case 'create_task': {
+      const { createTask } = await import('@/lib/platform/tasks');
+      const q = p.qn ? await findQuote(ctx, p.qn) : null;
+      const t = await createTask(ctx.tenantId, {
+        title: p.title, type: 'todo', note: p.note || undefined, source: 'ai', source_label: 'Bloomgard AI',
+        quote_id: q?.id || null, qn: q?.qn_number || null, assigned_to: p.assign_to || null, due_at: p.due_at || null, created_by: ctx.email,
+      });
+      return { ok: true, message: `Added "${t.title}" to the OK list${t.data.assigned_email ? ` for ${t.data.assigned_email}` : ''}.`, refresh: ['tasks'] };
+    }
+    case 'add_note': {
+      const q = await findQuote(ctx, p.qn);
+      if (!q) throw new Error('Quote not found.');
+      const { addComment } = await import('@/lib/platform/comments');
+      const c = await addComment(ctx.tenantId, { quote_id: q.id, qn: q.qn_number, body: p.body, author_id: ctx.userId, author_email: ctx.email, author_name: ctx.profile?.full_name || null } as any);
+      return { ok: true, message: `Note added to ${q.qn_number}${c.data.mentions?.length ? `; ${c.data.mentions.length} ${c.data.mentions.length === 1 ? 'person was' : 'people were'} notified` : ''}.`, refresh: ['quotes'] };
     }
     case 'update_settings': {
       if (p.scope === 'profile') {

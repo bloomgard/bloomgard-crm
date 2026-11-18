@@ -2,10 +2,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp, BarChart3, Bell, Check, ChevronRight, Copy, CornerUpLeft, Database, Download, FileSpreadsheet, Loader2, Mail, Mic, PenLine, Square,
-  Plus, RotateCcw, Settings as SettingsIcon, Sparkles, X,
+  Plus, RotateCcw, Settings as SettingsIcon, Sparkles, Wand2, X,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/utils/supabaseClient";
+import { ChangesetBlock, HealthBlock } from "@/components/platform/BuilderBlocks";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -37,6 +38,10 @@ export type AgentHomeProps = {
   onNavigate: (view: string) => void;
   onChanged: (kinds: string[]) => void;
   docsLink?: React.ReactNode;
+  /** A request handed over from elsewhere (Studio, Automations): sent as if typed, once. */
+  initialPrompt?: string;
+  onInitialPromptUsed?: () => void;
+  onOpenStudio?: () => void;
 };
 
 /* ------------------------------------------------------------------ */
@@ -438,7 +443,7 @@ function Typed({ text, animate, onTick }: { text: string; animate: boolean; onTi
 /* Main component                                                       */
 /* ------------------------------------------------------------------ */
 
-export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNavigate, onChanged, docsLink }: AgentHomeProps) {
+export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNavigate, onChanged, docsLink, initialPrompt, onInitialPromptUsed, onOpenStudio }: AgentHomeProps) {
   const [ov, setOv] = useState<Overview | null>(null);
   const [ovError, setOvError] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -477,6 +482,13 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
     try { const cached = localStorage.getItem(ovKey); if (cached) setOv(JSON.parse(cached)); } catch { /* ignore */ }
     loadOverview();
   }, [loadOverview, ovKey]);
+
+  // skills the team (or this person) saved: one-click instructions above the suggestion chips
+  const [skills, setSkills] = useState<Array<{ id: string; name: string; prompt: string }>>([]);
+  const loadSkills = useCallback(async () => {
+    try { const res = await agentFetch("/api/skills"); if (res.ok) setSkills(((await res.json()).items || []).filter((k: any) => k.prompt)); } catch { /* optional */ }
+  }, []);
+  useEffect(() => { loadSkills(); }, [loadSkills]);
 
   // conversation memory (per user, this browser)
   useEffect(() => {
@@ -595,6 +607,14 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
     setListening(true); rec.start();
   };
   const voiceSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  // a request handed over from Studio or Automations: send it once the chat has loaded
+  const handed = useRef("");
+  useEffect(() => {
+    if (!initialPrompt || busy || handed.current === initialPrompt) return;
+    handed.current = initialPrompt;
+    setTimeout(() => { send(initialPrompt); onInitialPromptUsed?.(); }, 50);
+  }, [initialPrompt, busy, send, onInitialPromptUsed]);
 
   const hasChat = msgs.length > 0;
   const statusEntries = useMemo(() => Object.entries(ov?.stats.byStatus || {}).sort((a, b) => b[1] - a[1]), [ov]);
@@ -776,6 +796,8 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
                       {b.type === "emails" && <EmailsBlock b={b} onOpen={() => onNavigate("inbox")} />}
                       {b.type === "table" && <TableBlock b={b} />}
                       {b.type === "export" && <ExportBlock b={b} />}
+                      {b.type === "changeset" && <ChangesetBlock b={b} onApplied={(r) => { onChanged(r); loadOverview(); loadSkills(); }} onOpenStudio={onOpenStudio} />}
+                      {b.type === "health" && <HealthBlock b={b} />}
                     </div>
                   ))}
                   {m.text && <Typed text={m.text} animate={!!m.typing} onTick={scrollDown} />}
@@ -801,6 +823,13 @@ export default function AgentHome({ userEmail, onOpenQuote, onNewQuote, onNaviga
         {/* ---- dock: three chips, the command bar, and the drop-up of more questions ---- */}
         <div className="agent-dock">
           <div className="flex items-center gap-2 mb-2.5">
+            {skills.length > 0 && (
+              <div className="flex flex-wrap gap-2" aria-label="Your skills">
+                {skills.slice(0, 4).map((k) => (
+                  <button key={k.id} onClick={() => send(k.prompt)} disabled={busy} className="agent-chip agent-chip--skill" title={k.prompt}><Wand2 className="w-3.5 h-3.5" />{k.name}</button>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2" aria-label="Suggestions">
               {topChips.map((c) => {
                 const Icon = CHIP_ICONS[c.icon] || Sparkles;

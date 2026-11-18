@@ -34,6 +34,16 @@
       ]
     },
     {
+      "title": "Automation & teamwork",
+      "pages": [
+        "studio",
+        "ok-list",
+        "automations",
+        "plugins",
+        "team"
+      ]
+    },
+    {
       "title": "Configuration",
       "pages": [
         "settings"

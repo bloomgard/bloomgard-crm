@@ -536,6 +536,8 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 .ed-steps { list-style: decimal; padding-left: 20px; margin-top: 10px; font-size: 13px; line-height: 1.6; color: var(--color-gray-700); }
 .ed-steps code { font-size: 12px; background: var(--color-gray-100); padding: 1px 5px; border-radius: 5px; }
 .agent-chip--todo { border-color: var(--sindoor); color: var(--color-gray-900); }
+.agent-chip--skill { border-style: dashed; border-color: var(--neelam); }
+.agent-chip--skill svg { color: var(--neelam); }
 
 /* Master Data import: AI matching */
 .md-ai { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--color-gray-800); padding: 9px 12px; border-radius: 10px; background: color-mix(in srgb, var(--neelam) 7%, var(--color-white)); border: 1px solid color-mix(in srgb, var(--neelam) 25%, var(--color-gray-200)); margin-bottom: 6px; }
@@ -616,6 +618,18 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 .set-row__desc { font-size: 13px; color: var(--color-gray-600); }
 .set-row__go { width: 16px; height: 16px; flex: none; margin-top: 4px; color: var(--color-gray-300); transition: color .15s, transform .15s; }
 .set-row:hover .set-row__go { color: var(--color-gray-600); transform: translateX(2px); }
+
+/* ---- sidebar count (the OK list) ---- */
+.nav-count { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono), monospace; font-size: 10.5px; font-weight: 600; color: #fff; background: var(--sindoor); }
+
+/* ---- Quotes: saved views as tabs ---- */
+.qv-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 14px; }
+.qv-tab { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 500; border: 1px solid var(--color-gray-200); color: var(--color-gray-600); background: var(--color-white); }
+.qv-tab:hover { color: var(--color-gray-900); border-color: var(--color-gray-400); }
+.qv-tab--on { color: var(--color-gray-900); border-color: var(--sindoor); background: color-mix(in srgb, var(--sindoor) 6%, var(--color-white)); font-weight: 600; }
+.qv-save { font-size: 12.5px; font-weight: 600; color: var(--neelam); padding: 5px 6px; }
+.qv-save:hover { text-decoration: underline; }
+.jaali.dark .qv-save { color: #7f9bff; }
 
 /* ---- Remembering fields: suggestions from the catalogue and from past quotes ---- */
 .sg-list { position: absolute; z-index: 50; left: 0; right: 0; margin-top: 4px; max-height: 260px; overflow-y: auto; scrollbar-width: thin; padding: 4px; border-radius: 12px; border: 1px solid var(--color-gray-200); background: var(--color-white); box-shadow: var(--shadow-lg); }

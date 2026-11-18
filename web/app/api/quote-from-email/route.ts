@@ -238,6 +238,12 @@ export async function POST(request: Request) {
       comments: `Quote auto-created from inbound email${inbound?.sender_email ? ` (${inbound.sender_email})` : ''}.`,
     }]);
 
+    // every way a quote is made from outside the form (AI, inbound email, the public API) passes here
+    try {
+      const { emit } = await import('@/lib/platform/events');
+      await emit({ type: 'quote.created', tenantId, quoteId, actorEmail: agentEmail || null, data: { qn: qn, source: inbound ? 'email' : 'api' } });
+    } catch { /* the quote exists; automations are best effort */ }
+
     return NextResponse.json({ success: true, quoteId, qn_number: qn, itemCount: items.length });
   } catch (error: any) {
     console.error('quote-from-email error:', error);

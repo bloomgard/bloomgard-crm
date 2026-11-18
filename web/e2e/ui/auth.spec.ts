@@ -90,7 +90,9 @@ test('sign-up refuses a personal email address', async ({ browser }) => {
   await page.locator('input[type="email"]').fill(`someone.${Date.now()}@gmail.com`);
   await page.locator('input[type="password"]').fill('kora-neel-12345');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByText(/company email/)).toBeVisible({ timeout: 15_000 });
+  // the intro also says "company email": read the error itself
+  // (Next's route announcer is a role=alert too, so match the form's own error box)
+  await expect(page.locator('.auth__error')).toContainText(/company email/, { timeout: 15_000 });
   await expect(page).toHaveURL(/mode=signup/);
   await ctx.close();
 });
