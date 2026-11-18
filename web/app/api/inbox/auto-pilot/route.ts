@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { guard } from '@/lib/requireTenant';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -7,7 +8,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: Request) {
   try {
-    const { tenantId, threadId, isAutoPilot } = await request.json();
+    const body = await request.json();
+    const g = await guard(request, body?.tenantId || null);
+    if (!g.ok) return g.response;
+    const tenantId = g.tenantId;
+    const { threadId, isAutoPilot } = body;
 
     if (!tenantId || !threadId || typeof isAutoPilot !== 'boolean') {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });

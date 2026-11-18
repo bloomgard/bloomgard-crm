@@ -1,6 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 import { admin, Actor, Cleanup } from './db';
 import { ENV, protectionHeaders, DUMMY_RECIPIENT } from './env';
+import { authHeaders } from './agent';
 
 // One counter for the whole worker (shared across spec files) so two fixtures never get the same number.
 const g = globalThis as unknown as { __e2eQn?: number };
@@ -70,7 +71,7 @@ export async function seedCatalogue(
   rows: Array<[string, string, string, string]>
 ) {
   const res = await request.post(`${ENV.baseUrl}/api/master-data`, {
-    headers: protectionHeaders(),
+    headers: await authHeaders(),
     data: {
       action: 'bulkImport',
       payload: {

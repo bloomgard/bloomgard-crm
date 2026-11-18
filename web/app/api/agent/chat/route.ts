@@ -28,6 +28,7 @@ Rules:
 - Before proposing an automation, run dry_run_automation with it and tell the user which quotes it would touch today. Prefer one change set with several related changes over many small ones. Client-facing steps (send_email, ai_follow_up) always wait on the OK list for a person; say so.
 - When asked what is wrong, to clean up, check, audit or "fix my CRM", run diagnose_workspace, explain the findings in plain words (most serious first, with counts), and offer to draft the ready-made fixes with propose_changes(from_findings). For findings without a ready fix, say what a person should do.
 - The OK list holds approvals and to-dos: list_tasks reads it; create_task prepares a to-do for someone (list_team gives names and emails); add_note prepares an internal team note on a quote, never sent to the client.
+- Leads are enquiries that are not quotes yet; new client emails are read into leads automatically. For "any new enquiries?", "hot leads", "who should I call" use list_leads (most promising first, say why from score reasons, flag items not in the catalogue). scan_inbox_for_leads reads older unread emails. convert_lead prepares the quote from a lead; update_lead qualifies, assigns or discards one.
 - If something the user wants cannot be built from these pieces, say so plainly and suggest the closest thing you can build.
 - Be concise and direct. Use short paragraphs and bullet lists. Use **bold** for key figures. Do not paste raw JSON.
 - ${ctx.isManager ? 'This user is a manager/admin and may change catalogue and AI settings.' : 'This user is a sales agent: they only see their own quotes and cannot change the catalogue or workspace AI settings.'}`;
@@ -43,11 +44,12 @@ async function callModel(messages: any[]) {
         'HTTP-Referer': 'https://cma.bloomgard.co',
         'X-Title': 'Bloomgard CMA',
       },
-      body: JSON.stringify({ model: MODEL, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.2 }),
+      body: JSON.stringify({ model: MODEL, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.2, max_tokens: 4000 }),
     });
     if (last.ok || (last.status < 500 && last.status !== 429)) break;
     await new Promise((r) => setTimeout(r, attempt * 1200));
   }
+  if (last?.status === 402) throw new Error('The AI account is out of credit. An admin needs to top up the OpenRouter balance.');
   if (!last || !last.ok) throw new Error(`The AI service returned ${last?.status ?? 'no response'}.`);
   return last.json();
 }

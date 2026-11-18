@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { guard } from '@/lib/requireTenant';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -7,12 +8,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get('tenantId');
   const tabType = searchParams.get('tabType') || 'manual';
-
-  if (!tenantId) {
-    return NextResponse.json({ error: 'Tenant ID required' }, { status: 400 });
-  }
+  // only the caller's own workspace catalogue
+  const g = await guard(request, searchParams.get('tenantId'));
+  if (!g.ok) return g.response;
+  const tenantId = g.tenantId;
 
   try {
     const { data: entries, error: entriesError } = await supabase
@@ -70,14 +70,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Action and payload required' }, { status: 400 });
     }
 
+    // Every change is to the caller's own workspace: a row named by id must belong to it.
+    const g = await guard(request, payload.tenant_id || null);
+    if (!g.ok) return g.response;
+    const tenantId = g.tenantId;
+    const entryOwned = async (entryId: any) => !!entryId && !!(await supabase.from('master_data_entries').select('id').eq('id', entryId).eq('tenant_id', tenantId).maybeSingle()).data;
+    const valueOwned = async (valueId: any) => {
+      if (!valueId) return false;
+      const { data: v } = await supabase.from('master_data_values').select('entry_id').eq('id', valueId).maybeSingle();
+      return !!v && entryOwned(v.entry_id);
+    };
+    const notFound = () => NextResponse.json({ error: 'Not found in this workspace.' }, { status: 404 });
+    if (['addValueOption', 'bulkAddValues'].includes(action) && !(await entryOwned(payload.entry_id))) return notFound();
+    if (['editValueOption', 'deleteValueOption'].includes(action) && !(await valueOwned(payload.id))) return notFound();
+    if (['editMasterKeyName', 'updateAIDescription', 'toggleAutoExtractable', 'deleteMasterKey'].includes(action) && !(await entryOwned(payload.id))) return notFound();
+    if (action === 'createMasterKey' && payload.parent_id && !(await entryOwned(payload.parent_id))) return notFound();
+    if (action === 'createMasterKey' || action === 'bulkImport') payload.tenant_id = tenantId;
+
     if (action === 'createMasterKey') {
-      const { data, error } = await supabase.from('master_data_entries').insert(payload).select().single();
+      const { data, error } = await supabase.from('master_data_entries').insert({ tenant_id: tenantId, tab_type: payload.tab_type || 'manual', key_name: payload.key_name, parent_id: payload.parent_id || null }).select().single();
       if (error) throw error;
       return NextResponse.json({ success: true, data }, { status: 200 });
     }
 
     if (action === 'addValueOption') {
-      const { data, error } = await supabase.from('master_data_values').insert(payload).select().single();
+      const { data, error } = await supabase.from('master_data_values').insert({ entry_id: payload.entry_id, value_text: payload.value_text, parent_value_id: payload.parent_value_id ?? null, ...(payload.is_default != null ? { is_default: !!payload.is_default } : {}) }).select().single();
       if (error) throw error;
       return NextResponse.json({ success: true, data }, { status: 200 });
     }

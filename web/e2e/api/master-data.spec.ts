@@ -1,16 +1,17 @@
 import { test, expect, APIRequestContext } from '@playwright/test';
 import { admin, resolveActor, Actor } from '../helpers/db';
 import { ENV, protectionHeaders, runTag } from '../helpers/env';
+import { authHeaders } from '../helpers/agent';
 
 /** Master Data API: keys, values, parent-to-child links, Excel-style bulk import, cascade delete. */
 test.describe.serial('Master Data API', () => {
   let actor: Actor;
   let tag: string;
   const key = (s: string) => `e2e_${tag}_${s}`;
-  const api = (request: APIRequestContext, action: string, payload: any) =>
-    request.post(`${ENV.baseUrl}/api/master-data`, { headers: protectionHeaders(), data: { action, payload } });
+  const api = async (request: APIRequestContext, action: string, payload: any) =>
+    request.post(`${ENV.baseUrl}/api/master-data`, { headers: await authHeaders(), data: { action, payload } });
   const tree = async (request: APIRequestContext) => {
-    const r = await request.get(`${ENV.baseUrl}/api/master-data?tenantId=${actor.tenantId}&tabType=manual`, { headers: protectionHeaders() });
+    const r = await request.get(`${ENV.baseUrl}/api/master-data?tenantId=${actor.tenantId}&tabType=manual`, { headers: await authHeaders() });
     expect(r.status()).toBe(200);
     return (await r.json()).tree as any[];
   };
@@ -33,14 +34,20 @@ test.describe.serial('Master Data API', () => {
     }
   });
 
-  test('GET needs a tenant id', async ({ request }) => {
-    const r = await request.get(`${ENV.baseUrl}/api/master-data`, { headers: protectionHeaders() });
-    expect(r.status()).toBe(400);
+  test('the catalogue is only ever your own workspace\'s', async ({ request }) => {
+    // anyone could once read or change any workspace's catalogue by naming its id
+    expect((await request.get(`${ENV.baseUrl}/api/master-data?tenantId=${actor.tenantId}`, { headers: protectionHeaders() })).status()).toBe(401);
+    expect((await request.post(`${ENV.baseUrl}/api/master-data`, { headers: protectionHeaders(), data: { action: 'createMasterKey', payload: { tenant_id: actor.tenantId, key_name: 'x' } } })).status()).toBe(401);
+    // signed in, naming another workspace is refused; naming none means your own
+    const other = await request.get(`${ENV.baseUrl}/api/master-data?tenantId=00000000-0000-0000-0000-000000000000`, { headers: await authHeaders() });
+    expect(other.status()).toBe(403);
+    const mine = await request.get(`${ENV.baseUrl}/api/master-data`, { headers: await authHeaders() });
+    expect(mine.status()).toBe(200);
   });
 
   test('unknown action and empty body are rejected', async ({ request }) => {
     expect((await api(request, 'doesNotExist', { x: 1 })).status()).toBe(400);
-    const empty = await request.post(`${ENV.baseUrl}/api/master-data`, { headers: protectionHeaders(), data: {} });
+    const empty = await request.post(`${ENV.baseUrl}/api/master-data`, { headers: await authHeaders(), data: {} });
     expect(empty.status()).toBe(400);
   });
 

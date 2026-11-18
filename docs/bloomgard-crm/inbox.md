@@ -35,14 +35,15 @@ status becomes **incoming** (so the quote is *Hot* in [Follow-ups](./follow-ups.
 any older AI draft is cleared so a stale draft is never shown for a new message. If AI is
 enabled for the workspace, a fresh [draft reply](./ai-assistant.md) is prepared for review.
 
-## AI actions on an email
+## Bloomgard AI on every email
 
-Select an email and choose **Generate AI Actions**. You get:
+Every email shows what Bloomgard AI made of it, under the message:
 
-- **Summary** – a short summary of what the client wants (with **Approve Summary**).
-- **Lead Gen Quote Extracted** – client details and line items found in the email, matched against Master Data.
-- **Drafted Auto-Reply** – a reply written for you to edit and send (**Approve & Open Draft**).
+- an **enquiry** shows who it is from, what they asked for (matched to your catalogue or not), its
+  score, and buttons to **Create quote**, **Open lead** or **Use reply**, which puts the drafted
+  reply in the reply box above for you to edit and send;
+- a reply, newsletter or anything else says so in one line, with **It is an enquiry** if the AI
+  got it wrong.
 
-From the extracted quote you can **Create Quote Now** (one click: the client and quote are
-created, items are filled from the catalogue, and the email is linked) or **Review in Form**
-to adjust it first. See [Lead generation](./lead-gen.md).
+New emails are read as they arrive. An older one shows **Read it**. Enquiries carry a *Lead* tag in
+the list, and **Enquiries** above the list shows only those. See [Lead generation](./lead-gen.md).

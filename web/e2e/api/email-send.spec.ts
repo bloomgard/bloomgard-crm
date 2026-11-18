@@ -3,6 +3,7 @@ import { admin, resolveActor, Actor, Cleanup, waitFor } from '../helpers/db';
 import { ENV, protectionHeaders, runTag, DUMMY_RECIPIENT } from '../helpers/env';
 import { resendStatus } from '../helpers/email';
 import { makeQuote, snapshotProfile, snapshotThreads } from '../helpers/fixtures';
+import { authHeaders } from '../helpers/agent';
 
 /**
  * Email sending through Resend. Every message goes to Resend's own test mailbox
@@ -32,14 +33,14 @@ test.describe.serial('Outbound email', () => {
   });
 
   test('send-quote validates required fields', async ({ request }) => {
-    const r = await request.post(`${ENV.baseUrl}/api/send-quote`, { headers: protectionHeaders(), data: { to: DUMMY_RECIPIENT } });
+    const r = await request.post(`${ENV.baseUrl}/api/send-quote`, { headers: await authHeaders(), data: { to: DUMMY_RECIPIENT } });
     expect(r.status()).toBe(400);
   });
 
   test('send-quote delivers with attachment, workspace sender and reply-to, and logs usage', async ({ request }) => {
     const subject = `Quote send ${tag}`;
     const r = await request.post(`${ENV.baseUrl}/api/send-quote`, {
-      headers: protectionHeaders(),
+      headers: await authHeaders(),
       data: {
         to: DUMMY_RECIPIENT, subject, message: 'E2E quote body',
         attachments: [{ filename: 'quote.txt', base64: Buffer.from('E2E attachment').toString('base64') }],
@@ -60,7 +61,7 @@ test.describe.serial('Outbound email', () => {
     const fwd = `e2e-send-${tag}@inbound.bloomgard.co`;
     await admin().from('profiles').update({ inbound_email: fwd }).eq('id', actor.userId);
     const r = await request.post(`${ENV.baseUrl}/api/send-quote`, {
-      headers: protectionHeaders(),
+      headers: await authHeaders(),
       data: {
         to: DUMMY_RECIPIENT, subject: `Fwd reply-to ${tag}`, message: 'body', agentEmail: actor.email, agentId: actor.userId,
         senderPreference: 'common', tenantId: actor.tenantId, companyName: actor.tenant.company_name, customSender: expectedFrom(),
@@ -74,7 +75,7 @@ test.describe.serial('Outbound email', () => {
   test('an unverified sender domain fails loudly instead of redirecting mail', async ({ request }) => {
     test.skip(!!process.env.RESEND_FALLBACK_TO, 'RESEND_FALLBACK_TO is set, so the sandbox fallback is expected');
     const r = await request.post(`${ENV.baseUrl}/api/send-quote`, {
-      headers: protectionHeaders(),
+      headers: await authHeaders(),
       data: {
         to: DUMMY_RECIPIENT, subject: `Unverified ${tag}`, message: 'body', agentEmail: actor.email,
         senderPreference: 'common', tenantId: actor.tenantId, companyName: 'E2E', customSender: 'quotes@unverified-e2e-domain.example',
@@ -86,10 +87,10 @@ test.describe.serial('Outbound email', () => {
   });
 
   test('send-email validates fields and delivers', async ({ request }) => {
-    const bad = await request.post(`${ENV.baseUrl}/api/send-email`, { headers: protectionHeaders(), data: { to: DUMMY_RECIPIENT } });
+    const bad = await request.post(`${ENV.baseUrl}/api/send-email`, { headers: await authHeaders(), data: { to: DUMMY_RECIPIENT } });
     expect(bad.status()).toBe(400);
     const r = await request.post(`${ENV.baseUrl}/api/send-email`, {
-      headers: protectionHeaders(),
+      headers: await authHeaders(),
       data: { to: DUMMY_RECIPIENT, subject: `Send-email ${tag}`, message: 'plain body', tenantId: actor.tenantId, companyName: actor.tenant.company_name, customSender: expectedFrom() },
     });
     expect(r.status(), await r.text()).toBe(200);
@@ -100,7 +101,7 @@ test.describe.serial('Outbound email', () => {
     const q = await makeQuote(actor, cleanup, `${tag}-ir`);
     const subject = `Re: Quote ${q.qn} ${tag}`;
     const r = await request.post(`${ENV.baseUrl}/api/inbox/reply`, {
-      headers: protectionHeaders(), data: { tenantId: actor.tenantId, to: DUMMY_RECIPIENT, subject, htmlBody: '<p>E2E inbox reply</p>' },
+      headers: await authHeaders(), data: { tenantId: actor.tenantId, to: DUMMY_RECIPIENT, subject, htmlBody: '<p>E2E inbox reply</p>' },
     });
     expect(r.status(), await r.text()).toBe(200);
     const convo = await waitFor(async () => {
@@ -112,7 +113,7 @@ test.describe.serial('Outbound email', () => {
   });
 
   test('inbox reply validates required fields', async ({ request }) => {
-    const r = await request.post(`${ENV.baseUrl}/api/inbox/reply`, { headers: protectionHeaders(), data: { tenantId: actor.tenantId } });
+    const r = await request.post(`${ENV.baseUrl}/api/inbox/reply`, { headers: await authHeaders(), data: { tenantId: actor.tenantId } });
     expect(r.status()).toBe(400);
   });
 
@@ -121,11 +122,11 @@ test.describe.serial('Outbound email', () => {
     const { data: th } = await admin().from('email_threads').select('id').eq('quote_id', q.id).single();
     await admin().from('email_threads').update({ ai_draft_text: 'draft to be cleared' }).eq('id', th!.id);
 
-    const missing = await request.post(`${ENV.baseUrl}/api/agent/reply`, { headers: protectionHeaders(), data: { quoteId: q.id } });
+    const missing = await request.post(`${ENV.baseUrl}/api/agent/reply`, { headers: await authHeaders(), data: { quoteId: q.id } });
     expect(missing.status()).toBe(400);
 
     const r = await request.post(`${ENV.baseUrl}/api/agent/reply`, {
-      headers: protectionHeaders(),
+      headers: await authHeaders(),
       data: { threadId: th!.id, quoteId: q.id, tenantId: actor.tenantId, agentId: actor.userId, message: `E2E triage reply ${tag}` },
     });
     expect(r.status(), await r.text()).toBe(200);

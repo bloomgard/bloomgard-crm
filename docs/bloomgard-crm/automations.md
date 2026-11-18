@@ -8,7 +8,7 @@ section: Automation & teamwork
 # Automations
 
 
-**Settings → Automations** holds rules of the form *when something happens, if these conditions
+**Studio → Automations** (also reachable from Settings → Automations) holds rules of the form *when something happens, if these conditions
 hold, do these steps*. Managers and admins create and change them; everyone can see them.
 
 ## Start from a ready-made one

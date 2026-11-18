@@ -51,13 +51,13 @@ export async function POST(request: Request) {
     },
   };
 
-  const { POST: createFromEnquiry } = await import('@/app/api/quote-from-email/route');
-  const res = await createFromEnquiry(new Request('http://internal/quote-from-email', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ tenantId, analysis, agentEmail: 'api@bloomgard.co' }),
-  }));
-  const out = await res.json();
-  if (!res.ok || !out?.quoteId) return bad(out?.error || 'Could not create the quote.', 500);
+  // owned by the workspace's first admin, so it shows up for a real person rather than nobody
+  const { systemCtx } = await import('@/lib/platform/ctx');
+  const owner = (await systemCtx(tenantId).catch(() => null))?.email || null;
+  const { createQuoteFromAnalysis } = await import('@/lib/quoteFromEmail');
+  let out: any;
+  try { out = await createQuoteFromAnalysis({ tenantId, analysis, agentEmail: owner, source: 'inbound_api' }); }
+  catch (e: any) { return bad(e.message || 'Could not create the quote.', 500); }
 
   // record where it came from (the enquiry route labels everything as an inbound email)
   const { data: q } = await db.from('quotations').select('custom_metadata').eq('id', out.quoteId).eq('tenant_id', tenantId).single();

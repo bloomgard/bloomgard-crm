@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { guard } from '@/lib/requireTenant';
 import { createClient } from '@supabase/supabase-js';
 import { getDynamicSender, sendEmail } from '@/lib/email';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
@@ -8,6 +9,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // the workspace comes from the caller's session (or an in-process server call), never from the body
+    const g = await guard(request, body?.tenantId || body?.parsedTenantId || null);
+    if (!g.ok) return g.response;
+    body.tenantId = g.tenantId;
     const { threadId, quoteId, tenantId, agentId, message } = body;
 
     if (!threadId || !quoteId || !tenantId || !message) {

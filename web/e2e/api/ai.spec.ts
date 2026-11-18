@@ -3,6 +3,7 @@ import { admin, resolveActor, Actor, Cleanup, waitFor } from '../helpers/db';
 import { ENV, protectionHeaders, runTag, DUMMY_RECIPIENT } from '../helpers/env';
 import { resendStatus } from '../helpers/email';
 import { makeQuote, seedCatalogue, snapshotProfile, snapshotThreads } from '../helpers/fixtures';
+import { userToken, authed, authHeaders } from '../helpers/agent';
 
 /**
  * Everything that calls the AI: enquiry analysis, grounded drafting, follow-up dispatch and the copilot.
@@ -33,11 +34,12 @@ test.describe.serial('AI features', () => {
 
   test('analyze-email extracts the client and resolves the product against Master Data', async ({ request }) => {
     test.setTimeout(120_000);
+    expect((await request.post(`${ENV.baseUrl}/api/ai/analyze-email`, { headers: protectionHeaders(), data: { email: { subject: 'x' } } })).status()).toBe(401);
     const { data: schema } = await admin().from('tenant_schemas').select('schema_config').eq('tenant_id', actor.tenantId).single();
     const blueprint = (schema!.schema_config as any[]).filter((s) => !s.is_ai_settings && !s.is_agent_config && !s.is_branding && !['system_agents', 'branding_settings'].includes(s.title));
     const before = await tokensUsed('analyze-email');
     const res = await request.post(`${ENV.baseUrl}/api/ai/analyze-email`, {
-      headers: protectionHeaders(),
+      headers: authed(await userToken()),
       data: {
         blueprint, companyName: actor.tenant.company_name, agent: { name: 'E2E Tester', title: 'QA Lead' },
         email: {
@@ -59,7 +61,7 @@ test.describe.serial('AI features', () => {
   test('analyze-email refuses to invent a price for a product that is not in the catalogue', async ({ request }) => {
     test.setTimeout(120_000);
     const res = await request.post(`${ENV.baseUrl}/api/ai/analyze-email`, {
-      headers: protectionHeaders(),
+      headers: authed(await userToken()),
       data: {
         blueprint: [], companyName: actor.tenant.company_name, agent: { name: 'E2E Tester', title: 'QA Lead' },
         email: { tenant_id: actor.tenantId, sender_email: `q-${tag}@e2e-acme.test`, subject: `Enquiry ${tag} 2`, body_text: 'How much is your quantum flux capacitor model ZX-9? Please quote 5 units.' },
@@ -105,7 +107,7 @@ test.describe.serial('AI features', () => {
       tenant_id: actor.tenantId, thread_id: messageId, message_id: messageId, sender_email: `regen-${tag}@e2e-acme.test`,
       subject, body_text: `Please confirm the rate for ${code()}.`,
     });
-    const res = await request.post(`${ENV.baseUrl}/api/ai-auto-reply`, { headers: protectionHeaders(), data: { threadId: messageId, tenantId: actor.tenantId } });
+    const res = await request.post(`${ENV.baseUrl}/api/ai-auto-reply`, { headers: await authHeaders(), data: { threadId: messageId, tenantId: actor.tenantId } });
     expect(res.status(), await res.text()).toBe(200);
     expect((await res.json()).success).toBe(true);
   });
@@ -114,7 +116,7 @@ test.describe.serial('AI features', () => {
     test.setTimeout(150_000);
     const q = await makeQuote(actor, cleanup, `${tag}-fu`, { items: [{ item_code: code(), item_name: `E2E Sprocket ${tag}`, quantity: 5, uom: 'PCS', item_rate: 41.25 }] });
     const res = await request.post(`${ENV.baseUrl}/api/trigger-agent`, {
-      headers: protectionHeaders(), data: { quoteId: q.id, tenantId: actor.tenantId, agentEmail: actor.email, agentId: actor.userId },
+      headers: await authHeaders(), data: { quoteId: q.id, tenantId: actor.tenantId, agentEmail: actor.email, agentId: actor.userId },
     });
     expect(res.status(), await res.text()).toBe(200);
     const { data: quote } = await admin().from('quotations').select('follow_up_status, custom_metadata').eq('id', q.id).single();
@@ -127,7 +129,7 @@ test.describe.serial('AI features', () => {
   });
 
   test('trigger-agent needs a quote and a workspace', async ({ request }) => {
-    const r = await request.post(`${ENV.baseUrl}/api/trigger-agent`, { headers: protectionHeaders(), data: {} });
+    const r = await request.post(`${ENV.baseUrl}/api/trigger-agent`, { headers: await authHeaders(), data: {} });
     expect(r.status()).toBe(400);
   });
 
@@ -135,7 +137,7 @@ test.describe.serial('AI features', () => {
     test.setTimeout(120_000);
     const before = await tokensUsed('ask-ai');
     const res = await request.post(`${ENV.baseUrl}/api/ask-ai`, {
-      headers: protectionHeaders(),
+      headers: await authHeaders(),
       data: { query: 'How many quotes are listed in the context?', context: { quotes: [{ qn: 'A' }, { qn: 'B' }, { qn: 'C' }] }, tenantId: actor.tenantId, userId: actor.userId },
     });
     expect(res.status()).toBe(200);

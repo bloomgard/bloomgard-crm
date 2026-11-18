@@ -34,7 +34,9 @@ test.describe.serial('Workspace platform', () => {
       await go(page, nav);
       await expect(page.getByRole('heading', { name: heading, exact: true }).first()).toBeVisible();
     }
+    // Settings → Automations opens Studio on its Automations tab: one home for what gets built
     await openSetting(page, 'Automations');
+    await expect(page.getByRole('tab', { name: /^Automations/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByLabel('Ready-made automations')).toBeVisible({ timeout: 20_000 });
     await openSetting(page, 'Plugins');
     await expect(page.getByText('Webhook', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
@@ -112,6 +114,7 @@ test.describe.serial('Workspace platform', () => {
     await expect(tab).toHaveAttribute('aria-selected', 'true');
 
     await go(page, 'Studio');
+    await page.getByRole('tab', { name: /^History/ }).click();
     await page.locator('li').filter({ hasText: `Add a view ${tag}` }).getByRole('button', { name: /Roll back/ }).click();
     await waitFor(async () => ((await rows('view').like('label', `%${tag}%`)).data || []).length === 0, 20_000, 1000, 'view removed');
   });

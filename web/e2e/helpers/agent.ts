@@ -29,3 +29,10 @@ export async function ask(request: APIRequestContext, token: string, content: st
     error: events.find((e) => e.t === 'error')?.error as string | undefined,
   };
 }
+
+let cachedToken: { value: string; at: number } | null = null;
+/** Headers for a route that needs the signed-in E2E user (cached for ten minutes per worker). */
+export async function authHeaders() {
+  if (!cachedToken || Date.now() - cachedToken.at > 10 * 60_000) cachedToken = { value: await userToken(), at: Date.now() };
+  return authed(cachedToken.value);
+}

@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server';
+import { authenticate } from '@/lib/agent/core';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+// same-origin only: the dashboard calls this with the user's session
+const corsHeaders: Record<string, string> = {};
 
 export async function POST(req: Request) {
   try {
+    // signed in, and only ever reading this user's own workspace catalogue
+    const ctx = await authenticate(req);
+    if (!ctx) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
     const body = await req.json();
-    const { email, blueprint, agent, companyName } = body;
+    const { email: rawEmail, blueprint } = body;
+    const email = rawEmail ? { ...rawEmail, tenant_id: ctx.tenantId } : rawEmail;
+    const companyName = ctx.tenant?.company_name || body.companyName || '';
+    const agent = { name: ctx.profile?.full_name || '', title: ctx.profile?.job_title || '', phone: ctx.profile?.phone || '' };
 
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -64,7 +68,10 @@ RULES for auto_reply:
 
 Return ONLY valid JSON. No markdown wrappers.`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // one retry: a model occasionally returns an empty or malformed answer
+    let result: any = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey.trim()}`,
@@ -78,12 +85,16 @@ Return ONLY valid JSON. No markdown wrappers.`;
           { role: "system", content: systemPrompt },
           { role: "user", content: `Email Subject: ${email.subject}\nSender: ${email.sender_email}\nBody:\n${email.body_text || email.body_html}` }
         ],
-        temperature: 0.1,
+        temperature: 0.1, max_tokens: 2500,
         response_format: { type: "json_object" }
       })
     });
 
-    const result = await response.json();
+      result = await response.json().catch(() => null);
+      const content = result?.choices?.[0]?.message?.content;
+      try { if (content && JSON.parse(content)) break; } catch { /* retry */ }
+    }
+
     
     if (email.tenant_id && result.usage) {
       const { logAiUsage } = await import('@/utils/usageLogger');

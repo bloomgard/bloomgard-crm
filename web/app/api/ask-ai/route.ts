@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { guard } from '@/lib/requireTenant';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +10,11 @@ const corsHeaders = {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
+    // the workspace comes from the caller's session (or an in-process server call), never from the body
+    const g = await guard(req, body?.tenantId || body?.parsedTenantId || null);
+    if (!g.ok) return g.response;
+    body.tenantId = g.tenantId;
+    if (g.ctx) body.userId = g.ctx.userId;
     const { query, data, context, tenantId, userId } = body;
 
     const apiKey = process.env.OPENROUTER_API_KEY;

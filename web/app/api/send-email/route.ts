@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { guard } from '@/lib/requireTenant';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 
@@ -23,6 +24,10 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // the workspace comes from the caller's session (or an in-process server call), never from the body
+    const g = await guard(req, body?.tenantId || body?.parsedTenantId || null);
+    if (!g.ok) return g.response;
+    body.tenantId = g.tenantId;
     const { 
       to, 
       cc, 

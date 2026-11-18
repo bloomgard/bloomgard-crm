@@ -2,18 +2,20 @@ import { test, expect } from '@playwright/test';
 import { admin, resolveActor, Actor, Cleanup } from '../helpers/db';
 import { ENV, protectionHeaders, runTag } from '../helpers/env';
 import { seedCatalogue } from '../helpers/fixtures';
+import { userToken, authed } from '../helpers/agent';
 
 /** One-click quote from an enquiry email: client creation, numbering, and Master Data enrichment of line items. */
 test.describe.serial('Quote from an enquiry email', () => {
   let actor: Actor;
   let tag: string;
+  let token: string;
   const cleanup = new Cleanup();
   const code = () => `E2E-${tag.toUpperCase()}-Q`;
   const post = (request: any, data: any) =>
-    request.post(`${ENV.baseUrl}/api/quote-from-email`, { headers: protectionHeaders(), data });
+    request.post(`${ENV.baseUrl}/api/quote-from-email`, { headers: authed(token), data });
 
   test.beforeAll(async ({ request }) => {
-    actor = await resolveActor(); tag = runTag();
+    actor = await resolveActor(); tag = runTag(); token = await userToken();
     // two products share the unit "BOX" with different rates: the unit must not be resolved by text alone
     await seedCatalogue(request, actor, cleanup, [
       [code(), `E2E Gasket ${tag}`, 'BOX', '12.50'],
@@ -22,8 +24,10 @@ test.describe.serial('Quote from an enquiry email', () => {
   });
   test.afterAll(async () => cleanup.run());
 
-  test('needs a workspace and an analysis', async ({ request }) => {
-    expect((await post(request, { analysis: { lead_gen_quote: {} } })).status()).toBe(400);
+  test('needs a signed-in user and an analysis; the workspace comes from the session', async ({ request }) => {
+    // anyone could once create quotes in any workspace by naming its id
+    const anon = await request.post(`${ENV.baseUrl}/api/quote-from-email`, { headers: protectionHeaders(), data: { tenantId: actor.tenantId, analysis: { lead_gen_quote: { Products: [] } } } });
+    expect(anon.status()).toBe(401);
     expect((await post(request, { tenantId: actor.tenantId })).status()).toBe(400);
   });
 

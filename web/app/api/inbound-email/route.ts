@@ -171,7 +171,7 @@ export async function POST(request: Request) {
     const clientMessage = bodyText || bodyHtml || 'No message body.';
 
     // 5. Database Insertion
-    const { error: insertError } = await supabase
+    const { data: insertedEmail, error: insertError } = await supabase
       .from('inbound_emails')
       .insert({
         tenant_id: tenant.id,
@@ -181,7 +181,9 @@ export async function POST(request: Request) {
         body_html: bodyHtml,
         message_id: payload.data.message_id || '',
         thread_id: threadId
-      });
+      })
+      .select('id')
+      .single();
 
     if (insertError) {
       console.error('Error inserting inbound email:', insertError);
@@ -264,6 +266,17 @@ export async function POST(request: Request) {
             console.error("AI draft generation failed:", err);
           }
         }
+      }
+
+      // Not a reply on a quote: read it for a lead (enquiry or not, with the sender's details and
+      // the items matched to the catalogue). It is kept, so nobody has to press anything.
+      if (!quote && insertedEmail?.id && tenant.ai_enabled !== false) {
+        try {
+          const { captureFromEmail } = await import('@/lib/platform/leads');
+          let ownerEmail: string | null = null;
+          if (agentId) { const { data: p } = await supabase.from('profiles').select('email').eq('id', agentId).maybeSingle(); ownerEmail = p?.email || null; }
+          await captureFromEmail(tenant.id, insertedEmail.id, { owner_email: ownerEmail });
+        } catch (err) { console.error('lead capture failed:', err); }
       }
 
       // automations and plugins hear about every client email, attached to a quote or not

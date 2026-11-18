@@ -142,6 +142,21 @@ Change shapes:
     title: { type: 'string' }, assign_to: { type: 'string', description: 'Email of a workspace member. Omit to leave it unassigned.' },
     due_in_days: { type: 'integer' }, note: { type: 'string' }, qn: { type: 'string', description: 'Quote number it is about, if any.' },
   }, ['title']),
+  fn('list_leads', 'Leads: enquiries that are not quotes yet, read from the inbox by the AI. Each has the sender and company, a summary, what they asked for (matched against the catalogue or not), a 0-100 score with reasons, hot/warm/cold, status (new, qualified, contacted, converted, discarded), owner and a drafted reply.', {
+    status: { type: 'string', enum: ['new', 'qualified', 'contacted', 'converted', 'discarded', 'open', 'all'], description: 'Default: everything not discarded.' },
+    temperature: { type: 'string', enum: ['hot', 'warm', 'cold'] },
+    query: { type: 'string', description: 'Company, person, email or words in the summary.' },
+  }),
+  fn('scan_inbox_for_leads', 'Read recent client emails that have not been read for leads yet (not replies on quotes) and turn the enquiries into leads. Safe: it only reads and files; nothing is sent.', {
+    limit: { type: 'integer', description: 'How many emails to read, default 15, max 40.' },
+  }),
+  fn('convert_lead', 'Prepare turning a lead into a quotation: the client, and line items from what they asked for, matched to the catalogue. The user must confirm.', {
+    lead_id: { type: 'string' },
+  }, ['lead_id']),
+  fn('update_lead', 'Prepare a change to a lead: its status (new, qualified, contacted, discarded with a reason), its owner (a workspace member email) or notes. The user must confirm.', {
+    lead_id: { type: 'string' }, status: { type: 'string', enum: ['new', 'qualified', 'contacted', 'discarded'] },
+    owner_email: { type: 'string' }, discarded_reason: { type: 'string' }, notes: { type: 'string' },
+  }, ['lead_id']),
   fn('share_quote', 'Prepare a client link for a quote: a page the client opens in a browser, with no login, to read the quote and Accept it or ask for changes (both are logged and the owner is told). Making a new link retires the old one. Put the link in a send_email body when asked to send it. The user must confirm.', {
     qn: { type: 'string' },
   }, ['qn']),
@@ -150,7 +165,7 @@ Change shapes:
   }, ['qn', 'body']),
 ];
 
-const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings', 'add_log_entry', 'change_form', 'add_user', 'create_task', 'add_note', 'share_quote']);
+const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings', 'add_log_entry', 'change_form', 'add_user', 'create_task', 'add_note', 'share_quote', 'convert_lead', 'update_lead']);
 export const isWriteTool = (name: string) => WRITE_TOOLS.has(name);
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -163,6 +178,7 @@ export const TOOL_LABELS: Record<string, string> = {
   diagnose_workspace: 'Checking workspace health', list_automations: 'Reading automations', dry_run_automation: 'Trying the automation in the sandbox',
   propose_changes: 'Drafting changes in the sandbox', list_changes: 'Reading the sandbox', list_tasks: 'Reading the OK list', list_team: 'Reading the team',
   create_task: 'Preparing task', add_note: 'Preparing team note', share_quote: 'Preparing client link',
+  list_leads: 'Reading leads', scan_inbox_for_leads: 'Reading the inbox for leads', convert_lead: 'Preparing quote from lead', update_lead: 'Preparing lead change',
 };
 
 /* ------------------------------------------------------------------ */
@@ -560,6 +576,20 @@ export async function runTool(name: string, a: any, ctx: AgentCtx): Promise<Tool
       const tasks = rows.filter(mine).filter((r) => want === 'all' || (want === 'open' ? r.data.status === 'open' : r.data.status !== 'open'));
       return { result: { count: tasks.length, tasks: tasks.slice(0, 40).map((r) => ({ id: r.id, title: r.title, type: r.data.type, status: r.data.status, assigned_to: r.data.assigned_email, due_at: r.data.due_at, qn: r.data.qn, source: r.data.source_label || r.data.source, summary: r.data.action?.summary || r.data.note })) } };
     }
+    case 'list_leads': {
+      const { listLeads } = await import('@/lib/platform/leads');
+      const rows = await listLeads(ctx, { status: a.status, temperature: a.temperature, q: a.query });
+      return { result: { count: rows.length, leads: rows.slice(0, 30).map((r) => ({
+        id: r.id, who: r.data.contact?.company || r.data.contact?.name || r.data.from_email, email: r.data.from_email, phone: r.data.contact?.phone,
+        summary: r.data.summary, status: r.data.status, temperature: r.data.temperature, score: r.data.score, why: r.data.score_reasons,
+        asked_for: r.data.requirements.map((q) => `${q.quantity ? q.quantity + ' ' + (q.uom || '') + ' ' : ''}${q.item_name || q.text}${q.match === 'none' ? ' (not in catalogue)' : q.item_code ? ` [${q.item_code}]` : ''}`),
+        owner: r.data.owner_email, returning_client: r.data.existing_client?.name || null, qn: r.data.qn || null, received: r.data.received_at,
+      })) } };
+    }
+    case 'scan_inbox_for_leads': {
+      const { scanInbox } = await import('@/lib/platform/leads');
+      return { result: await scanInbox(ctx, { limit: a.limit }) };
+    }
     case 'list_team': {
       const { teamMembers } = await import('@/lib/platform/store');
       return { result: { members: (await teamMembers(ctx.tenantId)).map((m) => ({ name: m.full_name, email: m.email, role: m.role })) } };
@@ -824,6 +854,36 @@ export async function prepare(name: string, a: any, ctx: AgentCtx): Promise<Tool
         };
         break;
       }
+      case 'convert_lead': {
+        const { getLead } = await import('@/lib/platform/leads');
+        const r = await getLead(ctx, a.lead_id);
+        if (r.data.status === 'converted') throw new Error(`That lead is already ${r.data.qn}.`);
+        const who = r.data.contact?.company || r.data.contact?.name || r.data.from_email;
+        action = {
+          kind: 'convert_lead', title: 'Create a quote from a lead', risk: 'internal',
+          summary: `${who}: ${r.data.requirements.length} item${r.data.requirements.length === 1 ? '' : 's'}`,
+          details: [['Client', who], ['Email', r.data.from_email], ...r.data.requirements.slice(0, 8).map((q) => ['Item', `${q.quantity || '?'} ${q.uom || ''} ${q.item_name || q.text}${q.match === 'none' ? ' (not in catalogue: price to fill in)' : ''}`.trim()] as [string, string])],
+          payload: { lead_id: r.id },
+        };
+        break;
+      }
+      case 'update_lead': {
+        const { getLead } = await import('@/lib/platform/leads');
+        const r = await getLead(ctx, a.lead_id);
+        const changes: any = {};
+        if (a.status) changes.status = a.status;
+        if (a.owner_email) changes.owner_email = a.owner_email;
+        if (a.discarded_reason) changes.discarded_reason = a.discarded_reason;
+        if (a.notes) changes.notes = a.notes;
+        if (!Object.keys(changes).length) throw new Error('Nothing to change.');
+        action = {
+          kind: 'update_lead', title: 'Change a lead', risk: 'internal',
+          summary: `${r.data.contact?.company || r.data.from_email}: ${Object.entries(changes).map(([k, v]) => `${k} ${v}`).join(', ')}`,
+          details: Object.entries(changes).map(([k, v]) => [k.replace('_', ' '), String(v)]) as Array<[string, string]>,
+          payload: { lead_id: r.id, ...changes },
+        };
+        break;
+      }
       case 'share_quote': {
         const q = await findQuote(ctx, a.qn);
         if (!q) throw new Error(`No quote "${a.qn}" that you can access.`);
@@ -913,7 +973,7 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
       return { ok: true, message: `Email sent to ${p.to}.`, refresh: ['quotes', 'inbox'] };
     }
     case 'create_quote': {
-      const { POST } = await import('@/app/api/quote-from-email/route');
+      const { createQuoteFromAnalysis } = await import('@/lib/quoteFromEmail');
       const analysis = {
         summary: `Created by Bloomgard AI for ${p.client_name}.`,
         lead_gen_quote: {
@@ -921,12 +981,7 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
           Products: p.items.map((i: any) => ({ item_code: i.item_code, item_name: i.item_name, quantity: i.quantity })),
         },
       };
-      const res = await POST(new Request('http://internal/quote-from-email', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tenantId: ctx.tenantId, emailId: p.source_email_id || undefined, analysis, agentEmail: ctx.email }),
-      }));
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || 'Could not create the quote.');
+      const out = await createQuoteFromAnalysis({ tenantId: ctx.tenantId, emailId: p.source_email_id || null, analysis, agentEmail: ctx.email });
       return { ok: true, message: `Created ${out.qn_number} with ${out.itemCount} item${out.itemCount === 1 ? '' : 's'}.`, refresh: ['quotes'] };
     }
     case 'update_quote_status': {
@@ -958,8 +1013,9 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
     case 'add_master_item': {
       needManager(ctx);
       const { POST } = await import('@/app/api/master-data/route');
+      const { INTERNAL_HEADER, internalKey } = await import('@/lib/requireTenant');
       const res = await POST(new Request('http://internal/master-data', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json', [INTERNAL_HEADER]: internalKey() },
         body: JSON.stringify({
           action: 'bulkImport',
           payload: {
@@ -1018,6 +1074,17 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
         quote_id: q?.id || null, qn: q?.qn_number || null, assigned_to: p.assign_to || null, due_at: p.due_at || null, created_by: ctx.email,
       });
       return { ok: true, message: `Added "${t.title}" to the OK list${t.data.assigned_email ? ` for ${t.data.assigned_email}` : ''}.`, refresh: ['tasks'] };
+    }
+    case 'convert_lead': {
+      const { convertLead } = await import('@/lib/platform/leads');
+      const out = await convertLead(ctx, p.lead_id);
+      return { ok: true, message: `Created ${out.qn} with ${out.items} item${out.items === 1 ? '' : 's'} from the lead.`, refresh: ['quotes', 'leads'] };
+    }
+    case 'update_lead': {
+      const { updateLead } = await import('@/lib/platform/leads');
+      const { lead_id, ...patch } = p;
+      await updateLead(ctx, lead_id, patch);
+      return { ok: true, message: 'Lead updated.', refresh: ['leads'] };
     }
     case 'share_quote': {
       const q = await findQuote(ctx, p.qn);

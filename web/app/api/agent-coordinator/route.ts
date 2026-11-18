@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { guard } from '@/lib/requireTenant';
 import { createClient } from '@supabase/supabase-js';
 import { getDynamicSender, sendEmail } from '@/lib/email';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
@@ -11,7 +12,11 @@ const AI_MODEL = 'openai/gpt-4o-mini';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { tenantId } = body;
+    // a signed-in manager or admin of this workspace (or an in-process server call) runs its agents
+    const g = await guard(request, body?.tenantId || null);
+    if (!g.ok) return g.response;
+    if (g.ctx && !g.ctx.isManager) return NextResponse.json({ success: false, error: 'Only managers and admins run the follow-up agents.' }, { status: 403 });
+    const tenantId = g.tenantId;
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Missing tenantId' }, { status: 400 });

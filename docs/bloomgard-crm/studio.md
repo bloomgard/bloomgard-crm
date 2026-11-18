@@ -17,6 +17,12 @@ would. Ask in plain words, for example:
 - "Add a Visit log with outcome and next step to the quote form"
 - "Check my workspace for problems and draft the fixes"
 
+## Its tabs
+
+**Build** (ask, and the drafts waiting to be applied) · **Automations** (every rule, made by you or
+the AI, with on/off and its runs; Settings → Automations opens here) · **Views & skills** ·
+**Health check** · **History** (what was applied, with Roll back).
+
 ## Drafts change nothing
 
 What the AI builds is saved as a **draft change set**: a list of every change in plain words.

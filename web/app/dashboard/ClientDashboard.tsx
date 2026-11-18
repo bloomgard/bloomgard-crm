@@ -21,9 +21,14 @@ import TeamView from '@/components/platform/TeamView';
 import NotificationBell from '@/components/platform/NotificationBell';
 import QuoteNotes from '@/components/platform/QuoteNotes';
 import PluginsView from '@/components/platform/PluginsView';
-import AutomationsView from '@/components/platform/AutomationsView';
 import StudioView from '@/components/platform/StudioView';
+import LeadsView from '@/components/platform/LeadsView';
+import InboxLeadPanel from '@/components/platform/InboxLeadPanel';
 import { api as platformApi, emitClientEvent } from '@/lib/platform/client';
+import { installAuthFetch } from '@/lib/authFetch';
+
+// every /api call from the workspace carries the user's session (see lib/authFetch.ts)
+installAuthFetch();
 import { CheckSquare, UsersRound, Wand2, Workflow, Plug } from 'lucide-react';
 import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
 import { CURRENCIES, currencyCode, money } from '@/lib/currency';
@@ -90,10 +95,10 @@ const HELP: Record<string, { text: string; href: string }> = {
   home: { text: 'Talk to Bloomgard AI: ask questions, search quotes, send email, edit the catalogue, change settings or build charts. Changes wait for your confirmation.', href: 'getting-started/' },
   pipeline: { text: 'All quotations with their status. Search, change status, import or export, and open a quote to preview the PDF or email it to the client.', href: 'sales/quotes/' },
   new_entry: { text: 'Fill the form top to bottom. Choosing a catalogue value (such as an item code) fills the linked fields automatically. The quote number is assigned when you save.', href: 'sales/quotes/#creating-a-quote' },
-  inbox: { text: 'Client emails land here. Open one, then use Generate AI Actions for a summary, an extracted quote and a drafted reply. Nothing is sent until you send it.', href: 'email/inbox/' },
+  inbox: { text: 'Client emails land here. Bloomgard AI reads each one: an enquiry shows who wrote, what they want, what is in your catalogue and a drafted reply. Nothing is sent until you send it.', href: 'email/inbox/' },
   alerts: { text: 'Quotes that have gone quiet, scored Hot, Warm or Cold. Review the AI suggested follow-up, edit it if needed, then approve to send.', href: 'sales/follow-ups/' },
   agents: { text: 'Follow-up agents chase quotes for you on a schedule. Set their instructions, importance and frequency, then assign quotes to them.', href: 'sales/follow-ups/#follow-up-agents' },
-  leadgen: { text: 'Enquiries that are not quotes yet. Generate AI Actions on the email, then Create Quote Now to turn it into a quotation.', href: 'sales/lead-gen/' },
+  leadgen: { text: 'Enquiries read from the inbox, scored hot, warm or cold with the reasons. Send the drafted reply, or Create quote to turn one into a quotation in a step.', href: 'sales/lead-gen/' },
   docs: { text: 'Every generated quote PDF. View or download a document again, or delete it.', href: 'sales/quotes/#pdf-export-and-the-document-library' },
   copilot: { text: 'Ask questions about your pipeline, inbox, follow-ups and catalogue in plain language. Answers use only your workspace data.', href: 'ai/dashboard-and-copilot/#bloomgard-ai-chat-assistant' },
   settings: { text: 'Pick a screen to configure your profile, catalogue, team, quote form, email, look and feel, AI behaviour and quote template.', href: 'configuration/settings/' },
@@ -720,6 +725,15 @@ export default function ClientDashboard() {
     } catch (err) { console.error("Inbox Fetch Error:", err); }
   }
 
+  // which emails Bloomgard AI has read as enquiries (for the chips and the Enquiries filter)
+  useEffect(() => {
+    if (currentView !== 'inbox' || !inboxLogs.length) return;
+    const ids = inboxLogs.filter((e: any) => !e.is_deleted).map((e: any) => e.id).slice(0, 100);
+    platformApi(`/api/leads?status=all&email_ids=${ids.join(',')}`)
+      .then((r) => setEmailLeads(Object.fromEntries((r.leads || []).map((l: any) => [l.email_id, { id: l.id, kind: l.kind, status: l.status, temperature: l.temperature, score: l.score }]))))
+      .catch(() => {});
+  }, [inboxLogs, currentView]);
+
   useEffect(() => {
     if (currentView === 'inbox' || currentView === 'copilot') fetchInboxLogs();
   }, [currentView]);
@@ -947,6 +961,16 @@ export default function ClientDashboard() {
   const [savedViews, setSavedViews] = useState<any[]>([]);
   const [activeViewId, setActiveViewId] = useState('');
   const [shareLink, setShareLink] = useState<null | { quoteId: string; url: string }>(null);
+  const [studioTab, setStudioTab] = useState<'build' | 'automations' | 'saved' | 'health' | 'history'>('build');
+  const [focusLeadId, setFocusLeadId] = useState('');
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'enquiries' | 'unread' | 'starred'>('all');
+  const [emailLeads, setEmailLeads] = useState<Record<string, { id: string; kind: string; status: string; temperature: string; score: number }>>({});
+  const openQuoteById = async (id: string) => {
+    let rec = records.find((r: any) => r.id === id);
+    if (!rec && tenantId) { await fetchRecords(tenantId); const { data } = await supabase.from('quotations').select('*, clients (*), quotation_items (*), quotation_attachments (*), status_logs (*)').eq('id', id).maybeSingle(); rec = data; }
+    setCurrentView('pipeline');
+    if (rec) setSelectedRecord(rec);
+  };
   const loadTaskCounts = async () => {
     try { const r = await platformApi('/api/tasks?status=open&scope=mine'); setTaskCounts({ approvals: r.counts?.approvals || 0, todos: r.counts?.todos || 0 }); } catch { /* badge is optional */ }
   };
@@ -1827,15 +1851,7 @@ Command: ${dashCommand}`;
   const handleAnalyzeEmail = async (email) => {
     setIsAnalyzingEmail(true);
     try {
-      const res = await fetch('/api/ai/analyze-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email, blueprint, companyName,
-          agent: { name: user?.full_name || '', title: user?.job_title || '', phone: user?.phone || '' }
-        })
-      });
-      const json = await res.json();
+      const json = await platformApi('/api/ai/analyze-email', { json: { email, blueprint } }).catch((e) => ({ error: e.message }));
       if (json.data) {
         setEmailAiAnalysis(prev => ({ ...prev, [email.id]: json.data }));
       } else {
@@ -1853,12 +1869,8 @@ Command: ${dashCommand}`;
     if (!analysis?.lead_gen_quote) return alert("Run 'Generate AI Actions' first.");
     setIsCreatingQuoteFromEmail(true);
     try {
-      const res = await fetch(getApiUrl('/api/quote-from-email'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId, emailId: email.id, analysis, agentEmail: user?.email }),
-      });
-      const json = await res.json();
+      // signed in: the workspace and owner come from the session, not the request
+      const json = await platformApi('/api/quote-from-email', { json: { emailId: email.id, analysis } }).catch((e) => ({ error: e.message }));
       if (json.success) {
         await fetchRecords(tenantId);
         if (confirm(`Created ${json.qn_number} with ${json.itemCount} item(s). Open it now?`)) {
@@ -1974,6 +1986,7 @@ Command: ${dashCommand}`;
                   if (rec) setSelectedRecord(rec);
                   return;
                 }
+                if (link.view === 'leadgen') { setFocusLeadId(link.sub || ''); setCurrentView('leadgen'); return; }
                 if (link.sub) { setSettingsSubView(link.sub); setCurrentView('settings'); return; }
                 setCurrentView(link.view || 'home');
               }} />
@@ -2063,8 +2076,11 @@ Command: ${dashCommand}`;
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
             <StudioView
               isManager={isManager}
+              userEmail={user?.email || ''}
+              tab={studioTab}
+              onTabChange={setStudioTab}
+              onOpenQuote={(id) => { const rec = records.find((r: any) => r.id === id); if (rec) setSelectedRecord(rec); }}
               onAskAI={askAI}
-              onOpenAutomations={isManager ? () => { setSettingsSubView('automations'); setCurrentView('settings'); } : undefined}
               onChanged={async (kinds) => {
                 if (tenantId) fetchRecords(tenantId);
                 loadSavedViews();
@@ -2365,12 +2381,12 @@ Command: ${dashCommand}`;
                   { key: 'personalization', icon: Sparkles, title: 'Personalization', desc: 'Switch between the light and dark Jaali themes.', managerOnly: false },
                   { key: 'ai-personality', icon: Bot, title: 'AI Settings', desc: 'Tone, English level, instructions and email routing rules.', managerOnly: true },
                   { key: 'quote-template', icon: Palette, title: 'Quote Template', desc: 'Brand identity and the HTML your quote PDFs are built from.', managerOnly: true },
-                  { key: 'automations', icon: Workflow, title: 'Automations', desc: 'Rules that chase quiet quotes, hand out tasks and keep the team informed, with every run on record.', managerOnly: false },
+                  { key: 'automations', icon: Workflow, title: 'Automations', desc: 'Rules that chase quiet quotes, hand out tasks and keep the team informed. They live in Studio, with everything else the AI builds.', managerOnly: false },
                   { key: 'plugins', icon: Plug, title: 'Plugins', desc: 'Webhook, Slack, an inbound API for your website form, and an accounting export.', managerOnly: false },
                 ].filter(item => !item.managerOnly || isManager).map(item => {
                   const Icon = item.icon;
                   return (
-                    <button key={item.key} onClick={() => setSettingsSubView(item.key)} className="set-row">
+                    <button key={item.key} onClick={() => { if (item.key === 'automations') { setStudioTab('automations'); setCurrentView('studio'); } else setSettingsSubView(item.key); }} className="set-row">
                       <Icon className="set-row__icon" aria-hidden />
                       <span className="set-row__text">
                         <span className="set-row__title">{item.title}</span>
@@ -2628,15 +2644,6 @@ Command: ${dashCommand}`;
                   </>
                 )}
               </section>
-            )}
-
-            {settingsSubView === 'automations' && (
-              <AutomationsView
-                isManager={isManager}
-                userEmail={user?.email || ''}
-                onOpenQuote={(id) => { const rec = records.find((r: any) => r.id === id); if (rec) setSelectedRecord(rec); }}
-                onAskAI={askAI}
-              />
             )}
 
             {settingsSubView === 'plugins' && <PluginsView isManager={isManager} />}
@@ -3258,7 +3265,43 @@ Command: ${dashCommand}`;
           </div>
         )}
 
-        {(currentView === "pipeline" || currentView === "leadgen") && (
+        {currentView === "leadgen" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
+            <header className="mb-6">
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Lead Generation</h2><DocsLink view="leadgen" /></div>
+              <p className="text-sm text-gray-600 mt-1">Enquiries that are not quotes yet. New client emails are read by Bloomgard AI as they arrive: who wrote, what they want, what is in your catalogue, and how promising it looks.</p>
+            </header>
+            <LeadsView
+              isManager={isManager}
+              userEmail={user?.email || ''}
+              focusLeadId={focusLeadId}
+              onOpenQuote={(id) => { setFocusLeadId(''); openQuoteById(id); }}
+              onOpenEmail={(id) => { const em = inboxLogs.find((e: any) => e.id === id); setCurrentView('inbox'); if (em) setSelectedInboxEmail(em); }}
+              onReviewInForm={(lead) => {
+                setEditingId(null); setQn('');
+                const base = blueprint.reduce((acc, s) => ({ ...acc, [s.title]: s.is_log ? [] : s.allow_multiple ? [{}] : {} }), {});
+                const client = blueprint.find((s: any) => !s.allow_multiple && /client|customer/i.test(s.title));
+                const items = blueprint.find((s: any) => s.allow_multiple && /product|item/i.test(s.title));
+                if (client) base[client.title] = { client_name: lead.contact?.company || '', contact_person: lead.contact?.name || '', email_id: lead.from_email || '', phone_number: lead.contact?.phone || '', billing_address: [lead.contact?.city, lead.contact?.country].filter(Boolean).join(', ') };
+                if (items && lead.requirements?.length) base[items.title] = lead.requirements.map((q: any) => ({ item_code: q.item_code || '', item_name: q.item_name || q.text || '', quantity: q.quantity ? String(q.quantity) : '', uom: q.uom || '', item_rate: q.rate != null ? String(q.rate) : '' }));
+                setDynamicData(base);
+                setCurrentView('new_entry');
+              }}
+            />
+            {records.some((r: any) => r.status === 'Lead') && (
+              <section className="mt-10">
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Older leads saved as quotes</h3>
+                <ul className="border-t border-gray-200">
+                  {records.filter((r: any) => r.status === 'Lead').map((r: any) => (
+                    <li key={r.id}><button className="w-full text-left py-2.5 border-b border-gray-200 text-sm flex gap-3 hover:bg-gray-50" onClick={() => setSelectedRecord(r)}><span className="font-mono text-xs text-gray-500">{r.qn_number}</span><span className="text-gray-900">{getManifestTitle(r)}</span></button></li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+
+        {currentView === "pipeline" && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-500 max-w-6xl mx-auto">
             <div className="flex flex-col gap-4 mb-6">
               <div className="flex items-center justify-start gap-6">
@@ -3384,11 +3427,20 @@ Command: ${dashCommand}`;
                     className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[var(--neelam)] focus:ring-4 focus:ring-[rgba(39,71,216,0.12)] transition-all"
                   />
                 </div>
+                <div className="qv-tabs" role="tablist" aria-label="Show">
+                  {([['all', 'All'], ['enquiries', 'Enquiries'], ['unread', 'Unread'], ['starred', 'Starred']] as const).map(([k, label]) => (
+                    <button key={k} role="tab" aria-selected={inboxFilter === k} className={`qv-tab ${inboxFilter === k ? 'qv-tab--on' : ''}`} onClick={() => setInboxFilter(k)}>
+                      {label}{k === 'enquiries' ? ` ${Object.values(emailLeads).filter((l) => l.status !== 'discarded' && l.status !== 'converted').length || ''}` : ''}
+                    </button>
+                  ))}
+                </div>
               </header>
               <div className="flex-1 overflow-y-auto">
                 {inboxLogs
                   .filter(log => !log.is_deleted)
                   .filter(log => log.subject?.toLowerCase().includes(inboxSearch.toLowerCase()) || log.sender_email?.toLowerCase().includes(inboxSearch.toLowerCase()))
+                  .filter(log => inboxFilter === 'all' || (inboxFilter === 'unread' && !log.is_read) || (inboxFilter === 'starred' && log.is_starred)
+                    || (inboxFilter === 'enquiries' && emailLeads[log.id] && emailLeads[log.id].status !== 'discarded'))
                   .map((log) => (
                     <div key={log.id} onClick={() => { setSelectedInboxEmail(log); if (!log.is_read) handleInboxAction(log.id, 'is_read', true); }} className={`pl-4 pr-5 py-3.5 border-b border-gray-200 cursor-pointer transition-colors ${selectedInboxEmail?.id === log.id ? 'bg-gray-100 border-l-4 border-l-[var(--sindoor)]' : 'hover:bg-gray-50 border-l-4 border-l-transparent'}`}>
                       <div className="flex justify-between items-start mb-1">
@@ -3397,7 +3449,12 @@ Command: ${dashCommand}`;
                           <span className="text-[11px] text-gray-400 whitespace-nowrap tabular-nums">{new Date(log.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
                         </div>
                       </div>
-                      <div className={`text-[13px] truncate mb-0.5 ${log.is_read ? 'text-gray-600' : 'font-semibold text-gray-800'}`}>{log.subject || 'No Subject'}</div>
+                      <div className={`text-[13px] truncate mb-0.5 flex items-center gap-2 ${log.is_read ? 'text-gray-600' : 'font-semibold text-gray-800'}`}>
+                        {emailLeads[log.id] && emailLeads[log.id].status !== 'discarded' && (
+                          <span className={`inbox-lead inbox-lead--${emailLeads[log.id].temperature}`} title={`Enquiry, scored ${emailLeads[log.id].score}`}>{emailLeads[log.id].status === 'converted' ? 'Quoted' : `Lead · ${emailLeads[log.id].temperature}`}</span>
+                        )}
+                        <span className="truncate">{log.subject || 'No Subject'}</span>
+                      </div>
                       <div className="text-xs text-gray-500 truncate flex items-center justify-between">
                         <span className="truncate pr-4">{log.body_text?.substring(0, 50)}...</span>
                         <button
@@ -3443,6 +3500,8 @@ Command: ${dashCommand}`;
 
                   <div className="mb-8 border border-gray-200 dark:border-gray-300 rounded-xl overflow-hidden bg-white shadow-sm">
                     <textarea
+                      id="inbox-reply"
+                      aria-label="Reply"
                       value={inboxReplyText}
                       onChange={(e) => setInboxReplyText(e.target.value)}
                       placeholder="Type your reply here..."
@@ -3462,61 +3521,15 @@ Command: ${dashCommand}`;
                     </div>
                   </div>
 
-                  <div className="mt-4 border-t border-gray-200 dark:border-gray-200 pt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-400 flex items-center gap-2">
-                        <div className="flex items-center gap-2.5"><span className="agent-orb agent-orb--sm" aria-hidden /> <span className="font-semibold text-gray-900">Bloomgard AI analysis</span></div>
-                      </h3>
-                      {!emailAiAnalysis[selectedInboxEmail.id] && (
-                        <button onClick={() => handleAnalyzeEmail(selectedInboxEmail)} disabled={isAnalyzingEmail} className="agent-btn agent-btn--primary">
-                          {isAnalyzingEmail ? "Analyzing..." : "Generate AI Actions"}
-                        </button>
-                      )}
-                    </div>
-
-                    {emailAiAnalysis[selectedInboxEmail.id] && (
-                      <div className="grid grid-cols-1 gap-4">
-                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-2">Summary</h4>
-                          <p className="text-sm text-gray-700 dark:text-gray-700 mb-4">{emailAiAnalysis[selectedInboxEmail.id].summary}</p>
-                          <button onClick={() => alert("Summary marked as reviewed!")} className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 text-[10px] font-bold rounded-lg hover:bg-indigo-50 transition-all uppercase tracking-wider">Approve Summary</button>
-                        </div>
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800">
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2">Lead Gen Quote Extracted</h4>
-                          <pre className="text-[10px] text-gray-600 dark:text-gray-400 mb-4 max-h-32 overflow-y-auto bg-white/50 p-2 rounded">
-                            {JSON.stringify(emailAiAnalysis[selectedInboxEmail.id].lead_gen_quote, null, 2)}
-                          </pre>
-                          <div className="flex gap-2 flex-wrap">
-                            <button
-                              onClick={() => handleCreateQuoteFromEmail(selectedInboxEmail, emailAiAnalysis[selectedInboxEmail.id])}
-                              disabled={isCreatingQuoteFromEmail}
-                              className="px-3 py-1.5 bg-emerald-600 text-white border border-emerald-700 text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-all uppercase tracking-wider disabled:opacity-50"
-                            >
-                              {isCreatingQuoteFromEmail ? "Creating…" : "Create Quote Now"}
-                            </button>
-                            <button onClick={() => {
-                              setEditingId("new");
-                              setQn("");
-                              setDynamicData(emailAiAnalysis[selectedInboxEmail.id].lead_gen_quote);
-                              setCurrentView("new_entry");
-                            }} className="px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-lg hover:bg-emerald-50 transition-all uppercase tracking-wider">Review in Form</button>
-                          </div>
-                        </div>
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Drafted Auto-Reply</h4>
-                          <div className="text-sm text-gray-700 dark:text-gray-700 mb-4 whitespace-pre-wrap bg-white/50 p-3 rounded">{emailAiAnalysis[selectedInboxEmail.id].auto_reply}</div>
-                          <button onClick={() => {
-                            setEmailDraft({
-                              to: selectedInboxEmail.sender_email,
-                              subject: "Re: " + selectedInboxEmail.subject,
-                              message: emailAiAnalysis[selectedInboxEmail.id].auto_reply,
-                              attachments: [], filename: ""
-                            });
-                            setShowEmailModal(true);
-                          }} className="px-3 py-1.5 bg-blue-600 text-white border border-blue-700 text-[10px] font-bold rounded-lg hover:bg-blue-700 transition-all uppercase tracking-wider">Approve & Open Draft</button>
-                        </div>
-                      </div>
-                    )}
+                  {/* Bloomgard AI's reading of this email: enquiry or not, who, what, catalogue matches, a drafted reply */}
+                  <div className="mt-2">
+                    <InboxLeadPanel
+                      key={selectedInboxEmail.id}
+                      emailId={selectedInboxEmail.id}
+                      onOpenLead={(id) => { setFocusLeadId(id); setCurrentView('leadgen'); }}
+                      onOpenQuote={(id) => openQuoteById(id)}
+                      onUseReply={(body) => { setInboxReplyText(body); setTimeout(() => { const el = document.getElementById('inbox-reply'); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); (el as any)?.focus(); }, 30); }}
+                    />
                   </div>
                 </div>
               ) : (

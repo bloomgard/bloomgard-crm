@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { guard } from '@/lib/requireTenant';
 import { getDynamicSender, sendEmail } from '@/lib/email';
 import { createClient } from '@supabase/supabase-js';
 
@@ -21,6 +22,11 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // the workspace comes from the caller's session (or an in-process server call), never from the body
+    const g = await guard(req, body?.tenantId || body?.parsedTenantId || null);
+    if (!g.ok) return g.response;
+    body.tenantId = g.tenantId;
+    if (g.ctx) { body.agentEmail = g.ctx.email; body.agentId = g.ctx.userId; }
     const { to, cc, bcc, subject, message, attachments, agentEmail, agentId, senderPreference, tenantId, companyName, customSender } = body;
 
     if (!to || !subject || !message) {

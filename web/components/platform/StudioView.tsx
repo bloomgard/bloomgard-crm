@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Sparkles, Wand2, RotateCcw, Trash2 } from "lucide-react";
 import { api } from "@/lib/platform/client";
 import { HealthBlock } from "./BuilderBlocks";
+import AutomationsView from "./AutomationsView";
 import s from "./StudioView.module.css";
 
 type Changeset = {
@@ -30,12 +31,21 @@ const STATUS: Record<Changeset["status"], string> = { draft: "Draft", applied: "
  * here, apply it when it looks right, and roll any applied set back in one step. Also a health
  * check, and the views and skills the team has saved.
  */
-export default function StudioView({ isManager, onAskAI, onChanged, onOpenAutomations }: {
+export type StudioTab = "build" | "automations" | "saved" | "health" | "history";
+
+export default function StudioView({ isManager, userEmail, onAskAI, onChanged, tab: tabProp, onTabChange, onOpenQuote }: {
   isManager: boolean;
+  userEmail: string;
   onAskAI: (prompt: string) => void;
   onChanged?: (refresh: string[]) => void;
-  onOpenAutomations?: () => void;
+  tab?: StudioTab;
+  onTabChange?: (t: StudioTab) => void;
+  onOpenQuote?: (quoteId: string) => void;
 }) {
+  const [tabState, setTabState] = useState<StudioTab>(tabProp || "build");
+  useEffect(() => { if (tabProp) setTabState(tabProp); }, [tabProp]);
+  const tab = tabState;
+  const setTab = (t: StudioTab) => { setTabState(t); onTabChange?.(t); };
   const [ask, setAsk] = useState("");
   const [sets, setSets] = useState<Changeset[]>([]);
   const [views, setViews] = useState<Saved[]>([]);
@@ -94,9 +104,24 @@ export default function StudioView({ isManager, onAskAI, onChanged, onOpenAutoma
     <div className={s.page}>
       <header className={s.header}>
         <h2 className="text-3xl font-bold text-gray-900">Studio</h2>
-        <p className={s.lede}>Bloomgard AI builds your workspace with you: automations, views, skills, form changes and data fixes. Everything is drafted here first. Nothing goes live until it is applied, and anything applied can be rolled back.</p>
+        <p className={s.lede}>Where your workspace gets built. Ask Bloomgard AI for automations, quote views, skills, form changes or data fixes: it drafts them here, nothing goes live until it is applied, and anything applied can be rolled back. The automations it builds, and the ones you make by hand, all live under Automations.</p>
       </header>
 
+      <nav className={s.tabs} role="tablist" aria-label="Studio">
+        {([
+          ["build", "Build", drafts.length],
+          ["automations", "Automations", null],
+          ["saved", "Views & skills", views.length + skills.length],
+          ["health", "Health check", health ? health.findings.length : null],
+          ["history", "History", history.length],
+        ] as Array<[StudioTab, string, number | null]>).map(([k, label, n]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={`${s.tab} ${tab === k ? s.tabOn : ""}`} onClick={() => setTab(k)}>
+            {label}{n != null && n > 0 ? <b>{n}</b> : null}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "build" && <>
       <section className={s.ask} aria-label="Ask Bloomgard AI to build something">
         <label htmlFor="studio-ask" className={s.askLabel}><Wand2 aria-hidden /> What should your workspace do?</label>
         <div className={s.askRow}>
@@ -136,6 +161,13 @@ export default function StudioView({ isManager, onAskAI, onChanged, onOpenAutoma
         )}
       </section>
 
+      </>}
+
+      {tab === "automations" && (
+        <AutomationsView isManager={isManager} userEmail={userEmail} onOpenQuote={onOpenQuote} />
+      )}
+
+      {tab === "health" && (
       <section className={s.section} aria-labelledby="studio-health">
         <div className={s.sectionHead}>
           <h3 id="studio-health">Health check</h3>
@@ -159,6 +191,9 @@ export default function StudioView({ isManager, onAskAI, onChanged, onOpenAutoma
         )}
       </section>
 
+      )}
+
+      {tab === "saved" && <>
       <div className={s.grid}>
         <section className={s.section} aria-labelledby="studio-views">
           <div className={s.sectionHead}><h3 id="studio-views">Quote views <b>{views.length}</b></h3></div>
@@ -179,8 +214,9 @@ export default function StudioView({ isManager, onAskAI, onChanged, onOpenAutoma
           )}
         </section>
       </div>
-      {onOpenAutomations && <p className={s.meta}>Automations live in <button className={s.link} onClick={onOpenAutomations}>Settings → Automations</button>, where you can switch them on and off and see every run.</p>}
+      </>}
 
+      {tab === "history" && (
       <section className={s.section} aria-labelledby="studio-history">
         <div className={s.sectionHead}><h3 id="studio-history">History</h3></div>
         {history.length === 0 ? <p className={s.empty}>Applied, discarded and rolled-back changes are kept here.</p> : (
@@ -202,6 +238,7 @@ export default function StudioView({ isManager, onAskAI, onChanged, onOpenAutoma
           </ul>
         )}
       </section>
+      )}
     </div>
   );
 }

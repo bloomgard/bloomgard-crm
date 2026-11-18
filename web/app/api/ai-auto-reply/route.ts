@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { guard } from '@/lib/requireTenant';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email';
 
@@ -13,7 +14,12 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
-    const { threadId, tenantId } = await request.json();
+    const body = await request.json();
+    // the workspace comes from the caller's session (or an in-process server call), never from the body
+    const g = await guard(request, body?.tenantId || body?.parsedTenantId || null);
+    if (!g.ok) return g.response;
+    body.tenantId = g.tenantId;
+    const { threadId, tenantId } = body;
 
     if (!threadId || !tenantId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
