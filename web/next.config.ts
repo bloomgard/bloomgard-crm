@@ -2,11 +2,11 @@ import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // This app IS the project root. Without this, a stray package-lock.json anywhere above the
-  // checkout (a home directory, say) is picked as the workspace root, and the dev server then
-  // watches and caches the wrong tree — globals.css edits stop reaching the browser.
-  turbopack: { root: path.join(__dirname) },
-  outputFileTracingRoot: path.join(__dirname),
+  // Locally this app IS the project root: without it a stray package-lock.json above the checkout
+  // (a home directory, say) is picked as the workspace root and the dev server caches the wrong
+  // tree. Not on Vercel, whose builder expects its own root (setting it there broke the deploy:
+  // ENOENT .next/server/pages-manifest.json).
+  ...(process.env.VERCEL ? {} : { turbopack: { root: path.join(__dirname) }, outputFileTracingRoot: path.join(__dirname) }),
 
   // Ensure backend plugins like Puppeteer work properly on Vercel
   serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
