@@ -17,6 +17,8 @@ export const DEFAULT_SCHEMA: any[] = [
     allow_multiple: false,
     fields: [
       { label: "Pipeline Status", name: "status", type: "master_status", options: "Inquiry, Quotation Given, Approved, Lost" },
+      { label: "Currency", name: "currency", type: "dropdown", options: "INR, USD, EUR, GBP, AED" },
+      { label: "Incoterms", name: "incoterms", type: "dropdown", options: "EXW, FCA, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP" },
       { label: "Payment Terms", name: "payment_terms", type: "text" },
       { label: "Delivery Terms", name: "delivery_terms", type: "text" },
       // Adds itself up from the line items: the quote list, the pipeline value and {{subtotal}}

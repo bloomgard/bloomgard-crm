@@ -142,12 +142,15 @@ Change shapes:
     title: { type: 'string' }, assign_to: { type: 'string', description: 'Email of a workspace member. Omit to leave it unassigned.' },
     due_in_days: { type: 'integer' }, note: { type: 'string' }, qn: { type: 'string', description: 'Quote number it is about, if any.' },
   }, ['title']),
+  fn('share_quote', 'Prepare a client link for a quote: a page the client opens in a browser, with no login, to read the quote and Accept it or ask for changes (both are logged and the owner is told). Making a new link retires the old one. Put the link in a send_email body when asked to send it. The user must confirm.', {
+    qn: { type: 'string' },
+  }, ['qn']),
   fn('add_note', 'Prepare an internal team note on a quote (never sent to the client). @Name mentions notify those people. The user must confirm.', {
     qn: { type: 'string' }, body: { type: 'string' },
   }, ['qn', 'body']),
 ];
 
-const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings', 'add_log_entry', 'change_form', 'add_user', 'create_task', 'add_note']);
+const WRITE_TOOLS = new Set(['send_email', 'create_quote', 'update_quote_status', 'update_master_item', 'add_master_item', 'update_settings', 'add_log_entry', 'change_form', 'add_user', 'create_task', 'add_note', 'share_quote']);
 export const isWriteTool = (name: string) => WRITE_TOOLS.has(name);
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -159,7 +162,7 @@ export const TOOL_LABELS: Record<string, string> = {
   add_master_item: 'Preparing catalogue item', update_settings: 'Preparing settings change', add_log_entry: 'Preparing log entry', change_form: 'Preparing form changes', add_user: 'Preparing new user',
   diagnose_workspace: 'Checking workspace health', list_automations: 'Reading automations', dry_run_automation: 'Trying the automation in the sandbox',
   propose_changes: 'Drafting changes in the sandbox', list_changes: 'Reading the sandbox', list_tasks: 'Reading the OK list', list_team: 'Reading the team',
-  create_task: 'Preparing task', add_note: 'Preparing team note',
+  create_task: 'Preparing task', add_note: 'Preparing team note', share_quote: 'Preparing client link',
 };
 
 /* ------------------------------------------------------------------ */
@@ -821,6 +824,17 @@ export async function prepare(name: string, a: any, ctx: AgentCtx): Promise<Tool
         };
         break;
       }
+      case 'share_quote': {
+        const q = await findQuote(ctx, a.qn);
+        if (!q) throw new Error(`No quote "${a.qn}" that you can access.`);
+        action = {
+          kind: 'share_quote', title: 'Make a client link', risk: 'external',
+          summary: `${q.qn_number} for ${clientName(q) || 'the client'}`,
+          details: [['Quote', q.qn_number], ['Client sees', 'the quote, with Accept and Ask for changes'], ['Older link', 'stops working']],
+          payload: { qn: q.qn_number },
+        };
+        break;
+      }
       case 'add_note': {
         const q = await findQuote(ctx, a.qn);
         if (!q) throw new Error(`No quote "${a.qn}" that you can access.`);
@@ -1004,6 +1018,14 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
         quote_id: q?.id || null, qn: q?.qn_number || null, assigned_to: p.assign_to || null, due_at: p.due_at || null, created_by: ctx.email,
       });
       return { ok: true, message: `Added "${t.title}" to the OK list${t.data.assigned_email ? ` for ${t.data.assigned_email}` : ''}.`, refresh: ['tasks'] };
+    }
+    case 'share_quote': {
+      const q = await findQuote(ctx, p.qn);
+      if (!q) throw new Error('Quote not found.');
+      const { createShareLink } = await import('@/lib/platform/share');
+      const { token } = await createShareLink(ctx, q.id);
+      const base = (ctx as any).origin || process.env.NEXT_PUBLIC_APP_URL || 'https://cma.bloomgard.co';
+      return { ok: true, message: `Client link for ${q.qn_number}: ${base}/q/${token}` };
     }
     case 'add_note': {
       const q = await findQuote(ctx, p.qn);

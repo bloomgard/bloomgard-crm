@@ -59,6 +59,19 @@ status **Transition** control and the audit log. **Save Edits** stores changes.
 - **Preview PDF** renders the quote with your [quote template](./settings.md#quote-template) before you export.
 - **Export PDF / Download PDF** produces the document. Generated PDFs are added to **Docs → Document Library**, where you can view or download them again or delete them.
 
+## The client link
+
+**Client link** on an open quote makes a page your client can open in any browser, with no login
+and no attachment: the quote, its items and total, and two buttons.
+
+- **Accept this quote** moves it to your accepted stage (Approved, Accepted, Won or PO Received,
+  whichever your pipeline has) and tells you and the managers.
+- **Ask for changes** keeps the status and gives the quote's owner a task with the client's request.
+
+Both go in the Status Log with the client's name, and the first time the client opens the link is
+logged too. The link is copied for you to paste into an email or WhatsApp; making a new link
+retires the old one. Bloomgard AI can make one as well: "send Rohit a link to accept QN-2026-014".
+
 ## Emailing a quote
 
 **Deploy Email** opens the send dialog: choose **Send As** (your personal address or the

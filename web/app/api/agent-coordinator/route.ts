@@ -152,30 +152,21 @@ export async function POST(request: Request) {
           - Strictly follow your core instructions and tone.
           - Achieve the assigned task over this phone call.`;
 
-          const blandApiKey = process.env.BLAND_API_KEY;
-          if (!blandApiKey) throw new Error("BLAND_API_KEY is not set in environment variables.");
-
-          const callRes = await fetch('https://api.bland.ai/v1/calls', {
-            method: 'POST',
-            headers: {
-              'authorization': blandApiKey,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              phone_number: clientPhone,
-              task: callTaskPrompt,
-              reduce_latency: true,
-              voice_id: 0
-            })
-          });
-
-          if (!callRes.ok) {
-            const errData = await callRes.text();
-            throw new Error(`Bland AI Error: ${errData}`);
-          }
-
-          await supabase.from('quotations').update({ follow_up_status: 'Voice Call Dispatched', last_contact_date: new Date().toISOString() }).eq('id', quote.id);
-          await supabase.from('status_logs').insert([{ quotation_id: quote.id, old_status: quote.status, new_status: quote.status, comments: `Autonomous Agent [${agent.name}] dispatched VOICE CALL based on Importance Level ${agent.importance}.` }]);
+          // Nothing reaches a client without a person's OK. An AI phone call is client-facing, so
+          // instead of dialing it goes on the OK list with its script; a person makes (or approves)
+          // the call. Automatic AI calls come back once a calls provider is connected in Plugins.
+          const { createTask } = await import('@/lib/platform/tasks');
+          const callTask = {
+            title: `Call ${clientName || 'the client'} about ${quote.qn_number}`,
+            type: 'todo' as const, source: 'workflow' as const, source_label: `Follow-up agent: ${agent.name}`,
+            note: `Phone: ${clientPhone}. Task: ${agent.task}.\n\nSuggested script:\n${callTaskPrompt}`.slice(0, 4000),
+            quote_id: quote.id, qn: quote.qn_number, created_by: agent.email || null,
+          };
+          // the quote's owner if they are a member; otherwise leave it for whoever picks it up
+          await createTask(tenantId, { ...callTask, assigned_to: quote.created_by_email || null })
+            .catch(() => createTask(tenantId, { ...callTask, assigned_to: null }));
+          await supabase.from('quotations').update({ follow_up_status: 'Call Task Created', last_contact_date: new Date().toISOString() }).eq('id', quote.id);
+          await supabase.from('status_logs').insert([{ quotation_id: quote.id, old_status: quote.status, new_status: quote.status, comments: `Follow-up agent [${agent.name}] asked for a call; it is on the OK list for a person.` }]);
           
           processedCount++;
 

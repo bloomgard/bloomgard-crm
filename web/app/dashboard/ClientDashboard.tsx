@@ -26,6 +26,7 @@ import StudioView from '@/components/platform/StudioView';
 import { api as platformApi, emitClientEvent } from '@/lib/platform/client';
 import { CheckSquare, UsersRound, Wand2, Workflow, Plug } from 'lucide-react';
 import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
+import { CURRENCIES, currencyCode, money } from '@/lib/currency';
 
 // BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
@@ -580,6 +581,12 @@ export default function ClientDashboard() {
       .then(({ data }) => { if (data) setDynamicInsights(data); });
   }, [tenantId]);
 
+  // /dashboard?view=tasks opens that screen (app shortcuts, links in notification emails)
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('view');
+    if (v && ['home', 'pipeline', 'inbox', 'alerts', 'tasks', 'leadgen', 'docs', 'team', 'studio', 'settings', 'new_entry'].includes(v)) setCurrentView(v);
+  }, []);
+
   // a prefill note belongs to the form it was made in
   useEffect(() => { setPrefillNote(null); }, [currentView, editingId]);
 
@@ -939,6 +946,7 @@ export default function ClientDashboard() {
   const [pendingAsk, setPendingAsk] = useState('');
   const [savedViews, setSavedViews] = useState<any[]>([]);
   const [activeViewId, setActiveViewId] = useState('');
+  const [shareLink, setShareLink] = useState<null | { quoteId: string; url: string }>(null);
   const loadTaskCounts = async () => {
     try { const r = await platformApi('/api/tasks?status=open&scope=mine'); setTaskCounts({ approvals: r.counts?.approvals || 0, todos: r.counts?.todos || 0 }); } catch { /* badge is optional */ }
   };
@@ -992,7 +1000,7 @@ export default function ClientDashboard() {
     let v = extractValue(record, col.name, col.sectionTitle);
     if ((v === "" || v == null) && /subtotal|amount|^total$/i.test(String(col.name))) v = itemsTotal(record);
     if (v === "" || v == null) return "-";
-    return isMoney ? `₹${formatValue(v, true)}` : formatValue(v, false);
+    return isMoney ? money(v, extractValue(record, 'currency', 'Quote Details')) : formatValue(v, false);
   };
 
   const getManifestTitle = (record = selectedRecord) => {
@@ -1664,6 +1672,11 @@ Command: ${dashCommand}`;
     });
 
     templateData['subtotal'] = formatValue(record.subtotal || extractValue(record, 'subtotal', 'Quote Details') || itemsTotal(record) || "0", true);
+    // {{currency}} is the code (INR, USD…), {{currency_symbol}} its sign, {{subtotal_money}} the amount with it
+    const cur = currencyCode(extractValue(record, 'currency', 'Quote Details'));
+    templateData['currency'] = cur;
+    templateData['currency_symbol'] = CURRENCIES[cur].symbol.trim();
+    templateData['subtotal_money'] = money(record.subtotal || extractValue(record, 'subtotal', 'Quote Details') || itemsTotal(record) || 0, cur);
     templateData['company_logo'] = logoUrl || "";
 
     try {
@@ -3985,7 +3998,11 @@ Command: ${dashCommand}`;
                             <div key={fIdx} className="flex flex-col border-b border-gray-50 pb-2">
                               <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{f.label}</p>
                               <p className="text-sm font-medium text-gray-900 break-words">
-                                {f.type === 'file' || f.type === 'attachment' ? (v ? <span className="text-green-600 text-[10px] font-bold"><Check className="w-3 h-3 inline mr-1" /> File Secured</span> : '—') : (v != null && v !== '' ? String(v) : '—')}
+                                {f.type === 'file' || f.type === 'attachment' ? (v ? <span className="text-green-600 text-[10px] font-bold"><Check className="w-3 h-3 inline mr-1" /> File Secured</span> : '—')
+                                  // a phone number is a call away; an email address opens a new message
+                                  : v && /phone|mobile|whatsapp/i.test(f.name) ? <a className="underline decoration-dotted underline-offset-4" href={`tel:${String(v).replace(/[^0-9+]/g, '')}`}>{String(v)}</a>
+                                  : v && /email/i.test(f.name) && /@/.test(String(v)) ? <a className="underline decoration-dotted underline-offset-4" href={`mailto:${String(v).trim()}`}>{String(v)}</a>
+                                  : (v != null && v !== '' ? String(v) : '—')}
                               </p>
                             </div>
                           );
@@ -3997,11 +4014,32 @@ Command: ${dashCommand}`;
               })}
             </div>
 
-            <div className="mt-12 pt-8 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4 pb-8">
+            <div className="mt-12 pt-8 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-4 pb-4">
               <button onClick={() => handleViewDocument(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Preview PDF</button>
               <button onClick={() => handleGeneratePDF(selectedRecord)} className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform">Download PDF</button>
+              <button
+                onClick={async () => {
+                  try {
+                    const r = await platformApi(`/api/quotes/${selectedRecord.id}/share`, { json: {} });
+                    setShareLink({ quoteId: selectedRecord.id, url: r.url });
+                    navigator.clipboard?.writeText(r.url).catch(() => {});
+                  } catch (e: any) { alert(e.message); }
+                }}
+                className="bg-white border border-gray-200 text-gray-700 py-3.5 rounded-xl font-semibold text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-transform"
+              >Client link</button>
               <button onClick={() => handleOpenEmailComposer(selectedRecord)} className="bg-gray-900 text-white py-3.5 rounded-xl font-semibold text-xs shadow-md hover:bg-gray-800 active:scale-95 transition-transform">Mail</button>
             </div>
+            {shareLink?.quoteId === selectedRecord.id && (
+              <div className="share-box" data-testid="share-link">
+                <p><b>Link copied.</b> Your client can open the quote in a browser and accept it or ask for changes; you hear about both, and it goes in the Status Log. Making a new link retires this one.</p>
+                <div className="share-box__row">
+                  <input readOnly value={shareLink.url} aria-label="Client link" onFocus={(e) => e.currentTarget.select()} />
+                  <button onClick={() => navigator.clipboard?.writeText(shareLink.url).catch(() => {})}>Copy</button>
+                  <a href={`${shareLink.url}?preview=1`} target="_blank" rel="noreferrer">Preview</a>
+                </div>
+              </div>
+            )}
+            <div className="pb-8" />
           </div>
         </div>
       )}

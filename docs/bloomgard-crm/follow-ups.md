@@ -60,5 +60,7 @@ Autonomous Follow-up Agents**). An agent has:
 
 Assign quotes to an agent when you create them (**Assign Agent**) or later from the agent's
 page (**Assign Quotes to Agent**). When a follow-up is due the agent writes and dispatches
-it; **View Details & Logs** shows what it has done. Quotes with no agent stay on manual
+it by email. An agent set to call asks for a call instead: it puts a task with the phone number
+and a suggested script on the [OK list](./ok-list.md), because nothing reaches a client without a
+person's OK; **View Details & Logs** shows what it has done. Quotes with no agent stay on manual
 follow-up.

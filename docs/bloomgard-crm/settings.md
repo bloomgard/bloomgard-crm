@@ -55,8 +55,8 @@ Design the quote form without code. The form is made of **modules** (sections su
 
 ### What a new workspace starts with
 
-Signing up gives you a working form, not an empty one: **Client Information**, **Quote Details**,
-**Products** and **Official Documents**. **Subtotal** is a formula (`SUM[Products.item_br]`) so the
+Signing up gives you a working form, not an empty one: **Client Information**, **Quote Details**
+(with **Currency** and **Incoterms** for export quotes), **Products** and **Official Documents**. **Subtotal** is a formula (`SUM[Products.item_br]`) so the
 quote's value adds itself up from the line items, and [Quote Template](#quote-template) already holds the
 **Classic** layout, so your first **Preview PDF** is a real quotation. Change any of it whenever you like.
 
@@ -126,4 +126,5 @@ They are a choice, never applied for you:
 Insert quote values with the field keys from the [Field Configurator](#field-configurator), for example
 `{{client_name}}`, `{{qn_number}}`, `{{date}}` and `{{subtotal}}`. Line items repeat inside
 `{{#each quotation_items}} … {{/each}}`, where `{{item_code}}`, `{{item_name}}`, `{{quantity}}`, `{{uom}}`,
-`{{item_rate}}` and `{{item_br}}` are available.
+`{{item_rate}}` and `{{item_br}}` are available. `{{currency}}` is the quote's currency code,
+`{{currency_symbol}}` its sign, and `{{subtotal_money}}` the total written with it (₹2,49,600, $249,600).

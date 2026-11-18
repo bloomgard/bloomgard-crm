@@ -6,7 +6,7 @@
 
 export type Kind =
   | 'task' | 'workflow' | 'workflow_run' | 'notification' | 'comment'
-  | 'plugin' | 'changeset' | 'view' | 'skill';
+  | 'plugin' | 'changeset' | 'view' | 'skill' | 'share';
 
 export type Rec<T = any> = { id: string; tenant_id: string; kind: Kind; title: string; data: T; created_at: string };
 

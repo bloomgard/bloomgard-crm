@@ -622,6 +622,13 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 /* ---- sidebar count (the OK list) ---- */
 .nav-count { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono), monospace; font-size: 10.5px; font-weight: 600; color: #fff; background: var(--sindoor); }
 
+/* ---- quote panel: the client link ---- */
+.share-box { margin-top: 4px; padding: 14px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--neelam) 25%, var(--color-gray-200)); background: color-mix(in srgb, var(--neelam) 5%, var(--color-white)); display: grid; gap: 10px; font-size: 13px; line-height: 1.55; color: var(--color-gray-700); }
+.share-box b { color: var(--color-gray-900); }
+.share-box__row { display: flex; gap: 8px; align-items: center; }
+.share-box__row input { flex: 1; min-width: 0; font-family: var(--font-mono), monospace; font-size: 12px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--color-gray-200); background: var(--color-white); color: var(--color-gray-800); }
+.share-box__row button, .share-box__row a { flex: none; font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--color-gray-200); background: var(--color-white); color: var(--color-gray-900); }
+
 /* ---- Quotes: saved views as tabs ---- */
 .qv-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 14px; }
 .qv-tab { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 500; border: 1px solid var(--color-gray-200); color: var(--color-gray-600); background: var(--color-white); }
