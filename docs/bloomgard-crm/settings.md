@@ -53,6 +53,13 @@ Design the quote form without code. The form is made of **modules** (sections su
 - The **Status Log** is shown at the top as *built in*. Every workspace has it, so it is not a module you add,
   rename or delete; see below.
 
+### What a new workspace starts with
+
+Signing up gives you a working form, not an empty one: **Client Information**, **Quote Details**,
+**Products** and **Official Documents**. **Subtotal** is a formula (`SUM[Products.item_br]`) so the
+quote's value adds itself up from the line items, and [Quote Template](#quote-template) already holds the
+**Classic** layout, so your first **Preview PDF** is a real quotation. Change any of it whenever you like.
+
 ### Master Status
 
 A dropdown whose options are your pipeline stages (for example *Inquiry, Quotation Given, PO Received, Lost*).

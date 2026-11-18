@@ -1,8 +1,8 @@
 
 // @ts-nocheck
 "use client";
-import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Download, Upload, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File, ChevronRight, BookOpen, ExternalLink, CornerUpLeft } from 'lucide-react';
-import { useState, useEffect, useRef } from "react";
+import { AlertTriangle, Check, Menu, LayoutDashboard, Rocket, Inbox, Bell, Magnet, FileText, Settings, Bot, Zap, Sparkles, Pen, Scroll, Database, Users, Wrench, Mail, Palette, X, ClipboardList, Monitor, Search, Star, Trash, Paperclip, Brain, Laptop, File, ChevronRight, BookOpen, ExternalLink, CornerUpLeft } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from "react";
 import MasterDataUI from "@/components/MasterDataUI";
 import { supabase } from "@/utils/supabaseClient";
 import { useMasterDataFields, MasterDataEntry } from "@/hooks/useMasterDataFields";
@@ -12,15 +12,21 @@ import BrandLockup from '@/components/BrandLockup';
 import AgentHome from '@/components/AgentHome';
 import FieldConfigurator from '@/components/FieldConfigurator';
 import LogModule from '@/components/LogModule';
-import { STATUS_LOG_TITLE, statusLogEntries, statusLogModule } from '@/lib/statusLog';
+import { STATUS_LOG_TITLE, mirrorStatusIntoMetadata, statusLogEntries, statusLogModule } from '@/lib/statusLog';
 import EmailDomainSetup from '@/components/EmailDomainSetup';
 import JaaliLoader from '@/components/JaaliLoader';
+import SuggestInput from '@/components/SuggestInput';
 import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
 
 // BULLETPROOF FORMATTER
 const formatValue = (val, isMoney = false) => {
   if (val == null || val === "") return val;
-  if (isMoney && !isNaN(parseFloat(val))) return parseFloat(val).toFixed(2);
+  // Money reads the way it is written on an Indian invoice: 2,49,600 — and ₹1,69,000 on Home
+  // and ₹169000.00 in the quote list were the same number twice.
+  if (isMoney && !isNaN(parseFloat(val))) {
+    const n = parseFloat(val);
+    return n.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
+  }
   let strVal = String(val);
   if (/\.\d{3,}/.test(strVal)) {
     if (!isNaN(parseFloat(strVal))) return parseFloat(strVal).toFixed(2);
@@ -30,6 +36,16 @@ const formatValue = (val, isMoney = false) => {
 };
 
 const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Fields that name the client: choosing a known one fills the rest from their last quote. */
+const CLIENT_KEYS = new Set(['clientname', 'companyname', 'client', 'customername', 'buyername']);
+/** Never carried over from a previous quote: they belong to this quote alone. */
+const PREFILL_SKIP_TYPES = new Set(['master_status', 'logged_in', 'calculated', 'file', 'attachment']);
+const PREFILL_SKIP_NAMES = /subtotal|total|amount|qn|quote.?(no|number|id)|ref.?id|^date$|valid/i;
+
+/** A stable id so each quote-form label points at its own control (screen readers, autofill, tests). */
+const fieldDomId = (section: string, field: string, rowIdx: number | null = null) =>
+  `qf-${normalize(section)}-${normalize(field)}${rowIdx === null ? '' : `-${rowIdx}`}`;
 
 // A real v4 UUID (the database columns are uuid): crypto.randomUUID where available,
 // otherwise a Math.random-based v4 so saving never throws on older WebViews.
@@ -151,7 +167,6 @@ export default function ClientDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [focusedField, setFocusedField] = useState<{ section: string, field: string, rowIdx: number | 'single' } | null>(null);
   const [viewingDoc, setViewingDoc] = useState(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -266,13 +281,8 @@ export default function ClientDashboard() {
   };
 
   /** Master Status fields on ordinary modules mirror the quote's status, so keep them in step. */
-  const statusIntoMetadata = (rec: any, newStatus: string) => {
-    const meta = { ...(rec?.custom_metadata || {}) };
-    blueprint.forEach((sec: any) => (sec.fields || []).forEach((f: any) => {
-      if (f.type === 'master_status' && meta[sec.title] && !Array.isArray(meta[sec.title])) meta[sec.title][f.name] = newStatus;
-    }));
-    return meta;
-  };
+  const statusIntoMetadata = (rec: any, newStatus: string) =>
+    mirrorStatusIntoMetadata(rec?.custom_metadata, blueprint, newStatus);
 
   /**
    * An entry in the built-in Status Log. Unlike the configurable log modules it is kept in `status_logs`,
@@ -551,6 +561,24 @@ export default function ClientDashboard() {
       .then(({ data }) => { if (data) setDynamicInsights(data); });
   }, [tenantId]);
 
+  // a prefill note belongs to the form it was made in
+  useEffect(() => { setPrefillNote(null); }, [currentView, editingId]);
+
+  // Escape closes the topmost overlay, innermost first — the usual way out of a panel or dialog.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showEmailModal) setShowEmailModal(false);
+      else if (viewingDoc) setViewingDoc(null);
+      else if (selectedRecord) setSelectedRecord(null);
+      else if (isMobileMenuOpen) setIsMobileMenuOpen(false);
+      else return;
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showEmailModal, viewingDoc, selectedRecord, isMobileMenuOpen]);
+
   useEffect(() => {
     if (!blueprint.length) return;
     setDynamicData(prev => {
@@ -727,10 +755,18 @@ export default function ClientDashboard() {
     if (days <= 10) return 'warm';
     return 'cold';
   };
-  const TEMP_META: Record<string, { label: string; cls: string; rank: number }> = {
-    hot: { label: 'Hot', cls: 'bg-red-100 text-red-700 border-red-200', rank: 0 },
-    warm: { label: 'Warm', cls: 'bg-amber-100 text-amber-700 border-amber-200', rank: 1 },
-    cold: { label: 'Cold', cls: 'bg-sky-100 text-sky-700 border-sky-200', rank: 2 },
+  /** "today", "3 days ago" — plain words for how long a quote has been quiet. */
+  const daysSinceContact = (r: any) => {
+    const last = r.last_contact_date || r.date || r.created_at;
+    if (!last) return 'never';
+    const d = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+    return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
+  };
+
+  const TEMP_META: Record<string, { label: string; rank: number }> = {
+    hot: { label: 'Hot', rank: 0 },
+    warm: { label: 'Warm', rank: 1 },
+    cold: { label: 'Cold', rank: 2 },
   };
   const sortedPendingAlerts = [...pendingAlerts]
     .filter(r => {
@@ -826,11 +862,98 @@ export default function ClientDashboard() {
     return [];
   };
 
+  /**
+   * Every value ever typed into an ordinary field, across this workspace's whole quote history,
+   * grouped by module and field key — so "Vardhman Textiles" suggests itself on Client Name the
+   * moment there is one past quote for them, with nothing to configure. Recomputed only when the
+   * record list or the form itself changes, never per keystroke, so typing stays instant even with
+   * a large history.
+   */
+  const SUGGESTIBLE_TYPES = new Set(['text', 'number', 'date', 'dropdown', 'master_status']);
+  const autoCapturedValues = useMemo(() => {
+    const sets: Record<string, Record<string, Set<string>>> = {};
+    blueprint.forEach((section: any) => {
+      if (section.is_log) return;
+      (section.fields || []).forEach((f: any) => {
+        if (!SUGGESTIBLE_TYPES.has(f.type)) return;
+        const bucket = (sets[section.title] ||= {})[f.name] ||= new Set<string>();
+        records.forEach((r: any) => {
+          if (section.allow_multiple) {
+            extractArray(r, section.title).forEach((row: any) => {
+              const v = extractValue(row, f.name);
+              if (v && typeof v !== 'object' && v !== '-') bucket.add(String(v).trim());
+            });
+          } else {
+            const v = extractValue(r, f.name, section.title);
+            if (v && typeof v !== 'object' && v !== '-') bucket.add(String(v).trim());
+          }
+        });
+      });
+    });
+    const out: Record<string, Record<string, string[]>> = {};
+    Object.entries(sets).forEach(([sectionTitle, fields]) => {
+      out[sectionTitle] = {};
+      Object.entries(fields).forEach(([fieldName, set]) => { out[sectionTitle][fieldName] = Array.from(set); });
+    });
+    return out;
+  }, [records, blueprint]);
+
+  /**
+   * The same client usually comes back on the same terms. Choosing a client you have quoted before
+   * fills every empty field around it from their most recent quote — contact, email, phone, address,
+   * terms — and says so, with an Undo. Line items, status, totals and the quote number are never copied.
+   */
+  const latestByClient = useMemo(() => {
+    const byName = new Map<string, any>();
+    const newestFirst = [...records].sort((a: any, b: any) => String(b.created_at || b.date || '').localeCompare(String(a.created_at || a.date || '')));
+    newestFirst.forEach((r: any) => {
+      const name = String(extractValue(r, 'client_name', 'Client Information') || r.clients?.company_name || '').trim().toLowerCase();
+      if (name && !byName.has(name)) byName.set(name, r);
+    });
+    return byName;
+  }, [records]);
+
+  const [prefillNote, setPrefillNote] = useState<null | { client: string; qn: string; count: number; before: any }>(null);
+
+  const prefillFromClient = (sectionTitle: string, fieldName: string, clientName: string) => {
+    if (editingId) return; // revising a quote: never overwrite what it already says
+    const rec = latestByClient.get(String(clientName || '').trim().toLowerCase());
+    if (!rec || prefillNote?.client.toLowerCase() === clientName.toLowerCase()) return;
+    const before = JSON.parse(JSON.stringify(dynamicData));
+    before[sectionTitle] = { ...(before[sectionTitle] || {}), [fieldName]: clientName };
+    const next = JSON.parse(JSON.stringify(before));
+    let count = 0;
+    blueprint.forEach((section: any) => {
+      if (section.is_log || section.allow_multiple) return;
+      (section.fields || []).forEach((f: any) => {
+        if (PREFILL_SKIP_TYPES.has(f.type) || CLIENT_KEYS.has(normalize(f.name)) || PREFILL_SKIP_NAMES.test(f.name)) return;
+        const cur = next[section.title]?.[f.name];
+        if (cur != null && String(cur).trim() !== '') return;
+        const v = extractValue(rec, f.name, section.title);
+        if (v == null || v === '' || typeof v === 'object') return;
+        next[section.title] = { ...(next[section.title] || {}), [f.name]: v };
+        count++;
+      });
+    });
+    if (!count) return;
+    setDynamicData(next);
+    setPrefillNote({ client: clientName, qn: rec.qn_number || rec.qn || '', count, before });
+  };
+
+  /** Line items already add up to the quote's value, so a subtotal nobody typed is not an unknown. */
+  const itemsTotal = (record) => {
+    const rows = record?.quotation_items || [];
+    if (!rows.length) return null;
+    const sum = rows.reduce((a, r) => a + (Number(r.item_br) || (Number(r.quantity) || 0) * (Number(r.item_rate) || 0)), 0);
+    return sum > 0 ? sum : null;
+  };
+
   const getFieldValue = (record, col) => {
-    const v = extractValue(record, col.name, col.sectionTitle);
-    if (v === "" || v == null) return "-";
     const isMoney = ['subtotal', 'total', 'amount', 'price', 'rate'].some(key => String(col.name).toLowerCase().includes(key));
-    return formatValue(v, isMoney);
+    let v = extractValue(record, col.name, col.sectionTitle);
+    if ((v === "" || v == null) && /subtotal|amount|^total$/i.test(String(col.name))) v = itemsTotal(record);
+    if (v === "" || v == null) return "-";
+    return isMoney ? `₹${formatValue(v, true)}` : formatValue(v, false);
   };
 
   const getManifestTitle = (record = selectedRecord) => {
@@ -840,28 +963,6 @@ export default function ClientDashboard() {
     if (record.client_name) return String(formatValue(record.client_name));
     if (record.clients?.company_name) return String(formatValue(record.clients.company_name));
     return "CLIENT MANIFEST";
-  };
-
-  const getAutoCapturedDbValues = (fieldName: string, sectionTitle?: string) => {
-    const uniqueVals = new Set<string>();
-    records.forEach(r => {
-      const val = extractValue(r, fieldName, sectionTitle);
-      if (val && typeof val !== 'object' && val !== '-') {
-        uniqueVals.add(String(val).trim());
-      }
-      if (sectionTitle) {
-        const arr = extractArray(r, sectionTitle);
-        if (Array.isArray(arr)) {
-          arr.forEach(item => {
-            const itemVal = extractValue(item, fieldName, sectionTitle);
-            if (itemVal && typeof itemVal !== 'object' && itemVal !== '-') {
-              uniqueVals.add(String(itemVal).trim());
-            }
-          });
-        }
-      }
-    });
-    return Array.from(uniqueVals).filter(Boolean);
   };
 
   const updateDynamicDataField = (sectionTitle, fieldName, value, rowIndex = null) => {
@@ -943,6 +1044,16 @@ export default function ClientDashboard() {
 
     const quoteId = editingId || safeUUID();
 
+    // Tables start with one blank row so there is something to type into. An untouched one is not
+    // a record: saving it would show an empty line in the quote, the PDF and the exports.
+    const savedData = { ...dynamicData };
+    blueprint.filter(b => b.allow_multiple && !b.is_log).forEach(sec => {
+      const rows = savedData[sec.title];
+      if (!Array.isArray(rows)) return;
+      savedData[sec.title] = rows.filter(row =>
+        Object.entries(row || {}).some(([k, v]) => !k.startsWith('_') && v != null && String(v).trim() !== '' && String(v) !== '0'));
+    });
+
     // Construct upsert payload
     const upsertPayload = {
       id: quoteId,
@@ -951,7 +1062,7 @@ export default function ClientDashboard() {
       qn_number: finalQn,
       date,
       status: masterStatusValue,
-      custom_metadata: dynamicData,
+      custom_metadata: savedData,
       created_by_email: creator
     };
 
@@ -966,7 +1077,7 @@ export default function ClientDashboard() {
 
       const items = [], atts = [];
       blueprint.filter(b => b.allow_multiple).forEach(sec => {
-        const rows = dynamicData[sec.title] || [], lt = sec.title.toLowerCase();
+        const rows = savedData[sec.title] || [], lt = sec.title.toLowerCase();
         rows.forEach((row, i) => {
           if (lt.includes('product') || lt.includes('item')) items.push({ quotation_id: quoteId, display_order: i, item_name: row.item_name || `Item ${i + 1}`, item_code: row.item_code || "", quantity: Number(row.quantity || 0), uom: row.uom || "", item_rate: Number(row.item_rate || 0), item_br: Number(row.item_br || 0), custom_metadata: row });
           else if (lt.includes('attachment') || lt.includes('file') || lt.includes('document')) atts.push({ quotation_id: quoteId, file_name: row.file_name || row.att_name || `File ${i + 1}`, file_path: row.file_path || row.att || "" });
@@ -1459,12 +1570,16 @@ Command: ${dashCommand}`;
           }
           return flat;
         });
-        templateData['quotation_items'] = normalizedItems;
+        // {{#each quotation_items}} means the line items. Every table used to overwrite it in turn,
+        // so a form with a second table (Official Documents) left the PDF's item rows empty.
+        const t = section.title.toLowerCase();
+        if (t.includes('product') || t.includes('item')) templateData['quotation_items'] = normalizedItems;
+        else if (!templateData['quotation_items']) templateData['quotation_items'] = normalizedItems;
         templateData[section.title] = normalizedItems;
       }
     });
 
-    templateData['subtotal'] = formatValue(record.subtotal || extractValue(record, 'subtotal', 'Quote Details') || "0", true);
+    templateData['subtotal'] = formatValue(record.subtotal || extractValue(record, 'subtotal', 'Quote Details') || itemsTotal(record) || "0", true);
     templateData['company_logo'] = logoUrl || "";
 
     try {
@@ -1764,8 +1879,8 @@ Command: ${dashCommand}`;
           <div className="max-w-6xl mx-auto bg-amber-50 border-l-4 border-amber-500 p-4 md:p-6 rounded-xl mb-8 flex items-start gap-4">
             <AlertTriangle className="w-6 h-6 text-amber-500" />
             <div>
-              <h3 className="text-sm font-bold text-amber-900">Workspace Connection Missing</h3>
-              <p className="text-xs text-amber-800 mt-1">This client account does not have a <code>tenant_id</code> assigned in the database. Quotes and AI features cannot load until this is fixed. Please update their profile in Supabase.</p>
+              <h3 className="text-sm font-bold text-amber-900">This account is not in a workspace yet</h3>
+              <p className="text-xs text-amber-800 mt-1">Quotes, email and the AI stay empty until someone adds you to one. Ask your workspace admin to invite you under Settings → User Access, or write to support@bloomgard.co.</p>
             </div>
           </div>
         )}
@@ -1800,303 +1915,266 @@ Command: ${dashCommand}`;
 
         {currentView === "alerts" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
-            <header className="mb-10">
+            <header className="mb-7">
               <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Follow ups</h2><DocsLink view="alerts" /></div>
-              <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mt-1">AI Follow-Up Triage</p>
+              <p className="text-sm text-gray-600 mt-1">Quotes that have gone quiet, client replies waiting on you, and what has already been sent.</p>
             </header>
 
-            <div className="relative rounded-[2rem] p-6 md:p-10 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-              {/* Glassmorphism Background Elements */}
-              <div className="absolute inset-0 bg-white/40 backdrop-blur-xl z-0 pointer-events-none"></div>
-              <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl z-0 pointer-events-none"></div>
-              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl z-0 pointer-events-none"></div>
+            <div className="fu-tabs" role="tablist" aria-label="Follow ups">
+              {([
+                ['due', 'Due', sortedPendingAlerts.length],
+                ['incoming', 'Incoming', visibleEmailThreads.filter(t => t.triage_status === 'incoming').length],
+                ['outgoing', 'Outgoing', visibleEmailThreads.filter(t => t.triage_status === 'outgoing').length],
+                ['history', 'Done', historyAlerts.length],
+              ] as Array<[string, string, number]>).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  role="tab"
+                  aria-selected={triageTab === key}
+                  onClick={() => setTriageTab(key)}
+                  className={`fu-tab ${triageTab === key ? 'fu-tab--on' : ''}`}
+                >
+                  {label} <b>{count}</b>
+                </button>
+              ))}
+            </div>
 
-              <div className="relative z-10">
-                <div className="flex gap-4 border-b border-indigo-100/50 mb-8">
-                  <button onClick={() => setTriageTab('due')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'due' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <Zap className="w-4 h-4 text-amber-500" /> Pending Follow-ups <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{pendingAlerts.length}</span>
-                  </button>
-                  <button onClick={() => setTriageTab('incoming')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'incoming' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <Download className="w-4 h-4 text-indigo-500" /> Incoming <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'incoming').length}</span>
-                  </button>
-                  <button onClick={() => setTriageTab('outgoing')} className={`pb-3 text-sm font-bold flex items-center gap-2 transition-all ${triageTab === 'outgoing' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <Upload className="w-4 h-4 text-blue-500" /> Outgoing <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">{visibleEmailThreads.filter(t => t.triage_status === 'outgoing').length}</span>
-                  </button>
+            {triageTab === 'due' && (
+              <>
+                <div className="fu-bar">
+                  <div className="fu-search">
+                    <Search aria-hidden />
+                    <input
+                      type="text"
+                      aria-label="Search follow-ups"
+                      value={triageSearch}
+                      onChange={(e) => setTriageSearch(e.target.value)}
+                      placeholder="Search quote #, client…"
+                    />
+                  </div>
+                  <label className="sr-only" htmlFor="fu-days">Quiet for at least</label>
+                  <select id="fu-days" className="fu-days" value={triageDaysFilter} onChange={(e) => setTriageDaysFilter(Number(e.target.value))}>
+                    <option value={0}>0 Days (Immediate)</option>
+                    <option value={1}>1 Day</option>
+                    <option value={2}>2 Days</option>
+                    <option value={3}>3 Days</option>
+                    <option value={5}>5 Days</option>
+                    <option value={7}>7 Days</option>
+                    <option value={14}>14+ Days</option>
+                  </select>
                 </div>
 
-                {triageTab === 'due' && (
-                  <>
-                    <div className="flex flex-wrap items-center gap-3 mb-6 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                      <div className="relative flex-1 min-w-[180px]">
-                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={triageSearch}
-                          onChange={(e) => setTriageSearch(e.target.value)}
-                          placeholder="Search quote #, client…"
-                          className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                      <select
-                        value={triageDaysFilter}
-                        onChange={(e) => setTriageDaysFilter(Number(e.target.value))}
-                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 outline-none focus:border-indigo-500"
-                      >
-                        <option value={0}>0 Days (Immediate)</option>
-                        <option value={1}>1 Day</option>
-                        <option value={2}>2 Days</option>
-                        <option value={3}>3 Days</option>
-                        <option value={5}>5 Days</option>
-                        <option value={7}>7 Days</option>
-                        <option value={14}>14+ Days</option>
-                      </select>
-                    </div>
+                {sortedPendingAlerts.length === 0 ? (
+                  <div className="fu-empty">
+                    <Sparkles aria-hidden />
+                    <p>{triageSearch.trim() ? 'No quote matches that search.' : 'Nothing is going cold.'}</p>
+                    <small>
+                      {triageSearch.trim()
+                        ? `Nothing due matches “${triageSearch.trim()}”. Clear the search to see all ${pendingAlerts.length}.`
+                        : `A quote appears here once it has been quiet for ${triageDaysFilter} day${triageDaysFilter === 1 ? '' : 's'}.`}
+                    </small>
+                  </div>
+                ) : (
+                  <div className="fu-list">
+                    {sortedPendingAlerts.map(r => {
+                      const defaultSnippet = `Hi ${extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote (${r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.`;
+                      const currentVal = editedSnippets[r.id] !== undefined ? editedSnippets[r.id] : defaultSnippet;
+                      const temp = quoteTemperature(r);
+                      const due = r.follow_up_due_date || r.custom_metadata?.follow_up_due_date;
 
-                    {sortedPendingAlerts.length === 0 ? (
-                      <div className="text-center py-16">
-                        <Sparkles className="w-10 h-10 mb-4 block opacity-50" />
-                        <p className="text-gray-500 font-medium text-sm">You are all caught up!</p>
-                        <p className="text-gray-400 text-xs mt-1">Quotes needing a follow-up will automatically appear here {triageDaysFilter} days after creation.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {sortedPendingAlerts.map(r => {
-                          const defaultSnippet = `Hi ${extractValue(r, 'contact_person', 'Client Information') || 'there'}, just following up on our recent quote (${r.qn_number || r.qn}). Let me know if you have any questions or need further clarification.`;
-                          const currentVal = editedSnippets[r.id] !== undefined ? editedSnippets[r.id] : defaultSnippet;
-                          const temp = quoteTemperature(r);
-
-                          return (
-                            <div key={r.id} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm hover:shadow-md hover:bg-white/80 transition-all gap-4">
-                              <div className="flex-1 w-full md:w-auto">
-                                <p className="text-xs font-bold text-gray-900 mb-1 flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${TEMP_META[temp].cls}`}>{TEMP_META[temp].label}</span>
-                                  {r.qn_number || r.qn} - {getManifestTitle(r)}
-                                </p>
-                                <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-3">Due: {r.follow_up_due_date || r.custom_metadata?.follow_up_due_date ? new Date(r.follow_up_due_date || r.custom_metadata?.follow_up_due_date).toLocaleDateString() : 'Overdue (> 3 days)'}</p>
-                                <div className="bg-white p-3 rounded-lg border border-indigo-100/50 shadow-sm relative group focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
-                                  <textarea
-                                    value={currentVal}
-                                    onChange={(e) => setEditedSnippets({ ...editedSnippets, [r.id]: e.target.value })}
-                                    className="w-full text-xs text-gray-600 italic bg-transparent outline-none resize-none min-h-[48px]"
-                                  />
-                                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mt-2 flex justify-between items-center">
-                                    <span>Suggested Email Snippet • Waiting for Approval</span>
-                                    <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1"><Pen className="w-3 h-3" /> Edit</span>
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4 w-full md:w-auto">
-                                <div className="hidden md:block text-right pr-4 border-r border-indigo-100/50">
-                                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Amount</p>
-                                  <p className="text-xs font-bold text-gray-700">₹{getFieldValue(r, { name: 'subtotal' })}</p>
-                                </div>
-                                <button
-                                  onClick={() => handleTriggerAgent(r)}
-                                  disabled={dispatchingId === r.id}
-                                  className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 ${dispatchingId === r.id ? 'bg-indigo-100/50 text-indigo-400 cursor-not-allowed border border-indigo-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-500 hover:shadow-lg hover:shadow-indigo-200'}`}
-                                >
-                                  {dispatchingId === r.id ? (
-                                    <><div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div> Dispatching...</>
-                                  ) : (
-                                    <><div className="flex items-center gap-2"><Bot className="w-4 h-4" /> Approve Agent</div></>
-                                  )}
-                                </button>
-                              </div>
+                      return (
+                        <div key={r.id} className="fu-row">
+                          <div className="fu-row__main">
+                            <div className="fu-head">
+                              <span className={`fu-temp fu-temp--${temp}`}>{TEMP_META[temp].label}</span>
+                              <span className="fu-qn">{r.qn_number || r.qn}</span>
+                              <button className="fu-client text-left hover:underline" onClick={() => setSelectedRecord(r)}>{getManifestTitle(r)}</button>
                             </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {triageTab === 'history' && (
-                  <>
-                    {historyAlerts.length === 0 ? (
-                      <div className="text-center py-16">
-                        <Scroll className="w-10 h-10 mb-4 block opacity-50" />
-                        <p className="text-gray-500 font-medium text-sm">No follow-up history yet.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {historyAlerts.map(r => (
-                          <div
-                            key={`hist-${r.id}`}
-                            onClick={() => setExpandedHistoryId(expandedHistoryId === r.id ? null : r.id)}
-                            className="bg-white/60 p-5 rounded-2xl border border-white/50 shadow-sm transition-all hover:bg-white/80 hover:shadow-md cursor-pointer"
-                          >
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <p className="text-xs font-bold text-gray-900 mb-1">{r.qn_number || r.qn} - {getManifestTitle(r)}</p>
-                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status: {r.follow_up_status || r.custom_metadata?.follow_up_status}</p>
-                              </div>
-                              <span className="text-indigo-400 text-xs font-bold bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100/50">
-                                {expandedHistoryId === r.id ? 'Close ▲' : 'View Log ▼'}
-                              </span>
+                            <p className="fu-due">{due ? `Due ${new Date(due).toLocaleDateString()}` : 'Overdue'} · last touched {daysSinceContact(r)}</p>
+                            <div className="fu-draft">
+                              <textarea
+                                aria-label={`Follow-up message for ${r.qn_number || r.qn}`}
+                                value={currentVal}
+                                onChange={(e) => setEditedSnippets({ ...editedSnippets, [r.id]: e.target.value })}
+                              />
+                              <p><span>Suggested message — edit it before you send</span></p>
                             </div>
-
-                            {expandedHistoryId === r.id && (
-                              <div className="mt-6 pt-6 border-t border-indigo-100/50 cursor-default" onClick={e => e.stopPropagation()}>
-                                {r.custom_metadata?.agent_summary && (
-                                  <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-4">
-                                    <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
-                                    <p className="text-sm text-indigo-900 font-medium leading-relaxed">{r.custom_metadata.agent_summary}</p>
-                                  </div>
-                                )}
-
-                                {r.custom_metadata?.agent_conversations && r.custom_metadata.agent_conversations.length > 0 && (
-                                  <div className="space-y-4 bg-white/80 p-6 rounded-2xl border border-gray-200 max-h-[300px] overflow-y-auto">
-                                    {r.custom_metadata.agent_conversations.map((msg: any, idx: number) => (
-                                      <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
-                                        <div className="flex items-center gap-2 mb-1 px-1">
-                                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
-                                          <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
-                                        </div>
-                                        <div className={`p-3 rounded-2xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
-                                          {msg.content}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                  <textarea
-                                    value={quoteReplyTexts[r.id] || ''}
-                                    onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
-                                    placeholder="Type a manual reply to the client..."
-                                    className="w-full p-4 text-sm focus:outline-none resize-y min-h-[80px] bg-transparent"
-                                  />
-                                  <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
-                                    <button
-                                      onClick={() => handleQuoteReply(r)}
-                                      disabled={isSendingQuoteReply === r.id || !(quoteReplyTexts[r.id] || '').trim()}
-                                      className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
-                                    >
-                                      {isSendingQuoteReply === r.id ? 'Sending...' : 'Send Reply'}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {(triageTab === 'incoming' || triageTab === 'outgoing') && (
-                  <div className="space-y-4">
-                    {(() => {
-                      const tabThreads = visibleEmailThreads.filter(t => t.triage_status === triageTab);
-                      if (tabThreads.length === 0) {
-                        return (
-                          <div className="text-center py-16 bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl">
-                            <p className="text-sm text-gray-500 font-medium">No {triageTab} threads found.</p>
+                          <div className="fu-row__side">
+                            <span className="fu-amount">
+                              <span>Amount</span>
+                              <b>{getFieldValue(r, { name: 'subtotal' })}</b>
+                            </span>
+                            <button className="fu-go" onClick={() => handleTriggerAgent(r)} disabled={dispatchingId === r.id}>
+                              {dispatchingId === r.id
+                                ? <><span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" aria-hidden /> Sending…</>
+                                : <><Bot className="w-4 h-4" aria-hidden /> Send follow-up</>}
+                            </button>
                           </div>
-                        );
-                      }
-                      return tabThreads.map((thread) => {
-                        const q = thread.quotations || {};
-                        let meta = q.custom_metadata;
-                        if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = {}; } }
-                        
-                        const replyText = quoteReplyTexts[thread.id] !== undefined ? quoteReplyTexts[thread.id] : (thread.ai_draft_text || '');
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
 
-                        return (
-                          <div key={thread.id} className="bg-gray-50/50 border border-gray-200 rounded-2xl p-6 shadow-sm mt-4">
-                            <div className="flex justify-between items-center mb-6">
-                              <div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{q.qn_number} • Last Updated {new Date(thread.last_updated).toLocaleString()}</p>
-                                <p className="text-lg font-bold text-gray-900">{q.clients?.company_name || meta?.client_name || 'Client'}</p>
-                              </div>
-                            </div>
+            {triageTab === 'history' && (
+              historyAlerts.length === 0 ? (
+                <div className="fu-empty">
+                  <Scroll aria-hidden />
+                  <p>No follow-ups sent yet.</p>
+                  <small>Once you send one from the Due tab, the whole exchange is kept here.</small>
+                </div>
+              ) : (
+                <div className="fu-list">
+                  {historyAlerts.map(r => {
+                    const open = expandedHistoryId === r.id;
+                    return (
+                      <div key={`hist-${r.id}`} className="fu-thread">
+                        <button
+                          className="fu-thread__head w-full"
+                          aria-expanded={open}
+                          onClick={() => setExpandedHistoryId(open ? null : r.id)}
+                        >
+                          <span className="fu-qn">{r.qn_number || r.qn}</span>
+                          <span className="fu-client">{getManifestTitle(r)}</span>
+                          <span className="fu-thread__when">{r.follow_up_status || r.custom_metadata?.follow_up_status} · <span className="fu-disclose">{open ? 'Hide' : 'View'}</span></span>
+                        </button>
 
-                            {meta?.agent_summary && (
-                              <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6">
-                                <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">AI Conclusion Summary</p>
-                                <p className="text-sm text-indigo-900 font-medium leading-relaxed">{meta.agent_summary}</p>
-                              </div>
+                        {open && (
+                          <div onClick={e => e.stopPropagation()}>
+                            {r.custom_metadata?.agent_summary && (
+                              <p className="fu-summary"><span>What the AI concluded</span>{r.custom_metadata.agent_summary}</p>
                             )}
-
-                            {meta?.agent_conversations && meta.agent_conversations.length > 0 ? (
-                              <div className="space-y-4 bg-white p-6 rounded-2xl border border-gray-200 max-h-[400px] overflow-y-auto">
-                                {meta.agent_conversations.map((msg: any, idx: number) => (
-                                  <div key={idx} className={`flex flex-col ${msg.role === 'client' ? 'items-start' : 'items-end'}`}>
-                                    <div className="flex items-center gap-2 mb-1 px-1">
-                                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{msg.role === 'client' ? 'Client' : 'Agent'}</span>
-                                      <span className="text-[9px] font-medium text-gray-300">{new Date(msg.timestamp).toLocaleString()}</span>
-                                    </div>
-                                    <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap ${msg.role === 'client' ? 'bg-gray-100 text-gray-800 rounded-tl-sm' : 'bg-indigo-600 text-white rounded-tr-sm shadow-md'}`}>
-                                      {msg.content}
-                                    </div>
+                            {r.custom_metadata?.agent_conversations?.length > 0 && (
+                              <div className="fu-convo">
+                                {r.custom_metadata.agent_conversations.map((msg: any, idx: number) => (
+                                  <div key={idx} className={`fu-msg fu-msg--${msg.role === 'client' ? 'client' : 'agent'}`}>
+                                    <em>{msg.role === 'client' ? 'Client' : 'You'} · {new Date(msg.timestamp).toLocaleString()}</em>
+                                    <div>{msg.content}</div>
                                   </div>
                                 ))}
                               </div>
-                            ) : (
-                              <div className="text-center py-8 bg-white border border-dashed border-gray-200 rounded-2xl">
-                                <p className="text-xs text-gray-400 font-medium">No conversation history yet.</p>
-                              </div>
                             )}
-
-                            {triageTab === 'incoming' && (
-                              <div className="mt-4 border border-indigo-200 rounded-xl overflow-hidden bg-white shadow-sm ring-2 ring-indigo-50">
-                                <div className="bg-indigo-50/50 p-3 border-b border-indigo-100 flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4" /> AI Suggested Reply</span>
-                                </div>
-                                <textarea
-                                  value={replyText}
-                                  onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: e.target.value }))}
-                                  placeholder="Type a manual reply to the client..."
-                                  className="w-full p-4 text-sm focus:outline-none resize-y min-h-[100px] bg-transparent"
-                                />
-                                <div className="bg-gray-50 p-2 border-t border-gray-200 flex justify-end items-center">
-                                  <button
-                                    onClick={async () => {
-                                      if (!replyText.trim()) return;
-                                      setIsSendingQuoteReply(thread.id);
-                                      try {
-                                        const res = await fetch('/api/agent/reply', {
-                                          method: 'POST',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({
-                                            threadId: thread.id,
-                                            quoteId: q.id,
-                                            tenantId: q.tenant_id,
-                                            agentId: thread.agent_id,
-                                            message: replyText
-                                          })
-                                        });
-                                        const data = await res.json();
-                                        if (data.success) {
-                                          alert("Reply sent successfully!");
-                                          setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: '' }));
-                                          await fetchRecords(tenantId);
-                                        } else {
-                                          alert("Failed: " + data.error);
-                                        }
-                                      } catch (e) {
-                                        alert("Error: " + e.message);
-                                      } finally {
-                                        setIsSendingQuoteReply(false);
-                                      }
-                                    }}
-                                    disabled={isSendingQuoteReply === thread.id || !replyText.trim()}
-                                    className="px-6 py-2 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition-all uppercase tracking-wider disabled:opacity-50 shadow-sm"
-                                  >
-                                    {isSendingQuoteReply === thread.id ? 'Sending...' : 'Send Reply'}
-                                  </button>
-                                </div>
+                            <div className="fu-reply">
+                              <textarea
+                                aria-label={`Reply to the client on ${r.qn_number || r.qn}`}
+                                value={quoteReplyTexts[r.id] || ''}
+                                onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                placeholder="Type a reply to the client…"
+                              />
+                              <div className="fu-reply__foot">
+                                <button
+                                  className="fu-go"
+                                  onClick={() => handleQuoteReply(r)}
+                                  disabled={isSendingQuoteReply === r.id || !(quoteReplyTexts[r.id] || '').trim()}
+                                >
+                                  {isSendingQuoteReply === r.id ? 'Sending…' : 'Send Reply'}
+                                </button>
                               </div>
-                            )}
+                            </div>
                           </div>
-                        );
-                      });
-                    })()}
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {(triageTab === 'incoming' || triageTab === 'outgoing') && (() => {
+              const tabThreads = visibleEmailThreads.filter(t => t.triage_status === triageTab);
+              if (tabThreads.length === 0) {
+                return (
+                  <div className="fu-empty">
+                    <Inbox aria-hidden />
+                    <p>{triageTab === 'incoming' ? 'No client replies waiting.' : 'Nothing sent is still waiting on a client.'}</p>
+                    <small>{triageTab === 'incoming' ? 'A reply to a quote lands here with a draft answer ready.' : 'Follow-ups you send move here until the client writes back.'}</small>
                   </div>
-                )}
-              </div>
-            </div>
+                );
+              }
+              return (
+                <div className="fu-list">
+                  {tabThreads.map((thread) => {
+                    const q = thread.quotations || {};
+                    let meta = q.custom_metadata;
+                    if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch { meta = {}; } }
+                    const replyText = quoteReplyTexts[thread.id] !== undefined ? quoteReplyTexts[thread.id] : (thread.ai_draft_text || '');
+
+                    return (
+                      <div key={thread.id} className="fu-thread">
+                        <div className="fu-thread__head">
+                          <span className="fu-qn">{q.qn_number}</span>
+                          <span className="fu-client">{q.clients?.company_name || meta?.client_name || 'Client'}</span>
+                          <span className="fu-thread__when">{new Date(thread.last_updated).toLocaleString()}</span>
+                        </div>
+
+                        {meta?.agent_summary && (
+                          <p className="fu-summary"><span>What the AI concluded</span>{meta.agent_summary}</p>
+                        )}
+
+                        {meta?.agent_conversations?.length > 0 ? (
+                          <div className="fu-convo">
+                            {meta.agent_conversations.map((msg: any, idx: number) => (
+                              <div key={idx} className={`fu-msg fu-msg--${msg.role === 'client' ? 'client' : 'agent'}`}>
+                                <em>{msg.role === 'client' ? 'Client' : 'You'} · {new Date(msg.timestamp).toLocaleString()}</em>
+                                <div>{msg.content}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">No messages on this thread yet.</p>
+                        )}
+
+                        {triageTab === 'incoming' && (
+                          <div className="fu-reply">
+                            <span><Sparkles aria-hidden /> AI suggested reply</span>
+                            <textarea
+                              aria-label={`Reply to the client on ${q.qn_number}`}
+                              value={replyText}
+                              onChange={(e) => setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: e.target.value }))}
+                              placeholder="Type a manual reply to the client..."
+                            />
+                            <div className="fu-reply__foot">
+                              <button
+                                className="fu-go"
+                                disabled={isSendingQuoteReply === thread.id || !replyText.trim()}
+                                onClick={async () => {
+                                  if (!replyText.trim()) return;
+                                  setIsSendingQuoteReply(thread.id);
+                                  try {
+                                    const res = await fetch('/api/agent/reply', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ threadId: thread.id, quoteId: q.id, tenantId: q.tenant_id, agentId: thread.agent_id, message: replyText }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                      alert("Reply sent successfully!");
+                                      setQuoteReplyTexts(prev => ({ ...prev, [thread.id]: '' }));
+                                      await fetchRecords(tenantId);
+                                    } else {
+                                      alert("Failed: " + data.error);
+                                    }
+                                  } catch (e) {
+                                    alert("Error: " + e.message);
+                                  } finally {
+                                    setIsSendingQuoteReply(false);
+                                  }
+                                }}
+                              >
+                                {isSendingQuoteReply === thread.id ? 'Sending…' : 'Send Reply'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -3045,12 +3123,14 @@ Command: ${dashCommand}`;
               </div>
             </div>
 
-            {records.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-6 flex items-start gap-4">
-                <AlertTriangle className="w-6 h-6 text-amber-500" />
-                <div>
-                  <p className="text-sm font-bold text-amber-900">No quotes loaded</p>
-                  <p className="text-xs text-amber-700 mt-1">This could mean: (1) Your Supabase <code>quotations</code> table is empty. (2) Your profile's <code>tenant_id</code> doesn't match the records. (3) The <code>qn_number</code> column doesn't exist.</p>
+            {/* A workspace with nothing in it yet is the normal first day, not a fault to report. */}
+            {records.length === 0 && currentView === "pipeline" && (
+              <div className="border border-dashed border-gray-300 rounded-2xl p-8 mb-6 text-center">
+                <p className="text-sm font-semibold text-gray-900">No quotes yet</p>
+                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">Start one with <b>+ New Entry</b>, ask Bloomgard AI on Home to draft one, or forward a client enquiry to your inbound address and turn it into a quote.</p>
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+                  <button onClick={() => { setEditingId(null); setQn(""); setCurrentView('new_entry'); }} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">+ New Entry</button>
+                  <button onClick={() => fileInputRef.current?.click()} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">Import quotes</button>
                 </div>
               </div>
             )}
@@ -3314,6 +3394,13 @@ Command: ${dashCommand}`;
             </div>
 
             <div className="space-y-8 pb-20">
+              {prefillNote && (
+                <div className="qf-prefill" role="status" data-testid="prefill-note">
+                  <span>Filled <b>{prefillNote.count} field{prefillNote.count === 1 ? '' : 's'}</b> from <b>{prefillNote.client}</b>'s last quote{prefillNote.qn ? ` (${prefillNote.qn})` : ''}. Check them before saving.</span>
+                  <button type="button" onClick={() => { setDynamicData(prefillNote.before); setPrefillNote(null); }}>Undo</button>
+                  <button type="button" onClick={() => setPrefillNote(null)}>Keep</button>
+                </div>
+              )}
               {blueprint.filter(s => s.title.toLowerCase() !== "status logs" && !s.is_log).map((section, sIdx) => (
                 <div key={sIdx} className="pt-4 pb-8 border-b border-gray-200">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
@@ -3344,13 +3431,18 @@ Command: ${dashCommand}`;
                             const manualValues = activeEntries.flatMap(entry => cascadeValues(entry, name => row[name]));
                             const activeValues = [...manualValues];
 
-                            // Check for Auto-Captured keys from DB
+                            // A configured "Auto" Master Data key, if anyone has set one up, cascaded
+                            // like the manual catalogue — plus every value this field has ever held
+                            // across this workspace's quote history, which needs no setup at all.
                             const autoEntries = findAllAutoEntriesByKey(f.name);
-                            if (autoEntries.length > 0) {
-                              const dbVals = getAutoCapturedDbValues(f.name, section.title);
+                            const autoCascaded = autoEntries.flatMap(entry => cascadeValues(entry, name => row[name])).map(v => v.value_text);
+                            const history = autoCapturedValues[section.title]?.[f.name] || [];
+                            {
                               const existingTexts = new Set(activeValues.map(v => v.value_text.toLowerCase()));
-                              dbVals.forEach(vStr => {
-                                if (!existingTexts.has(vStr.toLowerCase())) {
+                              [...autoCascaded, ...history].forEach(vStr => {
+                                const key = (vStr || '').toLowerCase();
+                                if (vStr && !existingTexts.has(key)) {
+                                  existingTexts.add(key);
                                   activeValues.push({ id: `auto-${vStr}`, value_text: vStr, is_default: false });
                                 }
                               });
@@ -3372,12 +3464,14 @@ Command: ${dashCommand}`;
                             }
 
                             const listId = `datalist-${section.title}-${f.name}-${fIdx}-${rIdx}`;
+                            const fieldId = fieldDomId(section.title, f.name, rIdx);
 
                             return (
                               <div key={fIdx} className="space-y-1.5 relative">
-                                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
+                                <label htmlFor={fieldId} className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
                                 {f.type === "dropdown" || f.type === "master_status" ? (
                                   <select
+                                    id={fieldId}
                                     value={row[f.name] || ""}
                                     onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
                                     className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm"
@@ -3389,15 +3483,16 @@ Command: ${dashCommand}`;
                                     ])).map((o, i) => <option key={i} value={o}>{o}</option>)}
                                   </select>
                                 ) : f.type === "logged_in" ? (
-                                  <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none shadow-sm cursor-not-allowed text-gray-500" />
+                                  <input id={fieldId} type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none shadow-sm cursor-not-allowed text-gray-500" />
                                 ) : f.type === "file" || f.type === "attachment" ? (
                                   <div className="flex flex-col gap-1">
-                                    <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result, rIdx) }; reader.readAsDataURL(file); } }} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                                    <input id={fieldId} type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result, rIdx) }; reader.readAsDataURL(file); } }} className="w-full bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-medium outline-none shadow-sm focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
                                     {(row[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1"><Check className="w-3 h-3 inline mr-1" /> File Attached</span>}
                                   </div>
                                 ) : f.type === "paragraph" ? (
                                   <div className="flex flex-col gap-1">
                                     <textarea
+                                      id={fieldId}
                                       value={row[f.name] || ""}
                                       maxLength={1500}
                                       onChange={e => updateDynamicDataField(section.title, f.name, e.target.value, rIdx)}
@@ -3407,40 +3502,17 @@ Command: ${dashCommand}`;
                                     <span className="text-[9px] text-gray-400 text-right">{(row[f.name] || "").length}/1500</span>
                                   </div>
                                 ) : (
-                                  <>
-                                    <input
-                                      type={f.type === "date" ? "date" : "text"}
-                                      inputMode={f.type === "number" ? "decimal" : undefined}
-                                      value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : (row[f.name] || "")}
-                                      readOnly={f.type === "calculated"}
-                                      onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: rIdx })}
-                                      onBlur={() => setTimeout(() => setFocusedField(null), 200)}
-                                      onChange={e => { updateDynamicDataField(section.title, f.name, e.target.value, rIdx); if (hasMasterValues) setFocusedField({ section: section.title, field: f.name, rowIdx: rIdx }); }}
-                                      className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-indigo-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''} ${hasMasterValues ? 'border-indigo-200 text-indigo-700' : ''}`}
-                                      placeholder={hasMasterValues ? "Select or type..." : "..."}
-                                      autoComplete="off"
-                                    />
-                                    {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === rIdx && (
-                                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                        {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).map((val) => (
-                                          <div
-                                            key={val.id}
-                                            className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
-                                            onMouseDown={(e) => {
-                                              e.preventDefault();
-                                              updateDynamicDataField(section.title, f.name, val.value_text, rIdx);
-                                              setFocusedField(null);
-                                            }}
-                                          >
-                                            {val.value_text}
-                                          </div>
-                                        ))}
-                                        {activeValues.filter(v => v.value_text.toLowerCase().includes((row[f.name] || "").toLowerCase())).length === 0 && (
-                                          <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </>
+                                  <SuggestInput
+                                    id={fieldId}
+                                    type={f.type === "date" ? "date" : "text"}
+                                    inputMode={f.type === "number" ? "decimal" : undefined}
+                                    value={f.type === "calculated" && row[f.name] != null && row[f.name] !== "" ? Number(row[f.name]).toFixed(2) : String(row[f.name] ?? "")}
+                                    readOnly={f.type === "calculated"}
+                                    suggestions={f.type === "calculated" ? [] : activeValues}
+                                    onChange={(v) => updateDynamicDataField(section.title, f.name, v, rIdx)}
+                                    className={`w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 shadow-sm ${f.type === 'calculated' ? 'bg-gray-100 cursor-not-allowed text-indigo-700 font-bold' : ''}`}
+                                    placeholder={hasMasterValues ? "Select or type..." : "..."}
+                                  />
                                 )}
                               </div>
                             );
@@ -3466,13 +3538,18 @@ Command: ${dashCommand}`;
                         const manualValues = activeEntries.flatMap(entry => cascadeValues(entry, name => dynamicData[section.title]?.[name]));
                         const activeValues = [...manualValues];
 
-                        // Check for Auto-Captured keys from DB
+                        // A configured "Auto" Master Data key, if anyone has set one up, cascaded like
+                        // the manual catalogue — plus every value this field has ever held across this
+                        // workspace's quote history, which needs no setup at all.
                         const autoEntries = findAllAutoEntriesByKey(f.name);
-                        if (autoEntries.length > 0) {
-                          const dbVals = getAutoCapturedDbValues(f.name, section.title);
+                        const autoCascaded = autoEntries.flatMap(entry => cascadeValues(entry, name => dynamicData[section.title]?.[name])).map(v => v.value_text);
+                        const history = autoCapturedValues[section.title]?.[f.name] || [];
+                        {
                           const existingTexts = new Set(activeValues.map(v => v.value_text.toLowerCase()));
-                          dbVals.forEach(vStr => {
-                            if (!existingTexts.has(vStr.toLowerCase())) {
+                          [...autoCascaded, ...history].forEach(vStr => {
+                            const key = (vStr || '').toLowerCase();
+                            if (vStr && !existingTexts.has(key)) {
+                              existingTexts.add(key);
                               activeValues.push({ id: `auto-${vStr}`, value_text: vStr, is_default: false });
                             }
                           });
@@ -3494,12 +3571,14 @@ Command: ${dashCommand}`;
                         }
 
                         const listId = `datalist-${section.title}-${f.name}-${fIdx}-single`;
+                        const fieldId = fieldDomId(section.title, f.name);
 
                         return (
                           <div key={fIdx} className="space-y-1.5 relative">
-                            <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
+                            <label htmlFor={fieldId} className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest ml-1">{f.label}</label>
                             {f.type === "dropdown" || f.type === "master_status" ? (
                               <select
+                                id={fieldId}
                                 value={dynamicData[section.title]?.[f.name] || ""}
                                 onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
                                 className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none focus:border-gray-400"
@@ -3511,15 +3590,16 @@ Command: ${dashCommand}`;
                                 ])).map((o, i) => <option key={i} value={o}>{o}</option>)}
                               </select>
                             ) : f.type === "logged_in" ? (
-                              <input type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
+                              <input id={fieldId} type="text" readOnly value={user?.email || ""} className="w-full bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-not-allowed text-gray-500" />
                             ) : f.type === "file" || f.type === "attachment" ? (
                               <div className="flex flex-col gap-1">
-                                <input type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result) }; reader.readAsDataURL(file); } }} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                                <input id={fieldId} type="file" onChange={e => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { updateDynamicDataField(section.title, f.name, ev.target.result) }; reader.readAsDataURL(file); } }} className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-medium outline-none focus:border-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
                                 {(dynamicData[section.title]?.[f.name]) && <span className="text-[9px] text-green-600 font-bold ml-1"><Check className="w-3 h-3 inline mr-1" /> File Attached</span>}
                               </div>
                             ) : f.type === "paragraph" ? (
                               <div className="flex flex-col gap-1">
                                 <textarea
+                                  id={fieldId}
                                   value={dynamicData[section.title]?.[f.name] || ""}
                                   maxLength={1500}
                                   onChange={e => updateDynamicDataField(section.title, f.name, e.target.value)}
@@ -3529,40 +3609,18 @@ Command: ${dashCommand}`;
                                 <span className="text-[9px] text-gray-400 text-right">{(dynamicData[section.title]?.[f.name] || "").length}/1500</span>
                               </div>
                             ) : (
-                              <>
-                                <input
-                                  type={f.type === "date" ? "date" : "text"}
-                                  inputMode={f.type === "number" ? "decimal" : undefined}
-                                  value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : (dynamicData[section.title]?.[f.name] || "")}
-                                  readOnly={f.type === "calculated"}
-                                  onFocus={() => hasMasterValues && setFocusedField({ section: section.title, field: f.name, rowIdx: 'single' })}
-                                  onBlur={() => setTimeout(() => setFocusedField(null), 200)}
-                                  onChange={e => { updateDynamicDataField(section.title, f.name, e.target.value); if (hasMasterValues) setFocusedField({ section: section.title, field: f.name, rowIdx: 'single' }); }}
-                                  className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : hasMasterValues ? 'bg-indigo-50 hover:bg-white focus:bg-white text-indigo-700 border-indigo-200 focus:border-indigo-400' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
-                                  placeholder={hasMasterValues ? "Select or type..." : "..."}
-                                  autoComplete="off"
-                                />
-                                {hasMasterValues && focusedField?.section === section.title && focusedField?.field === f.name && focusedField?.rowIdx === 'single' && (
-                                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                    {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).map((val) => (
-                                      <div
-                                        key={val.id}
-                                        className="px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-colors"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault();
-                                          updateDynamicDataField(section.title, f.name, val.value_text);
-                                          setFocusedField(null);
-                                        }}
-                                      >
-                                        {val.value_text}
-                                      </div>
-                                    ))}
-                                    {activeValues.filter(v => v.value_text.toLowerCase().includes((dynamicData[section.title]?.[f.name] || "").toLowerCase())).length === 0 && (
-                                      <div className="px-4 py-2.5 text-sm text-gray-400 italic">No matches...</div>
-                                    )}
-                                  </div>
-                                )}
-                              </>
+                              <SuggestInput
+                                id={fieldId}
+                                type={f.type === "date" ? "date" : "text"}
+                                inputMode={f.type === "number" ? "decimal" : undefined}
+                                value={f.type === "calculated" && dynamicData[section.title]?.[f.name] != null && dynamicData[section.title]?.[f.name] !== "" ? Number(dynamicData[section.title][f.name]).toFixed(2) : String(dynamicData[section.title]?.[f.name] ?? "")}
+                                readOnly={f.type === "calculated"}
+                                suggestions={f.type === "calculated" ? [] : activeValues}
+                                onChange={(v) => updateDynamicDataField(section.title, f.name, v)}
+                                onPick={CLIENT_KEYS.has(normalize(f.name)) ? (v) => prefillFromClient(section.title, f.name, v) : undefined}
+                                className={`w-full border px-4 py-2.5 rounded-xl text-sm font-medium outline-none shadow-sm ${f.type === 'calculated' ? 'bg-indigo-50 text-indigo-700 font-bold cursor-not-allowed border-gray-200' : 'bg-gray-50 hover:bg-white focus:bg-white focus:border-gray-400 border-gray-200'}`}
+                                placeholder={hasMasterValues ? "Select or type..." : "..."}
+                              />
                             )}
                           </div>
                         );
@@ -3608,7 +3666,13 @@ Command: ${dashCommand}`;
       </main>
 
       {selectedRecord && (
-        <div className="fixed inset-0 z-[150] flex justify-end bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+          className="fixed inset-0 z-[150] flex justify-end bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Quote ${selectedRecord.qn_number || selectedRecord.qn || ''}`}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedRecord(null); }}
+        >
           <div className="w-full max-w-2xl h-full bg-white shadow-2xl p-6 md:p-10 overflow-y-auto animate-in slide-in-from-right duration-300 border-l border-gray-200">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
               <div>
@@ -3618,7 +3682,7 @@ Command: ${dashCommand}`;
               <div className="flex gap-2">
                 <button onClick={() => loadRecordForEditing(selectedRecord)} className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 text-gray-600 active:scale-95 transition-transform" title="Edit"><Pen className="w-4 h-4" /></button>
                 <button onClick={() => handleDelete(selectedRecord.id)} className="w-10 h-10 bg-red-50 border border-red-100 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 active:scale-95 transition-transform" title="Delete"><Trash className="w-4 h-4" /></button>
-                <button onClick={() => setSelectedRecord(null)} className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200 active:scale-95 transition-transform"><X className="w-4 h-4" /></button>
+                <button onClick={() => setSelectedRecord(null)} className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200 active:scale-95 transition-transform" title="Close" aria-label="Close quote"><X className="w-4 h-4" /></button>
               </div>
             </div>
 
@@ -3629,20 +3693,22 @@ Command: ${dashCommand}`;
               </div>
               <div className="flex-1 overflow-x-auto pb-1 scrollbar-hide w-full">
                 <div className="flex gap-2 mb-6">
+                  {/* The stages are this workspace's own (Field Configurator → Master Status),
+                      never a fixed list: a hardcoded one would set a status the pipeline has no name for. */}
                   {selectedRecord.status === 'Lead' ? (
                     <button
-                      onClick={() => updateStatus(selectedRecord.id, 'Draft')}
-                      className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest shadow-md active:scale-95 transition-all bg-indigo-600 text-white w-full"
+                      onClick={() => updateStatus(selectedRecord.id, allStatuses.find((s: string) => s !== 'Lead') || 'Inquiry')}
+                      className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest shadow-md active:scale-95 transition-all bg-gray-900 text-white w-full"
                     >
                       <Zap className="w-4 h-4 inline mr-2" /> Convert to Quote
                     </button>
                   ) : (
-                    ['Draft', 'Pending', 'Approved', 'Rejected', 'Lost'].map(s => (
+                    (allStatuses as string[]).filter((s) => s !== 'Lead').map(s => (
                       <button
                         key={s}
                         onClick={() => updateStatus(selectedRecord.id, s)}
                         disabled={selectedRecord.status === s}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-sm active:scale-95 transition-all whitespace-nowrap ${selectedRecord.status === s ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-sm active:scale-95 transition-all whitespace-nowrap ${selectedRecord.status === s ? 'bg-gray-900 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400 hover:text-gray-900'}`}
                       >
                         {s}
                       </button>
@@ -3732,7 +3798,10 @@ Command: ${dashCommand}`;
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-4">
                         {section.fields.filter(f => f.type !== 'master_status').map((f, fIdx) => {
-                          const v = extractValue(selectedRecord, f.name, section.title);
+                          const raw = extractValue(selectedRecord, f.name, section.title);
+                          // a subtotal nobody typed is the sum of the line items, not a blank
+                          const v = (raw === '' || raw == null) && /subtotal|amount|^total$/i.test(String(f.name))
+                            ? itemsTotal(selectedRecord) : raw;
                           return (
                             <div key={fIdx} className="flex flex-col border-b border-gray-50 pb-2">
                               <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{f.label}</p>

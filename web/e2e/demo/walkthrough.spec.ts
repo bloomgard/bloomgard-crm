@@ -59,9 +59,9 @@ test('scene 02 — Smart quote form autofill', async ({ page }) => {
 test('scene 03 — Your Profile', async ({ page }) => {
   await openSetting(page, 'Your Profile');
   await expect(page.getByRole('heading', { name: 'Your Profile' })).toBeVisible();
-  await page.getByPlaceholder('e.g. Priya Sharma', { exact: true }).fill('Rohit Verma');
-  await page.getByPlaceholder('e.g. Sales Manager', { exact: true }).fill('Sales Executive');
-  await page.getByPlaceholder('e.g. +91 98765 43210', { exact: true }).fill('+91 99999 00000');
+  await page.getByPlaceholder('Full name', { exact: true }).fill('Rohit Verma');
+  await page.getByPlaceholder('Job title', { exact: true }).fill('Sales Executive');
+  await page.getByPlaceholder('Phone', { exact: true }).fill('+91 99999 00000');
   await page.waitForTimeout(1500);
   // NOTE: uncomment to persist — writes to your profile row:
   // await page.getByRole('button', { name: 'Save Profile' }).click();
@@ -115,8 +115,8 @@ test('scene 08 — Follow-up triage tabs + search', async ({ page }) => {
     await search.pressSequentially('QN-2026', { delay: 90 });
     await page.waitForTimeout(1500);
   }
-  for (const tab of ['Incoming', 'Outgoing', 'Pending Follow-ups']) {
-    await page.getByText(tab, { exact: false }).first().click().catch(() => {});
+  for (const tab of ['Incoming', 'Outgoing', 'Done', 'Due']) {
+    await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click().catch(() => {});
     await page.waitForTimeout(1500);
   }
 });

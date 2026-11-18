@@ -29,17 +29,20 @@ dropdown, paragraph, attachment or formula.
 
 ## Statuses
 
-A quote moves through a status pipeline. The statuses used by the product are:
+A quote moves through **your workspace's own pipeline**. The stages are whatever the
+**Master Status** field lists in the [Field Configurator](./settings.md#master-status) — the
+buttons on an open quote, the Quotes filter, the Status Log and Bloomgard AI all offer those
+same stages and nothing else. A new workspace starts with *Inquiry, Quotation Given,
+Approved, Lost*.
+
+Two names mean something to the product wherever they appear:
 
 | Status | Meaning |
 |---|---|
-| **Lead** | An enquiry that has not been turned into a quote yet (see [Lead generation](./lead-gen.md)). |
-| **Inquiry** | A quote created from an inbound email, waiting to be worked. |
-| **Draft** | Being prepared. |
-| **Pending** | Sent / awaiting the client's decision. |
+| **Lead** | An enquiry that has not been turned into a quote yet (see [Lead generation](./lead-gen.md)). Leads live in Lead Gen, not Quotes. |
 | **Approved** | Accepted. Approved quotes also appear in the Document Library. |
-| **Rejected** | Declined. |
-| **Lost** | Deal lost. Approved and Lost quotes never appear in Follow ups. |
+
+**Approved** and **Lost** quotes never appear in Follow ups.
 
 Every change is recorded in the **Status Log** on the quote: who moved it, when, from what to
 what, and any note. It is a log module like the ones you configure yourself — filter it by

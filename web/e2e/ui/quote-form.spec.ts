@@ -1,7 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { admin, resolveActor, Actor, Cleanup, waitFor } from '../helpers/db';
 import { runTag } from '../helpers/env';
-import { seedCatalogue } from '../helpers/fixtures';
+import { seedCatalogue, makeQuote } from '../helpers/fixtures';
 import { openApp, go, captureDialogs } from './_app';
 
 const field = (page: Page, label: string) =>
@@ -68,5 +68,52 @@ test.describe.serial('New quote form fed by Master Data', () => {
     expect(items).toHaveLength(1);
     expect(items![0]).toMatchObject({ item_code: codeB(), item_name: `E2E Bracket ${tag}`, uom: 'KG', quantity: 4 });
     expect(Number(items![0].item_rate)).toBeCloseTo(3.5);
+  });
+
+  // "Same client, different quote: almost everything is the same as before."
+  test('fields remember what was typed before, and choosing a known client fills the rest from their last quote', async ({ page }) => {
+    const client = `E2E Remembered Co ${tag}`;
+    const q = await makeQuote(actor, cleanup, `${tag}-remember`, {});
+    await admin().from('quotations').update({
+      custom_metadata: {
+        'Client Information': { client_name: client, contact_person: `Asha ${tag}`, email_id: `asha-${tag}@e2e-buyer.test`, billing_address: `Plot 9, GIDC ${tag}` },
+        'Quote Details': { status: 'Inquiry', payment_terms: `45 days net ${tag}`, delivery_terms: `FOB Mundra ${tag}` },
+      },
+    }).eq('id', q.id);
+
+    await openApp(page);
+    await go(page, 'Quotes');
+    await page.getByRole('button', { name: /\+ New Entry/ }).click();
+    await expect(page.getByText('Products', { exact: true }).first()).toBeVisible();
+
+    // a value typed on another quote is offered, marked as used before
+    const terms = page.getByLabel('Payment Terms');
+    await terms.click();
+    await terms.fill('45 days');
+    const option = page.getByRole('option', { name: new RegExp(`45 days net ${tag}`) });
+    await expect(option).toBeVisible();
+    await expect(option).toContainText(/used before/i);
+    await terms.fill('');
+
+    // choosing the client from the keyboard fills contact, email, address and terms
+    const name = page.getByLabel('Client Name');
+    await name.click();
+    await name.fill(`E2E Remembered Co ${tag}`.slice(0, 18));
+    await expect(page.getByRole('option', { name: new RegExp(client) })).toBeVisible();
+    await name.press('ArrowDown');
+    await name.press('ArrowUp');
+    await name.press('Enter');
+    await expect(name).toHaveValue(client);
+    await expect(page.getByTestId('prefill-note')).toContainText(client);
+    await expect(page.getByLabel('Contact Person')).toHaveValue(`Asha ${tag}`);
+    await expect(page.getByLabel('Billing Address')).toHaveValue(`Plot 9, GIDC ${tag}`);
+    await expect(page.getByLabel('Delivery Terms')).toHaveValue(`FOB Mundra ${tag}`);
+    await expect(page.getByLabel('Payment Terms')).toHaveValue(`45 days net ${tag}`);
+
+    // Undo puts the form back, keeping only the client
+    await page.getByTestId('prefill-note').getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByLabel('Contact Person')).toHaveValue('');
+    await expect(name).toHaveValue(client);
+    await page.getByRole('button', { name: 'Discard' }).click().catch(() => {});
   });
 });

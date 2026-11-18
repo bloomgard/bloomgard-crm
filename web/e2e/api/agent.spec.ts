@@ -46,12 +46,37 @@ test.describe.serial('Bloomgard AI agent', () => {
   });
 
   test('a confirmed status change is applied and audited', async ({ request }) => {
+    // give the quote a filled-in form section holding a Master Status, as a real quote has
+    const { data: form } = await admin().from('tenant_schemas').select('schema_config').eq('tenant_id', actor.tenantId).single();
+    const statusModules = (form!.schema_config as any[])
+      .filter((m) => !m.is_log && !m.allow_multiple && (m.fields || []).some((f: any) => f.type === 'master_status'));
+    if (statusModules.length) {
+      const { data: before } = await admin().from('quotations').select('custom_metadata').eq('id', q.id).single();
+      const meta = { ...(before!.custom_metadata as any) };
+      for (const m of statusModules) {
+        meta[m.title] = { ...(meta[m.title] || {}) };
+        for (const f of m.fields.filter((x: any) => x.type === 'master_status')) meta[m.title][f.name] = 'Inquiry';
+      }
+      await admin().from('quotations').update({ custom_metadata: meta }).eq('id', q.id);
+    }
+
     const res = await request.post(`${ENV.baseUrl}/api/agent/execute`, { headers: authed(token), data: { kind: 'update_quote_status', payload: { qn: q.qn, status: 'Pending', comment: 'e2e' } } });
     expect(res.status(), await res.text()).toBe(200);
     const { data } = await admin().from('quotations').select('status').eq('id', q.id).single();
     expect(data!.status).toBe('Pending');
     const { data: logs } = await admin().from('status_logs').select('old_status, new_status').eq('quotation_id', q.id);
     expect(logs).toContainEqual({ old_status: 'Inquiry', new_status: 'Pending' });
+
+    // a Master Status field in the form *is* the status: it has to move too, or opening the quote
+    // in the form and saving would silently put the old status back
+    const { data: after } = await admin().from('quotations').select('custom_metadata').eq('id', q.id).single();
+    for (const mod of statusModules) {
+      const section = (after!.custom_metadata as any)?.[mod.title];
+      if (!section) continue;
+      for (const f of (mod.fields || []).filter((x: any) => x.type === 'master_status')) {
+        expect(section[f.name], `${mod.title}.${f.name}`).toBe('Pending');
+      }
+    }
   });
 
   test('an invalid status or an unknown quote is rejected without touching anything', async ({ request }) => {

@@ -3,7 +3,7 @@ import { sendEmail } from '@/lib/email';
 import { logEmailSent } from '@/utils/usageLogger';
 import { createWorkspaceUser, ROLES } from '@/lib/users';
 import { loadState, refreshDomain, withDnsChecks, dnsHost, adoptExistingDomain } from '@/lib/emailDomain';
-import { STATUS_LOG_TITLE } from '@/lib/statusLog';
+import { STATUS_LOG_TITLE, mirrorStatusIntoMetadata } from '@/lib/statusLog';
 
 /* ------------------------------------------------------------------ */
 /* Tool schemas (OpenAI function-calling format, via OpenRouter)       */
@@ -785,7 +785,18 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
     case 'update_quote_status': {
       const q = await findQuote(ctx, p.qn);
       if (!q) throw new Error('Quote not found.');
-      await db.from('quotations').update({ status: p.status, last_contact_date: new Date().toISOString() }).eq('id', q.id);
+      // A Master Status field in the form *is* the status: move it too, or reopening the quote
+      // in the form and saving would put the old status back. visibleQuotes() hands back a slimmed
+      // copy of custom_metadata, so read the real one before writing it again.
+      const [{ modules }, { data: fresh }] = await Promise.all([
+        loadForm(ctx),
+        db.from('quotations').select('custom_metadata').eq('id', q.id).single(),
+      ]);
+      await db.from('quotations').update({
+        status: p.status,
+        custom_metadata: mirrorStatusIntoMetadata(fresh?.custom_metadata, modules, p.status),
+        last_contact_date: new Date().toISOString(),
+      }).eq('id', q.id);
       await db.from('status_logs').insert([{ quotation_id: q.id, old_status: q.status, new_status: p.status, changed_by: ctx.email || null, comments: p.comment || null }]);
       return { ok: true, message: `${q.qn_number} is now ${p.status}.`, refresh: ['quotes'] };
     }
@@ -820,9 +831,12 @@ export async function executeAction(kind: string, raw: any, ctx: AgentCtx): Prom
       const mod = plan.logs.find((l) => l.title === p.module)!;
       const { data: fresh, error: readErr } = await db.from('quotations').select('custom_metadata, status').eq('id', q.id).single();
       if (readErr) throw new Error(readErr.message);
-      const meta = { ...(fresh?.custom_metadata || {}) };
-      meta[mod.title] = [...(Array.isArray(meta[mod.title]) ? meta[mod.title] : []), { ...p.values, _at: new Date().toISOString(), _by: ctx.email }];
       const statusField = mod.fields.find((f) => f.type === 'master_status' && p.values[f.name]);
+      // an entry that carries a Master Status moves the quote, so every other Master Status field moves too
+      const meta = statusField
+        ? mirrorStatusIntoMetadata(fresh?.custom_metadata, (await loadForm(ctx)).modules, p.values[statusField.name])
+        : { ...(fresh?.custom_metadata || {}) };
+      meta[mod.title] = [...(Array.isArray(meta[mod.title]) ? meta[mod.title] : []), { ...p.values, _at: new Date().toISOString(), _by: ctx.email }];
       const patch: any = { custom_metadata: meta, last_contact_date: new Date().toISOString() };
       if (statusField && p.values[statusField.name] !== fresh?.status) patch.status = p.values[statusField.name];
       const { error } = await db.from('quotations').update(patch).eq('id', q.id);

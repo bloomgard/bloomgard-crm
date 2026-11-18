@@ -19,7 +19,9 @@ export const DEFAULT_SCHEMA: any[] = [
       { label: "Pipeline Status", name: "status", type: "master_status", options: "Inquiry, Quotation Given, Approved, Lost" },
       { label: "Payment Terms", name: "payment_terms", type: "text" },
       { label: "Delivery Terms", name: "delivery_terms", type: "text" },
-      { label: "Subtotal", name: "subtotal", type: "number" }
+      // Adds itself up from the line items: the quote list, the pipeline value and {{subtotal}}
+      // in the PDF all read this, so leaving it to be typed by hand would show a quote as worth nothing.
+      { label: "Subtotal", name: "subtotal", type: "calculated", options: "SUM[Products.item_br]" }
     ]
   },
   {

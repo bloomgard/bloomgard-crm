@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { db } from '@/lib/agent/core';
 import { DEFAULT_SCHEMA } from '@/lib/defaultSchema';
+import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
 import { domainOfEmail, isFreeEmailDomain, ensureRoutingId, startDomainSetup, ensureInboundWebhook } from '@/lib/emailDomain';
 
 export const ROLES = ['agent', 'manager', 'admin'] as const;
@@ -30,8 +31,10 @@ export async function createWorkspaceUser(o: { tenantId: string; email: string; 
   const { data, error } = await db.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: o.fullName || '' } });
   if (error || !data?.user) throw new Error(/registered|exists/i.test(error?.message || '') ? `${email} already has a Bloomgard account.` : (error?.message || 'Could not create the user.'));
   const userId = data.user.id;
+  // No personal forwarding address by default: everyone shares the workspace address until they ask
+  // for one of their own in Email Settings. An auto-assigned one would only ever be a raw user id.
   const { error: pErr } = await db.from('profiles').upsert({
-    id: userId, email, tenant_id: o.tenantId, role, full_name: o.fullName || null, inbound_email: `${userId}@inbound.bloomgard.co`,
+    id: userId, email, tenant_id: o.tenantId, role, full_name: o.fullName || null, inbound_email: null,
   }, { onConflict: 'id' });
   if (pErr) { await db.auth.admin.deleteUser(userId).catch(() => {}); throw new Error(pErr.message); }
   return { userId, email, role, password };
@@ -61,7 +64,10 @@ export async function provisionWorkspace(o: { companyName: string; fullName: str
   const { error: tErr } = await db.from('tenants').insert([{ id: tenantId, company_name: companyName, ai_enabled: true }]);
   if (tErr) throw new Error(tErr.message);
   try {
-    const { error: sErr } = await db.from('tenant_schemas').insert([{ tenant_id: tenantId, company_name: companyName, schema_config: DEFAULT_SCHEMA, html_template: '' }]);
+    // A workspace starts with a working PDF: an empty template would make the first Preview, Download
+    // and emailed quote a blank page. Settings → Quote Template can replace it at any time.
+    const starter = QUOTE_TEMPLATES.find((t) => t.id === 'classic') || QUOTE_TEMPLATES[0];
+    const { error: sErr } = await db.from('tenant_schemas').insert([{ tenant_id: tenantId, company_name: companyName, schema_config: DEFAULT_SCHEMA, html_template: starter?.html || '' }]);
     if (sErr) throw new Error(sErr.message);
     const user = await createWorkspaceUser({ tenantId, email: o.email, role: 'admin', fullName: o.fullName.trim(), password: o.password });
     // Email: a routing address straight away, and the company domain registered for sending.

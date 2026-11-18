@@ -7,13 +7,20 @@ section: Sales
 
 # Follow-ups
 
-**Follow ups** is the place to make sure no quote goes quiet.
+**Follow ups** is the place to make sure no quote goes quiet. It has four tabs:
+
+| Tab | What is in it |
+|---|---|
+| **Due** | Quotes that have gone quiet and need a nudge. |
+| **Incoming** | A client has written back and is waiting on you, with a draft reply ready. |
+| **Outgoing** | What you have sent that the client has not answered yet. |
+| **Done** | Quotes already followed up: the AI's conclusion and the whole exchange. |
 
 ## Which quotes show up
 
-A quote appears when it has had no activity for the number of days you pick in the days
+A quote appears under **Due** when it has had no activity for the number of days you pick in the days
 filter (including **0 Days (Immediate)** to see everything). Quotes that are **Approved** or
-**Lost** are excluded. A quote that already has a follow-up dispatched is shown in history
+**Lost** are excluded. A quote that already has a follow-up dispatched moves to **Done**
 instead. If a quote has an explicit follow-up due date, it appears once that date passes.
 
 Use **Search quote #, client…** to narrow the list.
@@ -30,12 +37,14 @@ Each quote is scored by how long since the last touch:
 
 Quotes are listed **hottest first**. An unanswered client email always makes a quote Hot.
 
-## AI Follow-Up Triage
+## Sending one
 
-For each quote you get an **AI Conclusion Summary** of the conversation and, where useful,
-a **Suggested Email Snippet • Waiting for Approval**. You can edit it, type a manual reply
-instead, and approve it to send. Sending clears the draft and marks the thread as
-outgoing; the sent email is logged.
+Every quote under **Due** comes with a suggested message already written. Edit it in place —
+nothing is sent until you press **Send follow-up** — and the quote moves to **Done**.
+
+Under **Incoming**, a client's reply comes with the AI's draft answer and, where there is a
+conversation to summarise, **What the AI concluded**. Edit the draft or write your own, then
+**Send Reply**: that clears the draft, moves the thread to **Outgoing** and logs the email.
 
 ## Follow-up agents
 

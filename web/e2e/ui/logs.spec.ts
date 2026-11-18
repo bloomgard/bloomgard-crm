@@ -137,6 +137,32 @@ test.describe.serial('Log modules', () => {
     await mine.fill('Action Log');
   });
 
+  // The transition row used to offer a fixed Draft/Pending/Approved/Rejected/Lost, which on a
+  // workspace with its own pipeline set a status nothing else in the app knew about.
+  test('the quote viewer offers this workspace\'s own stages, and Escape closes it', async ({ page }) => {
+    await openApp(page);
+    await go(page, 'Quotes');
+    await page.getByText(q.qn, { exact: true }).first().click();
+    const panel = page.getByRole('dialog');
+    await expect(panel).toBeVisible();
+
+    const configured = (await schema())
+      .flatMap((s: any) => s.fields || [])
+      .filter((f: any) => f.type === 'master_status')
+      .flatMap((f: any) => String(f.options || '').split(',').map((o: string) => o.trim()))
+      .filter(Boolean);
+    expect(configured.length).toBeGreaterThan(0);
+    for (const stage of configured) {
+      await expect(panel.getByRole('button', { name: stage, exact: true })).toBeVisible();
+    }
+    for (const notOurs of ['Draft', 'Pending', 'Rejected']) {
+      if (!configured.includes(notOurs)) await expect(panel.getByRole('button', { name: notOurs, exact: true })).toHaveCount(0);
+    }
+
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+  });
+
   test('Home has one Status & logs stat: pick a log module, then filter by its dropdowns', async ({ page }) => {
     await openApp(page);
     const box = page.getByLabel('Status and logs', { exact: true });

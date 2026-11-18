@@ -47,7 +47,7 @@ Open **Settings → Email Settings**:
 |---|---|
 | **Your personal email** | The address quotes are sent from by default ("Send As → Personal"). Replies are tied to your identity. |
 | **Workspace inbound address** | The shared `@inbound.bloomgard.co` address, created with the workspace. Every quote and reply Bloomgard sends sets Reply-To to it, so client replies come back with no DNS work. Mail arriving here is filed to the workspace and lands in the Inbox **unassigned**. |
-| **Your own address (optional)** | A second `@inbound.bloomgard.co` address, personal to you. It behaves exactly like the workspace one, except mail sent to it is **assigned to you** automatically. |
+| **Your own address (optional)** | A second `@inbound.bloomgard.co` address, personal to you. Nobody has one until they ask for it under **Give me my own address**. It behaves exactly like the workspace one, except mail sent to it is **assigned to you** automatically. |
 | **Common workspace email** | A verified company address (set by your admin) that any agent can send from. |
 
 Most workspaces need only the first. The personal address earns its keep when several

@@ -23,11 +23,16 @@ test.describe.serial('Accounts and users', () => {
     expect(res.status(), await res.text()).toBe(200);
     const { tenantId } = await res.json();
     made.tenants.push(tenantId);
-    const { data: prof } = await admin().from('profiles').select('id, role, tenant_id, full_name').eq('email', email).single();
+    const { data: prof } = await admin().from('profiles').select('id, role, tenant_id, full_name, inbound_email').eq('email', email).single();
     made.users.push(prof!.id);
     expect(prof).toMatchObject({ role: 'admin', tenant_id: tenantId, full_name: 'Signup Tester' });
-    const { data: sc } = await admin().from('tenant_schemas').select('schema_config').eq('tenant_id', tenantId).single();
+    expect(prof!.inbound_email).toBeNull(); // a personal forwarding address is opt-in, never an auto-assigned user id
+    const { data: sc } = await admin().from('tenant_schemas').select('schema_config, html_template').eq('tenant_id', tenantId).single();
     expect((sc!.schema_config as any[]).map((m) => m.title)).toContain('Quote Details');
+    // day one has to work: a subtotal that adds itself up, and a PDF that is not a blank page
+    const subtotal = (sc!.schema_config as any[]).flatMap((m) => m.fields || []).find((f: any) => f.name === 'subtotal');
+    expect(subtotal).toMatchObject({ type: 'calculated', options: 'SUM[Products.item_br]' });
+    expect(sc!.html_template).toContain('{{#each quotation_items}}');
     const { data: tenant } = await admin().from('tenants').select('company_name, inbound_routing_id, features_jsonb').eq('id', tenantId).single();
     expect(tenant!.company_name).toBe(`E2E Signup Co ${tag}`);
     expect(tenant!.inbound_routing_id).toMatch(/^e2e-signup-/); // its own routing address on inbound.bloomgard.co
