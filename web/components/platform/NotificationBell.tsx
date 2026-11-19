@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell } from "lucide-react";
 import { api } from "@/lib/platform/client";
 import type { NotificationData, Rec } from "@/lib/platform/types";
@@ -26,6 +27,22 @@ export default function NotificationBell({ onNavigate }: Props) {
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  // The panel is portalled to <body> and placed from the bell's position: inside the sidebar it was
+  // clipped by the sidebar's edge and painted under the page next to it.
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  const place = useCallback(() => {
+    const r = wrap.current?.getBoundingClientRect();
+    if (!r) return;
+    const w = Math.min(360, window.innerWidth - 24);
+    setPos({ left: Math.max(12, Math.min(r.left, window.innerWidth - w - 12)), bottom: Math.max(12, window.innerHeight - r.top + 8) });
+  }, []);
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open, place]);
 
   const load = useCallback(async () => {
     try {
@@ -45,7 +62,7 @@ export default function NotificationBell({ onNavigate }: Props) {
   // close on outside click or Escape (and keep Escape from also closing a panel underneath)
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false); };
+    const onDown = (e: MouseEvent) => { const t = e.target as Node; if (!wrap.current?.contains(t) && !panel.current?.contains(t)) setOpen(false); };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
     document.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey, true);
@@ -78,8 +95,8 @@ export default function NotificationBell({ onNavigate }: Props) {
         <Bell aria-hidden />
         {unread > 0 && <span className={s.badge} aria-hidden>{unread > 99 ? "99+" : unread}</span>}
       </button>
-      {open && (
-        <div className={s.panel} role="dialog" aria-label="Notifications">
+      {open && pos && createPortal(
+        <div ref={panel} className={s.panel} style={{ left: pos.left, bottom: pos.bottom }} role="dialog" aria-label="Notifications">
           <div className={s.panelHead}>
             <h3>Notifications</h3>
             <button type="button" className={s.markAll} disabled={!unread} onClick={() => markRead("all")}>Mark all read</button>
@@ -95,7 +112,9 @@ export default function NotificationBell({ onNavigate }: Props) {
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        // inside the themed root, so the dark theme's colours still apply
+        (wrap.current?.closest(".jaali") as HTMLElement) || document.body,
       )}
     </div>
   );

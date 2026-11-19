@@ -59,9 +59,9 @@ test('scene 02 — Smart quote form autofill', async ({ page }) => {
 test('scene 03 — Your Profile', async ({ page }) => {
   await openSetting(page, 'Your Profile');
   await expect(page.getByRole('heading', { name: 'Your Profile' })).toBeVisible();
-  await page.getByPlaceholder('Full name', { exact: true }).fill('Rohit Verma');
-  await page.getByPlaceholder('Job title', { exact: true }).fill('Sales Executive');
-  await page.getByPlaceholder('Phone', { exact: true }).fill('+91 99999 00000');
+  await page.getByLabel('Full name', { exact: true }).fill('Rohit Verma');
+  await page.getByLabel('Job title', { exact: true }).fill('Sales Executive');
+  await page.getByLabel('Phone', { exact: true }).fill('+91 99999 00000');
   await page.waitForTimeout(1500);
   // NOTE: uncomment to persist — writes to your profile row:
   // await page.getByRole('button', { name: 'Save Profile' }).click();

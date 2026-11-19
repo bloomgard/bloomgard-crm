@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BarChart3, KanbanSquare, MessagesSquare } from "lucide-react";
 import { api } from "@/lib/platform/client";
+import PlanningBoard from "./PlanningBoard";
+import TeamChat from "./TeamChat";
 import s from "./TeamView.module.css";
 
 type MemberStats = {
@@ -10,6 +13,65 @@ type MemberStats = {
 };
 type Activity = { kind: "status" | "note" | "task"; at: string; who: string; text: string; note?: string; quote_id?: string; qn?: string; client?: string };
 type Props = { isManager: boolean; onOpenQuote?: (quoteId: string) => void };
+
+export type TeamTab = "people" | "planning" | "chat";
+
+/**
+ * Team: People & activity (managers and admins), Planning (a board the whole team plans on) and
+ * Chat (channels and direct messages). `focus` comes from a notification: "planning:<card id>" or
+ * "chat:<channel id>".
+ */
+export default function Team({ isManager, tab: tabProp, onTabChange, focus, onFocusUsed, onOpenQuote, onOpenQuoteByQn }: {
+  isManager: boolean;
+  tab?: TeamTab;
+  onTabChange?: (t: TeamTab) => void;
+  focus?: string;
+  onFocusUsed?: () => void;
+  onOpenQuote?: (quoteId: string) => void;
+  onOpenQuoteByQn?: (qn: string) => void;
+}) {
+  const allowed: TeamTab[] = isManager ? ["people", "planning", "chat"] : ["planning", "chat"];
+  const pick = (t?: TeamTab) => (t && allowed.includes(t) ? t : allowed[0]);
+  const [tab, setTabState] = useState<TeamTab>(pick(tabProp));
+  useEffect(() => { if (tabProp) setTabState(pick(tabProp)); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tabProp, isManager]);
+  useEffect(() => {
+    if (focus?.startsWith("planning:")) setTabState("planning");
+    if (focus?.startsWith("chat:")) setTabState("chat");
+  }, [focus]);
+  const setTab = (t: TeamTab) => { setTabState(t); onTabChange?.(t); };
+  const LABELS: Record<TeamTab, [string, typeof BarChart3]> = { people: ["People & activity", BarChart3], planning: ["Planning", KanbanSquare], chat: ["Chat", MessagesSquare] };
+
+  return (
+    <div className={s.shell}>
+      <nav className={s.tabs} role="tablist" aria-label="Team">
+        {allowed.map((k) => {
+          const [label, Icon] = LABELS[k];
+          return (
+            <button key={k} role="tab" aria-selected={tab === k} className={`${s.tab} ${tab === k ? s.tabOn : ""}`} onClick={() => setTab(k)}>
+              <Icon aria-hidden />{label}
+            </button>
+          );
+        })}
+      </nav>
+      {tab === "people" && <PeopleActivity isManager={isManager} onOpenQuote={onOpenQuote} />}
+      {tab === "planning" && (
+        <PlanningBoard
+          focusCardId={focus?.startsWith("planning:") ? focus.slice(9) : undefined}
+          onFocusUsed={onFocusUsed}
+          onOpenQuote={onOpenQuote}
+        />
+      )}
+      {tab === "chat" && (
+        <TeamChat
+          isManager={isManager}
+          focusChannelId={focus?.startsWith("chat:") ? focus.slice(5) : undefined}
+          onFocusUsed={onFocusUsed}
+          onOpenQuoteByQn={onOpenQuoteByQn}
+        />
+      )}
+    </div>
+  );
+}
 
 const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const ago = (iso?: string) => {
@@ -23,7 +85,7 @@ const ago = (iso?: string) => {
 };
 
 /** Who is carrying what, and what the team did lately. Managers and admins only. */
-export default function TeamView({ isManager, onOpenQuote }: Props) {
+function PeopleActivity({ isManager, onOpenQuote }: Props) {
   const [members, setMembers] = useState<MemberStats[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [error, setError] = useState("");
@@ -47,7 +109,8 @@ export default function TeamView({ isManager, onOpenQuote }: Props) {
 
   const nameOf = (email: string) => {
     const m = members.find((x) => x.email.toLowerCase() === String(email).toLowerCase());
-    return m?.full_name || email || "Someone";
+    // logs written by the system (an inbound email, an automation) carry no person
+    return m?.full_name || email || "Bloomgard";
   };
 
   return (

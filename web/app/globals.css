@@ -637,6 +637,23 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 .qv-save { font-size: 12.5px; font-weight: 600; color: var(--neelam); padding: 5px 6px; }
 .qv-save:hover { text-decoration: underline; }
 .jaali.dark .qv-save { color: #7f9bff; }
+.qv-save--quiet { color: var(--color-gray-500); font-weight: 500; }
+.qv-help { margin-left: auto; font-size: 11.5px; color: var(--color-gray-400); text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+/* status chips above the quotes table: counts, multi-select */
+.qv-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+.qv-st { display: inline-flex; align-items: center; gap: 7px; padding: 4px 6px 4px 11px; border-radius: 9px; border: 1px solid var(--color-gray-200); background: var(--color-white); font-size: 12px; font-weight: 500; color: var(--color-gray-700); }
+.qv-st b { min-width: 20px; padding: 0 5px; border-radius: 6px; background: var(--color-gray-100); font-family: var(--font-mono), monospace; font-size: 10.5px; font-weight: 500; line-height: 18px; text-align: center; color: var(--color-gray-600); }
+.qv-st:hover { border-color: var(--color-gray-400); color: var(--color-gray-900); }
+.qv-st--on { border-color: var(--color-gray-900); background: var(--color-gray-900); color: var(--color-white); }
+.qv-st--on b { background: rgba(255,255,255,.18); color: var(--color-white); }
+.qv-count { margin-left: auto; font-size: 11.5px; color: var(--color-gray-500); font-variant-numeric: tabular-nums; }
+.qv-th { display: inline-flex; align-items: center; gap: 4px; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
+.qv-th span { font-size: 10px; opacity: .35; }
+.qv-th:hover { color: var(--color-gray-900); }
+.qv-th:hover span, .qv-th--on span { opacity: 1; }
+.qv-th--on { color: var(--color-gray-900); }
+.jaali.dark .qv-st--on { background: var(--color-gray-200); border-color: var(--color-gray-200); color: var(--color-gray-900); }
+.jaali.dark .qv-st--on b { background: rgba(0,0,0,.12); color: var(--color-gray-900); }
 
 /* ---- Remembering fields: suggestions from the catalogue and from past quotes ---- */
 .sg-list { position: absolute; z-index: 50; left: 0; right: 0; margin-top: 4px; max-height: 260px; overflow-y: auto; scrollbar-width: thin; padding: 4px; border-radius: 12px; border: 1px solid var(--color-gray-200); background: var(--color-white); box-shadow: var(--shadow-lg); }
@@ -725,10 +742,10 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
 
 /* the Bloomgard mark, filled with the AI orb's turning gradient */
 .jl > * { grid-area: 1 / 1; place-self: center; }
-.jl__mark { position: relative; width: clamp(184px, 42vw, 268px); aspect-ratio: 1; overflow: hidden;
+.jl__mark { position: relative; width: clamp(72px, 17vw, 104px); aspect-ratio: 1; overflow: hidden;
   -webkit-mask: url(/brand/mark.png) center / contain no-repeat; mask: url(/brand/mark.png) center / contain no-repeat;
   animation: jl-breathe 3.4s ease-in-out infinite; }
-.jl__mark i { position: absolute; inset: -55%; display: block; filter: blur(26px);
+.jl__mark i { position: absolute; inset: -55%; display: block; filter: blur(10px);
   background:
     conic-gradient(from 0deg, var(--neelam, #2747d8) 0%, var(--sindoor, #ea5420) 26%,
       var(--marigold, #e5a03a) 42%, var(--marigold, #e5a03a) 56%, var(--sindoor, #ea5420) 72%,
@@ -736,7 +753,7 @@ html:has(.jaali.dark) body { background-color: #0b0e1a !important; }
   animation: jl-spin 7s linear infinite; }
 .jl__mark::after { content: ""; position: absolute; inset: 0; border-radius: inherit; mix-blend-mode: screen; opacity: 0.5;
   background: radial-gradient(42% 42% at 32% 30%, rgba(255, 255, 255, 0.55), transparent 70%); }
-.jl__glow { width: clamp(300px, 64vw, 430px); aspect-ratio: 1; border-radius: 50%; filter: blur(64px);
+.jl__glow { width: clamp(120px, 26vw, 170px); aspect-ratio: 1; border-radius: 50%; filter: blur(28px);
   background: radial-gradient(60% 60% at 34% 40%, var(--neelam, #2747d8), transparent 70%),
               radial-gradient(60% 60% at 66% 62%, var(--sindoor, #ea5420), transparent 70%);
   animation: jl-glow 3.4s ease-in-out infinite; }

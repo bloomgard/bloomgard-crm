@@ -54,7 +54,8 @@ export const GET = withCtx(async (ctx, req) => {
   const activity = [
     ...logs.map((l) => ({
       kind: 'status', at: l.created_at, who: l.changed_by || '',
-      text: l.old_status ? `moved ${l.old_status} → ${l.new_status}` : `set ${l.new_status}`,
+      // a log written without a status change (an email logged, a call noted) is an update, not a move
+      text: !l.old_status ? `set ${l.new_status}` : l.old_status === l.new_status ? `logged an update (${l.new_status})` : `moved ${l.old_status} → ${l.new_status}`,
       note: l.comments || '', ...qLabel(l.quotation_id),
     })),
     ...notes.map((n) => ({

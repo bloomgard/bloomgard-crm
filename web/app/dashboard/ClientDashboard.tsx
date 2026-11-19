@@ -19,6 +19,8 @@ import SuggestInput from '@/components/SuggestInput';
 import TasksView from '@/components/platform/TasksView';
 import TeamView from '@/components/platform/TeamView';
 import NotificationBell from '@/components/platform/NotificationBell';
+import { FiltersPopover, ColumnsPopover, FilterChips } from '@/components/platform/QuotesToolbar';
+import FindInQuote from '@/components/platform/FindInQuote';
 import QuoteNotes from '@/components/platform/QuoteNotes';
 import PluginsView from '@/components/platform/PluginsView';
 import StudioView from '@/components/platform/StudioView';
@@ -29,7 +31,7 @@ import { installAuthFetch } from '@/lib/authFetch';
 
 // every /api call from the workspace carries the user's session (see lib/authFetch.ts)
 installAuthFetch();
-import { CheckSquare, UsersRound, Wand2, Workflow, Plug } from 'lucide-react';
+import { CheckSquare, UsersRound, Wand2, Workflow, Plug, ArrowDownUp, Download, Upload } from 'lucide-react';
 import { QUOTE_TEMPLATES } from '@/lib/quoteTemplates';
 import { CURRENCIES, currencyCode, money } from '@/lib/currency';
 
@@ -137,6 +139,7 @@ function DocsLink({ view, sub }: { view: string; sub?: string }) {
 
 export default function ClientDashboard() {
   const fileInputRef = useRef(null);
+  const quotePanelRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef(null);
   const iframeRef = useRef(null);
 
@@ -157,7 +160,7 @@ export default function ClientDashboard() {
     const names: Record<string, string> = { home: 'Home', pipeline: 'Quotes', inbox: 'Inbox', alerts: 'Follow ups', leadgen: 'Lead Gen', docs: 'Documents', settings: 'Settings', new_entry: 'New quote', agents: 'Agents', tasks: 'OK list', team: 'Team', studio: 'Studio' };
     document.title = `${names[currentView] || 'Workspace'} · Bloomgard CMA`;
   }, [currentView]);
-  const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint' | 'email'>('menu');
+  const [settingsSubView, setSettingsSubView] = useState<'menu' | 'master-data' | 'users' | 'blueprint' | 'email' | 'data' | string>('menu');
   const { masterTree, findAllEntriesByKey, findEntryById } = useMasterDataFields(tenantId || undefined, 'manual');
   const { masterTree: autoMasterTree, findAllEntriesByKey: findAllAutoEntriesByKey } = useMasterDataFields(tenantId || undefined, 'auto');
 
@@ -963,6 +966,8 @@ export default function ClientDashboard() {
   const [shareLink, setShareLink] = useState<null | { quoteId: string; url: string }>(null);
   const [studioTab, setStudioTab] = useState<'build' | 'automations' | 'saved' | 'health' | 'history'>('build');
   const [focusLeadId, setFocusLeadId] = useState('');
+  const [teamTab, setTeamTab] = useState<'people' | 'planning' | 'chat'>('people');
+  const [teamFocus, setTeamFocus] = useState('');
   const [inboxFilter, setInboxFilter] = useState<'all' | 'enquiries' | 'unread' | 'starred'>('all');
   const [emailLeads, setEmailLeads] = useState<Record<string, { id: string; kind: string; status: string; temperature: string; score: number }>>({});
   const openQuoteById = async (id: string) => {
@@ -1366,8 +1371,14 @@ export default function ClientDashboard() {
 
   const handleExportData = (format) => {
     if (!visibleRecords.length) return alert("No data to export.");
-    if (format === 'json') { const b = new Blob([JSON.stringify(visibleRecords, null, 2)], { type: "application/json" }); const u = URL.createObjectURL(b); const l = document.createElement("a"); l.href = u; l.download = `Bloomgard_${new Date().toISOString().split('T')[0]}.json`; l.click(); }
-    else { const h = ['Ref ID', 'Date', 'Status', 'Agent', ...tableColumns.map(c => c.label)]; const rows = visibleRecords.map(r => [r.qn_number, r.date, r.status, r.created_by_email, ...tableColumns.map(c => `"${String(getFieldValue(r, c)).replace(/"/g, '""')}"`),].join(',')); const b = new Blob([[h.join(','), ...rows].join('\n')], { type: "text/csv;charset=utf-8;" }); const u = URL.createObjectURL(b); const l = document.createElement("a"); l.href = u; l.download = `Bloomgard_${new Date().toISOString().split('T')[0]}.csv`; l.click(); }
+    const stamp = new Date().toISOString().split('T')[0];
+    const download = (blob: Blob, name: string) => { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    if (format === 'json') { download(new Blob([JSON.stringify(visibleRecords, null, 2)], { type: "application/json" }), `Bloomgard_quotes_${stamp}.json`); return; }
+    // CSV: every column the Quotes table can show, so nothing on the form is left out
+    const cols = quoteColumnDefs.filter((c) => c.id !== 'docs');
+    const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = visibleRecords.map((r) => cols.map((c) => esc(columnValue(r, c.id))).join(','));
+    download(new Blob(['\ufeff' + [cols.map((c) => esc(c.label)).join(','), ...rows].join('\n')], { type: "text/csv;charset=utf-8;" }), `Bloomgard_quotes_${stamp}.csv`);
   };
 
   const handleImportData = async (event) => {
@@ -1393,44 +1404,148 @@ export default function ClientDashboard() {
     const last = r.last_contact_date || r.date || r.created_at;
     return last ? (Date.now() - new Date(last).getTime()) / 86400000 : 0;
   };
+  /* ── Quotes list: columns, filters, sort and saved views ────────────────────────────────────
+   * The table shows whichever columns the person picked, in their order (any field of the quote
+   * form can be one). Filters, columns and sort together can be saved as a view: a tab above the
+   * table that brings that exact list back in one click. Without a view, the choice is remembered
+   * in this browser. */
+  const DEFAULT_QUOTE_COLUMNS = ['ref', 'client', 'contact', 'amount', 'owner', 'status', 'docs'];
+  const quoteColumnDefs = useMemo(() => {
+    const builtins = [
+      { id: 'ref', label: 'Ref ID', group: 'Quote' },
+      { id: 'date', label: 'Date', group: 'Quote' },
+      { id: 'client', label: 'Client', group: 'Quote' },
+      { id: 'contact', label: 'Contact person', group: 'Quote' },
+      { id: 'amount', label: 'Amount', group: 'Quote' },
+      { id: 'items', label: 'Line items', group: 'Quote' },
+      { id: 'owner', label: 'Created by', group: 'Quote' },
+      { id: 'status', label: 'Status', group: 'Quote' },
+      { id: 'quiet', label: 'Days quiet', group: 'Quote' },
+      { id: 'last_contact', label: 'Last contact', group: 'Quote' },
+      { id: 'follow_up', label: 'Follow-up', group: 'Quote' },
+      { id: 'docs', label: 'Document', group: 'Quote' },
+    ];
+    const fields = blueprint
+      .filter((sec: any) => !sec.is_log && !sec.allow_multiple && sec.title.toLowerCase() !== 'status logs')
+      .flatMap((sec: any) => (sec.fields || [])
+        .filter((f: any) => !['file', 'attachment', 'master_status'].includes(f.type))
+        .map((f: any) => ({ id: `f:${sec.title}::${f.name}`, label: f.label || f.name, group: sec.title })));
+    return [...builtins, ...fields];
+  }, [blueprint]);
+  const colsKey = `bg.quotes.columns.${tenantId || ''}`;
+  const [quoteFilters, setQuoteFilters] = useState<any>({});
+  const [quoteColumns, setQuoteColumnsState] = useState<string[]>(DEFAULT_QUOTE_COLUMNS);
+  const [quoteSort, setQuoteSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
+  useEffect(() => {
+    if (!tenantId) return;
+    try { const v = JSON.parse(localStorage.getItem(colsKey) || 'null'); if (Array.isArray(v) && v.length) setQuoteColumnsState(v); } catch { /* private window: defaults */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
+  const setQuoteColumns = (ids: string[]) => {
+    setQuoteColumnsState(ids);
+    if (!activeViewId) { try { localStorage.setItem(colsKey, JSON.stringify(ids)); } catch { /* not remembered, still applied */ } }
+  };
   const activeView = currentView === 'pipeline' ? savedViews.find((v) => v.id === activeViewId) : null;
-  /** A saved view's filters: statuses, owner ("me"), client name, amount range, days quiet. */
-  const inView = (r: any) => {
-    const f = activeView?.filters;
-    if (!f) return true;
-    if (f.statuses?.length && !f.statuses.map((x: string) => x.toLowerCase()).includes(String(r.status || '').toLowerCase())) return false;
+  /** Open a saved view (or '' for All quotes): its filters, columns and sort replace the current ones. */
+  const openView = (id: string) => {
+    setActiveViewId(id);
+    const v = savedViews.find((x) => x.id === id);
+    if (!v) {
+      setQuoteFilters({});
+      let cols = DEFAULT_QUOTE_COLUMNS;
+      try { const c = JSON.parse(localStorage.getItem(colsKey) || 'null'); if (Array.isArray(c) && c.length) cols = c; } catch { /* defaults */ }
+      setQuoteColumnsState(cols); setQuoteSort({ key: 'date', dir: 'desc' });
+      return;
+    }
+    setQuoteFilters({ ...(v.filters || {}) });
+    if (Array.isArray(v.columns) && v.columns.length) setQuoteColumnsState(v.columns);
+    setQuoteSort(v.sort?.key ? { key: v.sort.key, dir: v.sort.dir || 'desc' } : { key: 'date', dir: 'desc' });
+  };
+  const clean = (f: any) => JSON.stringify(Object.fromEntries(Object.entries(f || {}).filter(([, v]) => v !== undefined && v !== '' && !(Array.isArray(v) && !v.length)).sort()));
+  const viewChanged = !!activeView && (clean(activeView.filters) !== clean(quoteFilters)
+    || (Array.isArray(activeView.columns) && activeView.columns.length ? activeView.columns.join() !== quoteColumns.join() : quoteColumns.join() !== DEFAULT_QUOTE_COLUMNS.join())
+    || (activeView.sort?.key || 'date') !== quoteSort.key || (activeView.sort?.dir || 'desc') !== quoteSort.dir);
+
+  const quoteDate = (r: any) => String(r.date || r.quote_date || r.created_at || '').slice(0, 10);
+  const lineItems = (r: any) => extractArray(r, 'Products').length ? extractArray(r, 'Products') : (r.quotation_items || []);
+  /** The plain value of a column, for sorting and export. */
+  const columnValue = (r: any, id: string): any => {
+    switch (id) {
+      case 'ref': return r.qn_number || r.qn || '';
+      case 'date': return quoteDate(r);
+      case 'client': return extractValue(r, 'client_name', 'Client Information') || r.clients?.company_name || '';
+      case 'contact': return extractValue(r, 'contact_person', 'Client Information') || '';
+      case 'amount': return amountOf(r);
+      case 'items': return lineItems(r).length;
+      case 'owner': return r.created_by_email || '';
+      case 'status': return r.status || 'Inquiry';
+      case 'quiet': return Math.floor(quietDays(r));
+      case 'last_contact': return String(r.last_contact_date || '').slice(0, 10);
+      case 'follow_up': return r.follow_up_status || '';
+      case 'docs': return '';
+      default: {
+        if (!id.startsWith('f:')) return '';
+        const [sec, name] = id.slice(2).split('::');
+        const v = extractValue(r, name, sec);
+        return v == null || typeof v === 'object' ? '' : v;
+      }
+    }
+  };
+  /** The quote as text, for "find anything": every field, line item, note and log entry. */
+  const searchText = useMemo(() => {
+    const m = new Map<string, string>();
+    records.forEach((r: any) => {
+      const { quotation_attachments, ...rest } = r;
+      // attachments can be base64 files: never search inside those
+      const meta = rest.custom_metadata ? JSON.stringify(rest.custom_metadata, (k, v) => (typeof v === 'string' && v.length > 2000 ? '' : v)) : '';
+      m.set(r.id, (JSON.stringify({ ...rest, custom_metadata: undefined }) + meta).toLowerCase());
+    });
+    return m;
+  }, [records]);   // built once per load, not on every keystroke
+  const matchesFilters = (r: any, f: any) => {
+    if (f.search && !(searchText.get(r.id) || '').includes(String(f.search).toLowerCase())) return false;
+    if (f.statuses?.length && !f.statuses.map((x: string) => x.toLowerCase()).includes(String(r.status || 'Inquiry').toLowerCase())) return false;
     if (f.created_by) { const who = f.created_by === 'me' ? user?.email : f.created_by; if (String(r.created_by_email || '').toLowerCase() !== String(who || '').toLowerCase()) return false; }
-    if (f.client_contains && !String(extractValue(r, 'client_name', 'Client Information') || r.clients?.company_name || '').toLowerCase().includes(String(f.client_contains).toLowerCase())) return false;
+    if (f.client_contains && !String(columnValue(r, 'client')).toLowerCase().includes(String(f.client_contains).toLowerCase())) return false;
+    if (f.date_from && quoteDate(r) < f.date_from) return false;
+    if (f.date_to && quoteDate(r) > f.date_to) return false;
     if (f.min_amount != null && amountOf(r) < Number(f.min_amount)) return false;
     if (f.max_amount != null && amountOf(r) > Number(f.max_amount)) return false;
     if (f.quiet_days != null && quietDays(r) < Number(f.quiet_days)) return false;
     return true;
   };
-  const sortKey = activeView?.sort ? ({ date: 'date', amount: 'subtotal', quiet: 'quiet' } as any)[activeView.sort.key] : sortConfig.key;
-  const sortDir = activeView?.sort ? activeView.sort.dir : sortConfig.direction;
-  const sortedRecords = [...visibleRecords]
-    .filter(inView)
-    .filter(r => JSON.stringify(r).toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) => {
+  // the status chips count what the other filters leave, so the numbers always add up
+  const beforeStatus = visibleRecords.filter((r: any) => matchesFilters(r, { ...quoteFilters, statuses: undefined }));
+  const statusCounts = beforeStatus.reduce((acc: Record<string, number>, r: any) => { const k = r.status || 'Inquiry'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+  const sortedRecords = beforeStatus
+    .filter((r: any) => matchesFilters(r, { statuses: quoteFilters.statuses }))
+    .sort((a: any, b: any) => {
       // numbers compare as numbers: ₹90,000 is less than ₹1,69,000
-      let av: any, bv: any;
-      if (sortKey === 'subtotal') { av = amountOf(a); bv = amountOf(b); }
-      else if (sortKey === 'quiet') { av = quietDays(a); bv = quietDays(b); }
-      else { av = a[sortKey] || extractValue(a, sortKey) || ""; bv = b[sortKey] || extractValue(b, sortKey) || ""; }
+      const key = ({ subtotal: 'amount' } as any)[quoteSort.key] || quoteSort.key;
+      let av: any = columnValue(a, key), bv: any = columnValue(b, key);
+      const an = typeof av === 'number' ? av : parseFloat(String(av).replace(/[^0-9.-]/g, ''));
+      const bn = typeof bv === 'number' ? bv : parseFloat(String(bv).replace(/[^0-9.-]/g, ''));
+      if (key !== 'ref' && key !== 'date' && key !== 'last_contact' && Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== '' && String(bv).trim() !== '') { av = an; bv = bn; }
+      else { av = String(av).toLowerCase(); bv = String(bv).toLowerCase(); }
       if (av === bv) return 0;
-      return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+      return quoteSort.dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
+  const sortBy = (id: string) => setQuoteSort((s) => (s.key === id ? { key: id, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: id, dir: ['amount', 'quiet', 'date', 'items'].includes(id) ? 'desc' : 'asc' }));
 
-  /** Save the Quotes list as it is filtered now (statuses, search) as a view of your own. */
-  const saveCurrentAsView = async () => {
-    const name = prompt('Name this view (for example "My open quotes"):');
+  /** Save what the list shows now (filters, columns, sort) as a view: a tab that brings it back. */
+  const saveCurrentAsView = async (update = false) => {
+    const name = update && activeView ? activeView.name : prompt('Name this view (for example "My open quotes" or "Big quiet ones"):');
     if (!name?.trim()) return;
     try {
-      const filters: any = { ...(activeView?.filters || {}) };
-      if (searchTerm.trim()) filters.client_contains = searchTerm.trim();
-      const r = await platformApi('/api/views', { json: { name: name.trim(), data: { filters, sort: sortConfig.key === 'subtotal' ? { key: 'amount', dir: sortConfig.direction } : undefined, shared: false } } });
+      const data = { filters: JSON.parse(clean(quoteFilters)), columns: quoteColumns, sort: quoteSort, shared: update && activeView ? !!activeView.shared : false };
+      const r = await platformApi('/api/views', { json: { ...(update && activeView ? { id: activeView.id } : {}), name: name.trim(), data } });
       await loadSavedViews(); setActiveViewId(r.id);
     } catch (e: any) { alert(e.message); }
+  };
+  const deleteView = async () => {
+    if (!activeView || !confirm(`Delete the view “${activeView.name}”? The quotes in it are not touched.`)) return;
+    try { await platformApi(`/api/views?id=${activeView.id}`, { method: 'DELETE' }); await loadSavedViews(); openView(''); }
+    catch (e: any) { alert(e.message); }
   };
 
   const handleSendChatAI = async (overrideMsg = null) => {
@@ -1957,7 +2072,8 @@ Command: ${dashCommand}`;
             ['tasks', <div key='tasks' className='flex items-center gap-2'><CheckSquare className='w-4 h-4' /> OK list</div>],
             ['leadgen', <div key='leadgen' className='flex items-center gap-2'><Magnet className='w-4 h-4' /> Lead Gen</div>],
             ['docs', <div key='docs' className='flex items-center gap-2'><FileText className='w-4 h-4' /> Docs</div>],
-            ...(isManager ? [['team', <div key='team' className='flex items-center gap-2'><UsersRound className='w-4 h-4' /> Team</div>]] : []),
+            // everyone plans and chats; People & activity inside it is for managers and admins
+            ['team', <div key='team' className='flex items-center gap-2'><UsersRound className='w-4 h-4' /> Team</div>],
             ['studio', <div key='studio' className='flex items-center gap-2'><Wand2 className='w-4 h-4' /> Studio</div>],
             ['settings', <div key='settings' className='flex items-center gap-2'><Settings className='w-4 h-4' /> Settings</div>]
           ].map(([v, label]) => (
@@ -1987,6 +2103,7 @@ Command: ${dashCommand}`;
                   return;
                 }
                 if (link.view === 'leadgen') { setFocusLeadId(link.sub || ''); setCurrentView('leadgen'); return; }
+                if (link.view === 'team') { const t = String(link.sub || '').split(':')[0]; if (t === 'chat' || t === 'planning') setTeamTab(t); setTeamFocus(link.sub || ''); setCurrentView('team'); return; }
                 if (link.sub) { setSettingsSubView(link.sub); setCurrentView('settings'); return; }
                 setCurrentView(link.view || 'home');
               }} />
@@ -2066,9 +2183,17 @@ Command: ${dashCommand}`;
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
             <header className="mb-6">
               <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">Team</h2><DocsLink view="team" /></div>
-              <p className="text-sm text-gray-600 mt-1">Who is carrying which quotes, what is waiting on whom, and what moved today.</p>
+              <p className="text-sm text-gray-600 mt-1">{(isManager ? teamTab : teamTab === 'people' ? 'planning' : teamTab) === 'people' ? 'Who is carrying which quotes, what is waiting on whom, and what moved today.' : (isManager ? teamTab : teamTab === 'people' ? 'planning' : teamTab) === 'chat' ? 'Talk it through: channels for the whole team and direct messages.' : 'Plan the work together: cards for what needs doing, who has it, and by when.'}</p>
             </header>
-            <TeamView isManager={isManager} onOpenQuote={(id) => { const rec = records.find((r: any) => r.id === id); if (rec) setSelectedRecord(rec); }} />
+            <TeamView
+              isManager={isManager}
+              tab={teamTab}
+              onTabChange={setTeamTab}
+              focus={teamFocus}
+              onFocusUsed={() => setTeamFocus('')}
+              onOpenQuote={(id) => { const rec = records.find((r: any) => r.id === id); if (rec) setSelectedRecord(rec); else openQuoteById(id); }}
+              onOpenQuoteByQn={(qnNumber) => { const rec = records.find((r: any) => String(r.qn_number || r.qn || '').toLowerCase() === qnNumber.toLowerCase()); if (rec) setSelectedRecord(rec); else alert(`No quote ${qnNumber} in this workspace.`); }}
+            />
           </div>
         )}
 
@@ -2367,7 +2492,7 @@ Command: ${dashCommand}`;
                   ← Back to Menu
                 </button>
               )}
-              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{({ profile: "Your Profile", "master-data": "Master Data", users: "User Access", blueprint: "Field Configurator", email: "Email Settings", personalization: "Personalization", "ai-personality": "AI Settings", "quote-template": "Quote Template", automations: "Automations", plugins: "Plugins" } as Record<string, string>)[settingsSubView] || "Workspace Settings"}</h2><DocsLink view="settings" sub={settingsSubView} /></div>
+              <div className="flex items-center gap-3 flex-wrap"><h2 className="text-3xl font-bold text-gray-900">{({ profile: "Your Profile", "master-data": "Master Data", users: "User Access", blueprint: "Field Configurator", email: "Email Settings", personalization: "Personalization", "ai-personality": "AI Settings", "quote-template": "Quote Template", automations: "Automations", plugins: "Plugins", data: "Import & export" } as Record<string, string>)[settingsSubView] || "Workspace Settings"}</h2><DocsLink view="settings" sub={settingsSubView} /></div>
             </header>
 
             {settingsSubView === 'menu' && (
@@ -2383,6 +2508,7 @@ Command: ${dashCommand}`;
                   { key: 'quote-template', icon: Palette, title: 'Quote Template', desc: 'Brand identity and the HTML your quote PDFs are built from.', managerOnly: true },
                   { key: 'automations', icon: Workflow, title: 'Automations', desc: 'Rules that chase quiet quotes, hand out tasks and keep the team informed. They live in Studio, with everything else the AI builds.', managerOnly: false },
                   { key: 'plugins', icon: Plug, title: 'Plugins', desc: 'Webhook, Slack, an inbound API for your website form, and an accounting export.', managerOnly: false },
+                  { key: 'data', icon: ArrowDownUp, title: 'Import & export', desc: 'Download your quotes as a spreadsheet (CSV) or a full backup (JSON), and bring quotes in from a backup.', managerOnly: false },
                 ].filter(item => !item.managerOnly || isManager).map(item => {
                   const Icon = item.icon;
                   return (
@@ -2647,6 +2773,26 @@ Command: ${dashCommand}`;
             )}
 
             {settingsSubView === 'plugins' && <PluginsView isManager={isManager} />}
+
+            {settingsSubView === 'data' && (
+              <div className="grid gap-5 max-w-3xl">
+                <section className="border border-gray-200 rounded-2xl p-6 bg-white">
+                  <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Download className="w-4 h-4" aria-hidden /> Export quotes</h3>
+                  <p className="text-sm text-gray-600 mt-1">Every quote you can see ({visibleRecords.length}). The spreadsheet has a column for every field of your quote form; the backup keeps everything, line items and logs included, and can be imported again.</p>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <button type="button" onClick={() => handleExportData('csv')} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">Download spreadsheet (CSV)</button>
+                    <button type="button" onClick={() => handleExportData('json')} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">Download backup (JSON)</button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">Want only some quotes, or particular columns? Ask Bloomgard AI on Home, for example “export my approved quotes from this month as Excel”.</p>
+                </section>
+                <section className="border border-gray-200 rounded-2xl p-6 bg-white">
+                  <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Upload className="w-4 h-4" aria-hidden /> Import quotes</h3>
+                  <p className="text-sm text-gray-600 mt-1">Bring quotes in from a Bloomgard backup (.json). Each one is added as a new quote owned by you; nothing already here is changed.</p>
+                  <input type="file" accept=".json,application/json" className="hidden" ref={fileInputRef} onChange={handleImportData} />
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-4 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">Choose a backup file…</button>
+                </section>
+              </div>
+            )}
 
             {settingsSubView === 'personalization' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm max-w-2xl">
@@ -3320,40 +3466,53 @@ Command: ${dashCommand}`;
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[180px] max-w-xs">
-                  <input placeholder="Search quotes..." className="w-full bg-white border border-gray-200 pl-10 pr-4 py-2.5 rounded-xl text-xs font-medium outline-none focus:border-gray-400 text-gray-700 placeholder:text-gray-400" onChange={e => setSearchTerm(e.target.value)} />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <input
+                    placeholder="Search anything in a quote: client, item, note…"
+                    aria-label="Search quotes"
+                    value={quoteFilters.search || ''}
+                    className="w-full h-[38px] bg-white border border-gray-200 pl-10 pr-4 rounded-xl text-xs font-medium outline-none focus:border-gray-400 text-gray-700 placeholder:text-gray-400"
+                    onChange={e => setQuoteFilters((f: any) => { const n = { ...f }; if (e.target.value) n.search = e.target.value; else delete n.search; return n; })}
+                  />
                   <div className="absolute left-4 top-1/2 -translate-y-1/2"><svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
                 </div>
-                <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                  <select value={sortConfig.key} onChange={e => setSortConfig({ ...sortConfig, key: e.target.value })} className="px-3 py-2.5 text-xs font-semibold text-gray-600 outline-none cursor-pointer border-r border-gray-100 bg-transparent">
-                    <option value="qn_number">Ref ID</option>
-                    <option value="date">Date</option>
-                    <option value="status">Status</option>
-                    {tableColumns.map((c, i) => <option key={i} value={c.name}>{c.label}</option>)}
-                  </select>
-                  <button onClick={() => setSortConfig({ ...sortConfig, direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })} className="px-3 py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-50">{sortConfig.direction === 'asc' ? '↑' : '↓'}</button>
-                </div>
-                <select onChange={e => { if (e.target.value) { handleExportData(e.target.value); e.target.value = ''; } }} className="bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 px-3 py-2.5 rounded-xl text-xs font-semibold outline-none cursor-pointer shadow-sm">
-                  <option value="">Export...</option>
-                  <option value="json">JSON</option>
-                  <option value="csv">CSV</option>
-                </select>
-                <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImportData} />
-                <button onClick={() => fileInputRef.current?.click()} className="bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 px-3 py-2.5 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">Import</button>
+                <FiltersPopover filters={quoteFilters} onChange={setQuoteFilters} me={user?.email || ''}
+                  owners={[...new Set(visibleRecords.map((r: any) => String(r.created_by_email || '')).filter(Boolean))].sort()} />
+                <ColumnsPopover all={quoteColumnDefs} value={quoteColumns} onChange={setQuoteColumns} onReset={() => setQuoteColumns(DEFAULT_QUOTE_COLUMNS)} />
               </div>
             </div>
 
-            {/* A workspace with nothing in it yet is the normal first day, not a fault to report. */}
+            {/* Saved views: a tab per saved list (its filters, columns and sort), plus All quotes */}
             {currentView === "pipeline" && records.length > 0 && (
               <div className="qv-tabs" role="tablist" aria-label="Saved views">
-                <button role="tab" aria-selected={!activeViewId} className={`qv-tab ${!activeViewId ? 'qv-tab--on' : ''}`} onClick={() => setActiveViewId('')}>All quotes</button>
+                <button role="tab" aria-selected={!activeViewId} className={`qv-tab ${!activeViewId ? 'qv-tab--on' : ''}`} onClick={() => openView('')}>All quotes</button>
                 {savedViews.map((v) => (
-                  <button key={v.id} role="tab" aria-selected={activeViewId === v.id} className={`qv-tab ${activeViewId === v.id ? 'qv-tab--on' : ''}`} onClick={() => setActiveViewId(v.id)} title={v.shared ? 'Shared with the team' : 'Only you see this view'}>{v.name}</button>
+                  <button key={v.id} role="tab" aria-selected={activeViewId === v.id} className={`qv-tab ${activeViewId === v.id ? 'qv-tab--on' : ''}`} onClick={() => openView(v.id)} title={v.shared ? 'Shared with the team' : 'Only you see this view'}>{v.name}</button>
                 ))}
-                <button className="qv-save" onClick={saveCurrentAsView}>+ Save as view</button>
+                {activeView && viewChanged && (activeView.mine || isManager) && <button className="qv-save" onClick={() => saveCurrentAsView(true)}>Save changes to “{activeView.name}”</button>}
+                {(!activeView || viewChanged) && <button className="qv-save" onClick={() => saveCurrentAsView(false)} title="A view saves the search, filters, columns and sort you have now as a tab here, so you can come back to exactly this list in one click.">+ Save as view</button>}
+                {activeView && !viewChanged && (activeView.mine || isManager) && <button className="qv-save qv-save--quiet" onClick={deleteView}>Delete view</button>}
+                <span className="qv-help" title="A view is a saved list: the search, filters, columns and sort you set, kept as a tab here. Yours are private; a manager can share one with the team from Studio → Saved.">What is a view?</span>
               </div>
             )}
+
+            {/* Status at a glance: click to show only those, click again to clear; several can be on */}
+            {records.length > 0 && (
+              <div className="qv-status" role="group" aria-label="Filter by status">
+                {(allStatuses as string[]).filter((st) => st !== 'Lead').concat(Object.keys(statusCounts).filter((k) => !(allStatuses as string[]).includes(k))).map((st) => {
+                  const on = (quoteFilters.statuses || []).includes(st);
+                  return (
+                    <button key={st} type="button" aria-pressed={on} className={`qv-st ${on ? 'qv-st--on' : ''}`}
+                      onClick={() => setQuoteFilters((f: any) => { const cur: string[] = f.statuses || []; const next = on ? cur.filter((x) => x !== st) : [...cur, st]; const n = { ...f }; if (next.length) n.statuses = next; else delete n.statuses; return n; })}>
+                      {st}<b>{statusCounts[st] || 0}</b>
+                    </button>
+                  );
+                })}
+                <span className="qv-count">{sortedRecords.length} of {visibleRecords.length} quotes</span>
+              </div>
+            )}
+            <div className="mb-3"><FilterChips filters={quoteFilters} onChange={setQuoteFilters} money={(n) => money(n, 'INR')} ownerLabel={(v) => (v === 'me' ? 'Me' : v)} /></div>
 
             {records.length === 0 && currentView === "pipeline" && (
               <div className="border border-dashed border-gray-300 rounded-2xl p-8 mb-6 text-center">
@@ -3361,43 +3520,74 @@ Command: ${dashCommand}`;
                 <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">Start one with <b>+ New Entry</b>, ask Bloomgard AI on Home to draft one, or forward a client enquiry to your inbound address and turn it into a quote.</p>
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
                   <button onClick={() => { setEditingId(null); setQn(""); setCurrentView('new_entry'); }} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">+ New Entry</button>
-                  <button onClick={() => fileInputRef.current?.click()} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">Import quotes</button>
+                  <button onClick={() => { setSettingsSubView('data' as any); setCurrentView('settings'); }} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform">Import quotes</button>
                 </div>
               </div>
             )}
 
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto w-full">
-                <table className="min-w-full text-left border-collapse">
+                <table className="min-w-full text-left border-collapse" data-testid="quotes-table">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                      <th className="px-3 py-2 whitespace-nowrap">Ref ID</th>
-                      {tableColumns.map((c, i) => <th key={i} className={`px-3 py-2 whitespace-nowrap ${c.name === 'client_name' ? 'min-w-[200px]' : ''}`}>{c.label}</th>)}
-                      <th className="px-3 py-2 whitespace-nowrap w-[1%]">Created By</th>
-                      <th className="px-3 py-2 whitespace-nowrap w-[1%] text-center">Status</th>
-                      <th className="px-3 py-2 whitespace-nowrap w-[1%] text-center">Docs</th>
+                      {quoteColumns.map((id) => {
+                        const def = quoteColumnDefs.find((c) => c.id === id);
+                        if (!def) return null;
+                        const sorted = quoteSort.key === id || (id === 'amount' && quoteSort.key === 'subtotal');
+                        const centre = ['status', 'docs', 'items'].includes(id);
+                        return (
+                          <th key={id} scope="col" aria-sort={sorted ? (quoteSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={`px-3 py-2 whitespace-nowrap ${centre ? 'text-center w-[1%]' : ''} ${id === 'client' ? 'min-w-[200px]' : ''}`}>
+                            {id === 'docs' ? def.label : (
+                              <button type="button" className={`qv-th ${sorted ? 'qv-th--on' : ''}`} onClick={() => sortBy(id)} title={`Sort by ${def.label}`}>
+                                {def.label}<span aria-hidden>{sorted ? (quoteSort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                              </button>
+                            )}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {sortedRecords.length > 0 ? sortedRecords.map((r, i) => (
                       <tr key={r.id || i} onClick={() => setSelectedRecord(r)} className="hover:bg-indigo-50/40 transition-colors cursor-pointer">
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <p className="text-xs font-semibold text-gray-900">{r.qn_number || r.qn || r.id?.slice(0, 8)}</p>
-                          <p className="text-[9px] text-gray-500 mt-0.5">{r.date || r.quote_date}</p>
-                        </td>
-                        {tableColumns.map((c, j) => <td key={j} className={`px-3 py-2 whitespace-nowrap text-[11px] text-gray-600 truncate ${c.name === 'client_name' ? 'max-w-[250px]' : 'max-w-[150px]'}`}>{getFieldValue(r, c)}</td>)}
-                        <td className="px-3 py-2 whitespace-nowrap text-[11px] text-gray-600 truncate max-w-[150px] w-[1%]">{r.created_by_email}</td>
-                        <td className="px-3 py-2 whitespace-nowrap w-[1%] text-center">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wide border shadow-sm ${r.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : r.status === 'Lost' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-                            {r.status || "Inquiry"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap w-[1%] text-center">
-                          <button onClick={(e) => { e.stopPropagation(); handleViewDocument(r); }} className="px-2.5 py-1 bg-white border border-gray-200 rounded text-[9px] font-bold uppercase hover:bg-gray-50 active:scale-95 transition-transform text-indigo-600 shadow-sm">View</button>
-                        </td>
+                        {quoteColumns.map((id) => {
+                          if (!quoteColumnDefs.some((c) => c.id === id)) return null;
+                          const cell = 'px-3 py-2 whitespace-nowrap text-[11px] text-gray-600';
+                          switch (id) {
+                            case 'ref': return (
+                              <td key={id} className="px-3 py-2 whitespace-nowrap">
+                                <p className="text-xs font-semibold text-gray-900">{r.qn_number || r.qn || r.id?.slice(0, 8)}</p>
+                                {!quoteColumns.includes('date') && <p className="text-[9px] text-gray-500 mt-0.5">{r.date || r.quote_date}</p>}
+                              </td>
+                            );
+                            case 'client': return <td key={id} className={`${cell} truncate max-w-[250px]`}>{columnValue(r, 'client') || '-'}</td>;
+                            case 'amount': return <td key={id} className={`${cell} tabular-nums`}>{getFieldValue(r, { name: 'subtotal', sectionTitle: 'Quote Details' })}</td>;
+                            case 'items': { const n = lineItems(r); return <td key={id} className={`${cell} text-center tabular-nums`} title={n.map((x: any) => x.item_name || x.name).filter(Boolean).join(', ')}>{n.length || '-'}</td>; }
+                            case 'owner': return <td key={id} className={`${cell} truncate max-w-[180px]`}>{r.created_by_email || '-'}</td>;
+                            case 'status': return (
+                              <td key={id} className="px-3 py-2 whitespace-nowrap w-[1%] text-center">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wide border shadow-sm ${r.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : r.status === 'Lost' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>{r.status || "Inquiry"}</span>
+                              </td>
+                            );
+                            case 'quiet': { const d = columnValue(r, 'quiet'); return <td key={id} className={`${cell} tabular-nums ${d >= 7 && !['approved', 'lost'].includes(String(r.status).toLowerCase()) ? 'text-[var(--sindoor)] font-semibold' : ''}`}>{d}d</td>; }
+                            case 'docs': return (
+                              <td key={id} className="px-3 py-2 whitespace-nowrap w-[1%] text-center">
+                                <button onClick={(e) => { e.stopPropagation(); handleViewDocument(r); }} className="px-2.5 py-1 bg-white border border-gray-200 rounded text-[9px] font-bold uppercase hover:bg-gray-50 active:scale-95 transition-transform text-indigo-600 shadow-sm">View</button>
+                              </td>
+                            );
+                            default: {
+                              const v = columnValue(r, id);
+                              const money_ = id.startsWith('f:') && /subtotal|total|amount|price|rate|value/i.test(id.split('::')[1] || '');
+                              return <td key={id} className={`${cell} truncate max-w-[200px]`}>{v === '' || v == null ? '-' : money_ ? getFieldValue(r, { name: id.split('::')[1], sectionTitle: id.slice(2).split('::')[0] }) : String(formatValue(v, false))}</td>;
+                            }
+                          }
+                        })}
                       </tr>
                     )) : (
-                      <tr><td colSpan={tableColumns.length + 4} className="py-8 text-center"><p className="text-gray-400 font-medium text-[11px] tracking-wider">No Records Found.</p></td></tr>
+                      <tr><td colSpan={quoteColumns.length || 1} className="py-10 text-center">
+                        <p className="text-gray-500 text-xs">{visibleRecords.length ? 'No quotes match these filters.' : 'No quotes yet.'}</p>
+                        {visibleRecords.length > 0 && <button type="button" onClick={() => setQuoteFilters({})} className="mt-2 text-xs font-semibold text-[var(--neelam)] hover:underline">Clear filters</button>}
+                      </td></tr>
                     )}
                   </tbody>
                 </table>
@@ -3407,7 +3597,7 @@ Command: ${dashCommand}`;
         )}
 
         {currentView === "inbox" && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-[calc(100vh-140px)] flex gap-6">
+          <div data-testid="inbox-layout" className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-[calc(100dvh-6rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:h-[calc(100dvh-2.5rem)] flex gap-6">
             <div className="w-[26rem] shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
               <header className="pr-5 pt-1 pb-4 border-b border-gray-200 flex flex-col gap-4">
                 <div className="flex justify-between items-center">
@@ -3874,7 +4064,8 @@ Command: ${dashCommand}`;
           aria-label={`Quote ${selectedRecord.qn_number || selectedRecord.qn || ''}`}
           onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedRecord(null); }}
         >
-          <div className="w-full max-w-2xl h-full bg-white shadow-2xl p-6 md:p-10 overflow-y-auto animate-in slide-in-from-right duration-300 border-l border-gray-200">
+          <div ref={quotePanelRef} className="w-full max-w-2xl h-full bg-white shadow-2xl p-6 md:p-10 overflow-y-auto animate-in slide-in-from-right duration-300 border-l border-gray-200">
+            <FindInQuote scope={quotePanelRef} resetKey={selectedRecord.id || ''} />
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
               <div>
                 <h3 className="text-2xl font-bold text-gray-900 break-words pr-4">{getManifestTitle()}</h3>

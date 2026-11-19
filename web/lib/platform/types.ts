@@ -6,7 +6,8 @@
 
 export type Kind =
   | 'task' | 'workflow' | 'workflow_run' | 'notification' | 'comment'
-  | 'plugin' | 'changeset' | 'view' | 'skill' | 'share' | 'lead';
+  | 'plugin' | 'changeset' | 'view' | 'skill' | 'share' | 'lead'
+  | 'board' | 'card' | 'channel' | 'message' | 'chat_read';
 
 export type Rec<T = any> = { id: string; tenant_id: string; kind: Kind; title: string; data: T; created_at: string };
 
@@ -183,8 +184,12 @@ export type ViewData = {
     min_amount?: number;
     max_amount?: number;
     quiet_days?: number;         // no contact for at least N days
+    date_from?: string;          // quote date, YYYY-MM-DD
+    date_to?: string;
+    search?: string;             // matches anything in the quote
   };
-  sort?: { key: 'date' | 'amount' | 'quiet'; dir: 'asc' | 'desc' };
+  sort?: { key: 'date' | 'amount' | 'quiet' | string; dir: 'asc' | 'desc' };
+  columns?: string[];            // column ids in order, as the Columns menu writes them
   shared: boolean;               // the whole team sees it, or only its creator
   created_by?: string | null;
 };
@@ -196,3 +201,56 @@ export type SkillData = {
   shared: boolean;
   created_by?: string | null;
 };
+
+/* ---------------------------------------------------------------- planning (Team → Planning) */
+
+export type BoardColumn = { id: string; name: string };
+
+export type BoardData = {
+  columns: BoardColumn[];
+  description?: string;
+  created_by?: string | null;
+  updated_at?: string;
+};
+
+export type CardData = {
+  board_id: string;
+  column: string;                // a BoardColumn id
+  position: number;              // order inside the column, lowest first
+  description?: string;
+  assignee_id?: string | null;
+  assignee_email?: string | null;
+  due_at?: string | null;        // YYYY-MM-DD
+  labels?: string[];
+  priority?: 'low' | 'normal' | 'high';
+  checklist?: Array<{ text: string; done: boolean }>;
+  quote_id?: string | null;
+  qn?: string | null;
+  created_by?: string | null;
+  updated_at?: string;
+};
+
+/* ---------------------------------------------------------------- chat (Team → Chat) */
+
+export type ChannelData = {
+  type: 'channel' | 'dm';
+  description?: string;
+  members?: string[];            // dm: the two profile ids; a channel is open to the whole workspace
+  created_by?: string | null;
+  last_message_at?: string | null;
+  updated_at?: string;
+};
+
+export type MessageData = {
+  channel_id: string;
+  body: string;
+  author_id: string;
+  author_email: string;
+  author_name?: string | null;
+  mentions?: string[];           // profile ids
+  edited_at?: string | null;
+  updated_at?: string;
+};
+
+/** One per person: when they last read each channel, for unread counts. */
+export type ChatReadData = { user_id: string; reads: Record<string, string>; updated_at?: string };
