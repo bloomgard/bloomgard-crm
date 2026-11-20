@@ -1,5 +1,6 @@
 import { authenticate, db } from '@/lib/agent/core';
 import { logAiUsage } from '@/utils/usageLogger';
+import { SMART_MODEL, parseModelJson } from '@/lib/ai/models';
 
 export const maxDuration = 60;
 
@@ -51,12 +52,12 @@ Reply as JSON: {"columns":[{"column":0,"action":"map","target":"item_code","new_
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY || ''}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://cma.bloomgard.co', 'X-Title': 'Bloomgard CMA' },
-      body: JSON.stringify({ model: 'openai/gpt-4o-2024-11-20', temperature: 0.1, response_format: { type: 'json_object' }, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: SMART_MODEL, temperature: 0.1, max_tokens: 2500, messages: [{ role: 'user', content: prompt }] }),
     });
     if (!res.ok) throw new Error(`AI service returned ${res.status}`);
     const out = await res.json();
     usage = out.usage;
-    const parsed = JSON.parse(out.choices?.[0]?.message?.content || '{}');
+    const parsed = parseModelJson(out.choices?.[0]?.message?.content || '{}');
 
     // Validate everything the model said; it only ever suggests.
     const used = new Map<string, Col>();

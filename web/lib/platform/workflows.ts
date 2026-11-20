@@ -9,6 +9,7 @@ import { MAX_DEPTH } from './events';
 import { sendPluginMessage } from './plugins';
 import { addComment } from './comments';
 import { ACTION_OPTIONS, APPROVABLE, CLIENT_FACING, OP_OPTIONS, TRIGGER_OPTIONS, inr } from './workflowTemplates';
+import { FAST_MODEL, parseModelJson } from '@/lib/ai/models';
 import type {
   ActionType, Condition, PlatformEvent, Rec, Trigger, WorkflowAction, WorkflowData, WorkflowRunData,
 } from './types';
@@ -324,12 +325,12 @@ Return JSON only: {"subject": "...", "body": "..."}`;
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://bloomgard.vercel.app' },
-      body: JSON.stringify({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }),
+      body: JSON.stringify({ model: FAST_MODEL, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) return fallback;
     const out = await res.json();
-    const parsed = JSON.parse(String(out?.choices?.[0]?.message?.content || '{}').replace(/^```json|```$/g, ''));
+    const parsed = parseModelJson(out?.choices?.[0]?.message?.content || '{}');
     const subject = String(parsed.subject || '').trim(), body = String(parsed.body || '').trim();
     return subject && body ? { subject, body } : fallback;
   } catch {

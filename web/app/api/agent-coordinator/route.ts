@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { guard } from '@/lib/requireTenant';
 import { createClient } from '@supabase/supabase-js';
 import { getDynamicSender, sendEmail } from '@/lib/email';
+import { FAST_MODEL } from '@/lib/ai/models';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const AI_MODEL = 'openai/gpt-4o-mini'; 
+const AI_MODEL = FAST_MODEL;
 
 export async function POST(request: Request) {
   try {
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
     // Transporter removed in favor of native Resend
     // Try to extract domain from tenant data or website if available
     // If not, it will fallback inside getDynamicSender
-    const tenantDomain = tenantData?.website ? new URL(tenantData.website).hostname.replace('www.', '') : undefined;
+    const tenantDomain = (tenantData as any)?.website ? new URL((tenantData as any).website).hostname.replace('www.', '') : undefined;
     const fromString = getDynamicSender(tenantData?.company_name, tenantData?.custom_email_sender, tenantDomain);
 
     for (const task of tasks) {
@@ -203,7 +204,7 @@ export async function POST(request: Request) {
             // Log AI usage
             if (aiData.usage) {
               const { logAiUsage } = await import('@/utils/usageLogger');
-              await logAiUsage(tenantData.id, null, 'agent-coordinator', aiData.usage);
+              await logAiUsage(tenantId, null, 'agent-coordinator', aiData.usage);
             }
             
             const emailBody = aiData.choices[0].message.content.trim();
@@ -219,7 +220,7 @@ export async function POST(request: Request) {
             
             // Log Email Usage
             const { logEmailSent } = await import('@/utils/usageLogger');
-            await logEmailSent(tenantData.id, clientEmail, mailOptions.subject);
+            await logEmailSent(tenantId, clientEmail, mailOptions.subject);
             
             const now = new Date().toISOString();
             let meta = quote.custom_metadata;

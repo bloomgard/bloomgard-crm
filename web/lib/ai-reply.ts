@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { buildMasterDataContext } from '@/lib/masterDataContext';
+import { FAST_MODEL } from '@/lib/ai/models';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const AI_MODEL = 'openai/gpt-4o-mini';
+const AI_MODEL = FAST_MODEL;
 
 /** The human identity the AI should write and sign as — never a bracket placeholder. */
 async function resolveAgentIdentity(agentId: string | null, tenant: any, fallbackEmail?: string | null) {

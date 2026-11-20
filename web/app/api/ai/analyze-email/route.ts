@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticate } from '@/lib/agent/core';
+import { SMART_MODEL, parseModelJson } from '@/lib/ai/models';
 
 // same-origin only: the dashboard calls this with the user's session
 const corsHeaders: Record<string, string> = {};
@@ -80,19 +81,18 @@ Return ONLY valid JSON. No markdown wrappers.`;
         "X-Title": "Bloomgard AI Inbox"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o-2024-11-20",
+        model: SMART_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Email Subject: ${email.subject}\nSender: ${email.sender_email}\nBody:\n${email.body_text || email.body_html}` }
         ],
-        temperature: 0.1, max_tokens: 2500,
-        response_format: { type: "json_object" }
+        temperature: 0.1, max_tokens: 2500
       })
     });
 
       result = await response.json().catch(() => null);
       const content = result?.choices?.[0]?.message?.content;
-      try { if (content && JSON.parse(content)) break; } catch { /* retry */ }
+      try { if (content && parseModelJson(content)) break; } catch { /* retry */ }
     }
 
     
@@ -103,7 +103,7 @@ Return ONLY valid JSON. No markdown wrappers.`;
 
     let analysis;
     try {
-      analysis = JSON.parse(result?.choices?.[0]?.message?.content);
+      analysis = parseModelJson(result?.choices?.[0]?.message?.content);
     } catch (parseError) {
       console.error("Failed to parse AI JSON response", result?.choices?.[0]?.message?.content);
       return NextResponse.json({ error: "AI returned invalid format." }, { status: 500, headers: corsHeaders });

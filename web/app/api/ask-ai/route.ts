@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { guard } from '@/lib/requireTenant';
+import { FAST_MODEL, parseModelJson } from '@/lib/ai/models';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,14 +71,13 @@ ${query || "Give me a summary of client follow-ups and recent inbox emails."}`;
         "X-Title": "Bloomgard"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o-2024-11-20",
+        model: FAST_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: isChartIntentRequest ? 0.1 : 0.4,
-        max_tokens: 1500,
-        response_format: isChartIntentRequest ? { type: "json_object" } : undefined
+        max_tokens: 1500
       })
     });
 
@@ -90,8 +90,10 @@ ${query || "Give me a summary of client follow-ups and recent inbox emails."}`;
       await logAiUsage(tenantId, userId || null, 'ask-ai', result.usage);
     }
 
-    const answer = result?.choices?.[0]?.message?.content || "Analysis complete. The system is finalising the report. Please refresh in a moment.";
+    let answer = result?.choices?.[0]?.message?.content || "Analysis complete. The system is finalising the report. Please refresh in a moment.";
 
+    // a chart answer must be bare JSON for the browser to draw it, whatever wrapping the model added
+    if (isChartIntentRequest) { try { answer = JSON.stringify(parseModelJson(answer)); } catch { /* leave it as text */ } }
     return NextResponse.json({ answer }, { status: 200, headers: corsHeaders });
 
   } catch (error: any) {

@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { guard } from '@/lib/requireTenant';
 import { createClient } from '@supabase/supabase-js';
 import { getDynamicSender, sendEmail } from '@/lib/email';
+import { FAST_MODEL } from '@/lib/ai/models';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const AI_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const AI_MODEL = 'openai/gpt-4o-mini';
+const AI_MODEL = FAST_MODEL;
 
 export async function POST(request: Request) {
   try {

@@ -73,7 +73,9 @@ export async function POST(request: Request) {
       const send = (o: any) => controller.enqueue(encoder.encode(JSON.stringify(o) + '\n'));
       const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
       try {
-        const messages: any[] = [{ role: 'system', content: systemPrompt(ctx) }, ...history];
+        // The instructions and the ~40 tool definitions are the same on every step and every request
+        // (about 16k tokens); marking them cacheable lets the provider bill repeats at a fraction.
+        const messages: any[] = [{ role: 'system', content: [{ type: 'text', text: systemPrompt(ctx), cache_control: { type: 'ephemeral' } }] }, ...history];
         let finished = false;
         for (let step = 0; step < MAX_STEPS && !finished; step++) {
           const res = await callModel(messages);
