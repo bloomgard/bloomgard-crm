@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { nextQuoteNumber, settleQuoteNumber, todayIST } from '@/lib/quoteNumber';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -169,19 +170,10 @@ export async function createQuoteFromAnalysis(o: { tenantId: string; emailId?: s
       clientId = nc?.id || null;
     }
 
-    // Next QN number for this tenant
-    const { data: existingQuotes } = await supabase
-      .from('quotations').select('qn_number').eq('tenant_id', tenantId);
-    let maxNum = 0;
-    (existingQuotes || []).forEach((q) => {
-      const m = q.qn_number?.match(/QN-\d+-(\d+)/i);
-      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
-    });
-    const qn = `QN-${new Date().getFullYear()}-${(maxNum + 1).toString().padStart(3, '0')}`;
+    // Next QN number for this tenant, allocated from every quote in it (see lib/quoteNumber.ts)
+    const qn = await nextQuoteNumber(tenantId);
 
     const quoteId = crypto.randomUUID();
-    const followUp = new Date();
-    followUp.setDate(followUp.getDate() + 3);
 
     const meta = {
       ...lgq,
@@ -195,11 +187,11 @@ export async function createQuoteFromAnalysis(o: { tenantId: string; emailId?: s
       tenant_id: tenantId,
       client_id: clientId,
       qn_number: qn,
-      date: new Date().toISOString().split('T')[0],
+      date: todayIST(),
       status: 'Inquiry',
       custom_metadata: meta,
       created_by_email: agentEmail || 'system@bloomgard.co',
-      follow_up_due_date: followUp.toISOString().split('T')[0],
+      follow_up_due_date: todayIST(3),
     }]);
     if (qErr) throw qErr;
 
@@ -243,6 +235,8 @@ export async function createQuoteFromAnalysis(o: { tenantId: string; emailId?: s
       await emit({ type: 'quote.created', tenantId, quoteId, actorEmail: agentEmail || null, data: { qn: qn, source: inbound ? 'email' : 'api' } });
     } catch { /* the quote exists; automations are best effort */ }
 
-    return { success: true as const, quoteId, qn_number: qn, itemCount: items.length };
+    // someone may have taken the same number a moment ago: keep numbers unique
+    const settled = await settleQuoteNumber(tenantId, quoteId).catch(() => ({ qn }));
+    return { success: true as const, quoteId, qn_number: settled.qn, itemCount: items.length };
   }
 }

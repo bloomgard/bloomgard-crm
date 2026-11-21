@@ -137,6 +137,26 @@ function DocsLink({ view, sub }: { view: string; sub?: string }) {
   );
 }
 
+/** Today (or `offsetDays` from today) as YYYY-MM-DD in the user's own time zone. toISOString() is UTC,
+ *  which in India is yesterday until 5:30 in the morning. */
+const todayLocal = (offsetDays = 0) => {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+
+/** Ask the server for the next quote number, or to settle a clash after saving (lib/quoteNumber.ts). */
+async function quoteNumberApi(supabaseClient: any, action: 'next' | 'settle', quoteId?: string) {
+  const { data } = await supabaseClient.auth.getSession();
+  const res = await fetch('/api/quotes/number', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data?.session?.access_token || ''}` },
+    body: JSON.stringify({ action, quote_id: quoteId }),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || out.error) throw new Error(out.error || 'Could not number the quote.');
+  return out as { qn: string; renumbered?: boolean; was?: string };
+}
+
 export default function ClientDashboard() {
   const fileInputRef = useRef(null);
   const quotePanelRef = useRef<HTMLDivElement>(null);
@@ -216,7 +236,9 @@ export default function ClientDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
   const [qn, setQn] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayLocal());
+  const savingRef = useRef(false);     // a double click must not save the quote twice
+  const autoQnRef = useRef('');        // the number we generated, as opposed to one the user typed
   const [dynamicData, setDynamicData] = useState({});
   const [statusFilter, setStatusFilter] = useState("");
   const [editedSnippets, setEditedSnippets] = useState({});
@@ -1057,20 +1079,31 @@ export default function ClientDashboard() {
     });
   };
 
+  useEffect(() => {
+    if (currentView === 'new_entry' && !editingId) setDate(todayLocal());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, editingId]);
+
   const handleSave = async () => {
-    if (isSavingRecord) return;
+    if (isSavingRecord || savingRef.current) return;
+    savingRef.current = true;
     setIsSavingRecord(true);
-    if (!tenantId) { setIsSavingRecord(false); return alert("No workspace connected. Contact your administrator."); }
+    if (!tenantId) { savingRef.current = false; setIsSavingRecord(false); return alert("No workspace connected. Contact your administrator."); }
 
-    let maxNum = 0;
-    records.forEach(r => {
-      const m = r.qn_number?.match(/QN-\d+-(\d+)/i);
-      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
-    });
-    const autoGenQn = `QN-${new Date().getFullYear()}-${(maxNum + 1).toString().padStart(3, '0')}`;
-    const generatedQn = qn || autoGenQn;
-
-    if (!editingId && !qn) setQn(autoGenQn);
+    // The next number comes from the server, counted over every quote in the workspace. Worked out
+    // here, from the quotes this page loaded when it opened, two people got the same number.
+    const localNext = () => {
+      let maxNum = 0;
+      records.forEach(r => { const m = r.qn_number?.match(/QN-\d+-(\d+)/i); if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10)); });
+      return `QN-${new Date().getFullYear()}-${(maxNum + 1).toString().padStart(3, '0')}`;
+    };
+    let autoGenQn = '';
+    if (!editingId && (!qn || qn === autoQnRef.current)) {
+      autoGenQn = await quoteNumberApi(supabase, 'next').then(r => r.qn).catch(() => localNext());
+      autoQnRef.current = autoGenQn;
+      setQn(autoGenQn);
+    }
+    const generatedQn = autoGenQn || qn;
     let finalQn = generatedQn;
     if (editingId) {
       const cur = records.find(r => r.id === editingId);
@@ -1080,9 +1113,7 @@ export default function ClientDashboard() {
     // Auto-calculate a follow up date 3 days from now if this is a brand new quote
     let computedFollowUpDate = null;
     if (!editingId) {
-      const d = new Date();
-      d.setDate(d.getDate() + 3);
-      computedFollowUpDate = d.toISOString().split('T')[0];
+      computedFollowUpDate = todayLocal(3);
     }
 
     const creator = editingId ? records.find(r => r.id === editingId)?.created_by_email : (user?.email || "system@bloomgard.com");
@@ -1150,6 +1181,12 @@ export default function ClientDashboard() {
     try {
       const { error } = await supabase.from("quotations").upsert([upsertPayload], { onConflict: 'id' });
       if (error) throw error;
+      // someone may have saved a quote with the same number a moment ago: the earlier one keeps it
+      let renumberedFrom = '';
+      if (finalQn) {
+        const settled = await quoteNumberApi(supabase, 'settle', quoteId).catch(() => null);
+        if (settled?.qn && settled.qn !== finalQn) { renumberedFrom = finalQn; finalQn = settled.qn; }
+      }
 
       const items = [], atts = [];
       blueprint.filter(b => b.allow_multiple).forEach(sec => {
@@ -1175,11 +1212,12 @@ export default function ClientDashboard() {
       }
 
       setEditingId(null);
-      alert(`Successfully saved ${finalQn}!`);
+      autoQnRef.current = '';
+      alert(renumberedFrom ? `Saved as ${finalQn} (${renumberedFrom} had just been used by someone else).` : `Successfully saved ${finalQn}!`);
       setCurrentView("pipeline");
       await fetchRecords(tenantId);
     } catch (err) { alert("Save Failed: " + err.message); }
-    finally { setIsSavingRecord(false); }
+    finally { savingRef.current = false; setIsSavingRecord(false); }
   };
 
   const handleTriggerAgent = async (quote) => {
@@ -2006,7 +2044,7 @@ Command: ${dashCommand}`;
   const loadRecordForEditing = (rec) => {
     setEditingId(rec.id);
     setQn(rec.qn_number);
-    setDate(rec.date || new Date().toISOString().split('T')[0]);
+    setDate(rec.date || todayLocal());
     let d = { ...(rec.custom_metadata || {}) };
 
     blueprint.forEach(sec => {
